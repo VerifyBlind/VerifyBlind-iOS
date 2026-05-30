@@ -1,0 +1,127 @@
+name: VerifyBlind
+options:
+  bundleIdPrefix: app.verifyblind
+  deploymentTarget:
+    iOS: "16.0"
+  developmentLanguage: tr
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+  groupSortPosition: top
+  xcodeVersion: "15.4"
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+    ENABLE_BITCODE: NO
+    DEVELOPMENT_TEAM: $(APPLE_TEAM_ID)
+    SWIFT_STRICT_CONCURRENCY: minimal
+
+configs:
+  Debug: debug
+  Release: release
+
+packages:
+  NFCPassportReader:
+    url: https://github.com/AndyQ/NFCPassportReader
+    from: 2.1.0
+  SwiftCBOR:
+    url: https://github.com/valpackett/SwiftCBOR
+    from: 0.4.7
+  GRDB:
+    url: https://github.com/groue/GRDB.swift
+    from: 6.29.0
+  SwiftyDropbox:
+    url: https://github.com/dropbox/SwiftyDropbox
+    from: 10.0.0
+  Sentry:
+    url: https://github.com/getsentry/sentry-cocoa
+    from: 8.36.0
+
+targets:
+  VerifyBlind:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+      - path: Config
+        excludes:
+          - "*.xcconfig"
+      - path: Core
+      - path: Features
+      - path: NFC
+      - path: Camera
+      - path: OCR
+      - path: Backup
+      - path: Resources
+    # Info.plist statik dosya — App/Info.plist'i olduğu gibi kullan, regenerate yapma.
+    entitlements:
+      path: Config/VerifyBlind.entitlements
+      properties:
+        com.apple.developer.nfc.readersession.formats:
+          - TAG
+        com.apple.developer.devicecheck.appattest-environment: $(APP_ATTEST_ENVIRONMENT)
+        com.apple.developer.associated-domains:
+          - applinks:verifyblind.com
+          - applinks:api.verifyblind.com
+        com.apple.developer.icloud-services:
+          - CloudDocuments
+        com.apple.developer.icloud-container-identifiers:
+          - $(ICLOUD_CONTAINER_ID)
+        com.apple.developer.ubiquity-container-identifiers:
+          - $(ICLOUD_CONTAINER_ID)
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(IOS_BUNDLE_ID)
+        CURRENT_PROJECT_VERSION: $(BUILD_NUMBER)
+        MARKETING_VERSION: "1.0.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Manual
+        SWIFT_OBJC_BRIDGING_HEADER: ""
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: App/Info.plist
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "DEBUG"
+          GCC_PREPROCESSOR_DEFINITIONS: "DEBUG=1"
+        Release:
+          SWIFT_OPTIMIZATION_LEVEL: "-O"
+    configFiles:
+      Debug: Config/Debug.xcconfig
+      Release: Config/Release.xcconfig
+    dependencies:
+      - package: NFCPassportReader
+      - package: SwiftCBOR
+      - package: GRDB
+        product: GRDB
+      - package: SwiftyDropbox
+      - package: Sentry
+        product: Sentry
+    scheme:
+      testTargets:
+        - VerifyBlindTests
+      gatherCoverageData: true
+
+  VerifyBlindTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - Tests/VerifyBlindTests
+    dependencies:
+      - target: VerifyBlind
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(IOS_BUNDLE_ID).tests
+        BUNDLE_LOADER: $(TEST_HOST)
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/VerifyBlind.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/VerifyBlind
+
+  VerifyBlindUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - Tests/VerifyBlindUITests
+    dependencies:
+      - target: VerifyBlind
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(IOS_BUNDLE_ID).uitests

@@ -1,0 +1,35 @@
+# XcodeGen tarafından üretilir, git'te tutulmaz
+VerifyBlind.xcodeproj/
+*.xcworkspace/
+
+# Xcode/CodeMagic build artifactları
+build/
+DerivedData/
+.build/
+*.ipa
+*.dSYM
+*.dSYM.zip
+*.xcarchive
+
+# SPM
+.swiftpm/
+Packages/
+Package.pins
+Package.resolved
+
+# macOS
+.DS_Store
+
+# Xcode user-specific state
+xcuserdata/
+*.xcuserstate
+
+# Local env override (xcconfig CodeMagic'te env'den üretilir; yanlışlıkla secret commit'i engelle)
+Config/Debug.local.xcconfig
+Config/Release.local.xcconfig
+
+# Backup folder
+Backup/
+
+# OS
+.DS_Store

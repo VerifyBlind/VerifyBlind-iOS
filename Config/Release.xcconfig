@@ -1,0 +1,13 @@
+// Release.xcconfig — CodeMagic prod build'inde env vars'tan üzerine yazılır.
+
+API_BASE_URL = https:/$()/api.verifyblind.com/api/verify/
+CERT_PIN_1 =
+CERT_PIN_2 =
+ENCLAVE_DEVELOPER_PUBLIC_KEY =
+APPLE_TEAM_ID =
+IOS_BUNDLE_ID = com.verifyblind.app
+APP_ATTEST_ENVIRONMENT = production
+ICLOUD_CONTAINER_ID = iCloud.com.verifyblind.app
+SENTRY_DSN =
+DROPBOX_IOS_APP_KEY =
+BUILD_NUMBER = 1

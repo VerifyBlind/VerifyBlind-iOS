@@ -1,0 +1,21 @@
+// Debug.xcconfig — CodeMagic build başında env vars'tan üretilir.
+// Lokal/manuel build için bu placeholder değerler kullanılır.
+// CodeMagic dev/prod build'lerinde codemagic.yaml içindeki "Generate xcconfig from env" adımı
+// bu dosyanın üzerine yazar.
+//
+// Info.plist içindeki $(VAR) referansları bu değerleri build sırasında alır;
+// Config.swift de Bundle.main.object(forInfoDictionaryKey:) ile okur.
+//
+// NOT: xcconfig'te `//` yorum karakteri olduğu için URL'lerdeki `//` $()  ile bölünür.
+
+API_BASE_URL = https:/$()/api.verifyblind.com/api/verify/
+CERT_PIN_1 =
+CERT_PIN_2 =
+ENCLAVE_DEVELOPER_PUBLIC_KEY =
+APPLE_TEAM_ID =
+IOS_BUNDLE_ID = com.verifyblind.app
+APP_ATTEST_ENVIRONMENT = development
+ICLOUD_CONTAINER_ID = iCloud.com.verifyblind.app
+SENTRY_DSN =
+DROPBOX_IOS_APP_KEY =
+BUILD_NUMBER = 1

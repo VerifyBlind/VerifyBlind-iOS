@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>VerifyBlind</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>AccentColor</string>
+	</dict>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>armv7</string>
+		<string>nfc</string>
+	</array>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>NFCReaderUsageDescription</key>
+	<string>Kimlik kartınızdaki çipi okumak için NFC erişimi gerekli.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>QR kodu ve kimlik fotoğrafını okumak için kamera erişimi gerekli.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Kimliğinizi güvenle saklamak için Face ID kullanılır.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Doğrulama belgesini cihaza kaydetmek için.</string>
+	<key>com.apple.developer.nfc.readersession.iso7816.select-identifiers</key>
+	<array>
+		<string>A0000002471001</string>
+	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.verifyblind.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>verifyblind</string>
+			</array>
+		</dict>
+	</array>
+	<!-- xcconfig'ten Info.plist'e enjekte edilen build-time config — Config.swift bunları okur -->
+	<key>API_BASE_URL</key>
+	<string>$(API_BASE_URL)</string>
+	<key>CERT_PIN_1</key>
+	<string>$(CERT_PIN_1)</string>
+	<key>CERT_PIN_2</key>
+	<string>$(CERT_PIN_2)</string>
+	<key>ENCLAVE_DEVELOPER_PUBLIC_KEY</key>
+	<string>$(ENCLAVE_DEVELOPER_PUBLIC_KEY)</string>
+	<key>APP_ATTEST_ENVIRONMENT</key>
+	<string>$(APP_ATTEST_ENVIRONMENT)</string>
+	<key>ICLOUD_CONTAINER_ID</key>
+	<string>$(ICLOUD_CONTAINER_ID)</string>
+	<key>SENTRY_DSN</key>
+	<string>$(SENTRY_DSN)</string>
+	<key>DROPBOX_IOS_APP_KEY</key>
+	<string>$(DROPBOX_IOS_APP_KEY)</string>
+</dict>
+</plist>
