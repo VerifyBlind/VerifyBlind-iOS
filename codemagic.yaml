@@ -60,9 +60,7 @@ workflows:
             --create
 
       - name: Add certificate to keychain
-        script: |
-          keychain add-certificates \
-            --certificate-key "@env:CERTIFICATE_PRIVATE_KEY"
+        script: keychain add-certificates
 
       - name: Set Xcode project to use fetched profiles
         script: xcode-project use-profiles
@@ -161,9 +159,7 @@ workflows:
             --create
 
       - name: Add certificate to keychain
-        script: |
-          keychain add-certificates \
-            --certificate-key "@env:CERTIFICATE_PRIVATE_KEY"
+        script: keychain add-certificates
 
       - name: Set Xcode project to use fetched profiles
         script: xcode-project use-profiles
