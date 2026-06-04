@@ -1,0 +1,168 @@
+workflows:
+
+  # ── DEV branch → TestFlight Internal ──────────────────────────────────────
+  ios-dev:
+    name: iOS Dev → TestFlight Internal
+    max_build_duration: 60
+    integrations:
+      app_store_connect: VerifyBlind_ASC_API_Key
+    environment:
+      groups:
+        - verifyblind_ios_dev
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: app.verifyblind.ios
+      vars:
+        XCODE_SCHEME: VerifyBlind
+        XCODE_PROJECT: VerifyBlind.xcodeproj
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: dev
+          include: true
+    scripts:
+      - name: Install XcodeGen
+        script: brew install xcodegen
+
+      - name: Generate xcconfig from env vars
+        script: |
+          # xcconfig syntax: // in URL must be written as $/()
+          {
+            echo "API_BASE_URL = https:/\$()/api.verifyblind.com/api/verify/"
+            echo "CERT_PIN_1 = ${CERT_PIN_1:-}"
+            echo "CERT_PIN_2 = ${CERT_PIN_2:-}"
+            echo "ENCLAVE_DEVELOPER_PUBLIC_KEY = ${ENCLAVE_DEVELOPER_PUBLIC_KEY:-}"
+            echo "APPLE_TEAM_ID = ${APPLE_TEAM_ID}"
+            echo "IOS_BUNDLE_ID = app.verifyblind.ios"
+            echo "APP_ATTEST_ENVIRONMENT = development"
+            echo "ICLOUD_CONTAINER_ID = iCloud.app.verifyblind.ios"
+            echo "SENTRY_DSN = ${SENTRY_DSN:-}"
+            echo "DROPBOX_IOS_APP_KEY = ${DROPBOX_IOS_APP_KEY:-}"
+            echo "BUILD_NUMBER = $BUILD_NUMBER"
+          } > Config/Debug.xcconfig
+
+      - name: Generate Xcode project (XcodeGen)
+        script: xcodegen generate
+
+      - name: Resolve Swift Package Manager dependencies
+        script: |
+          xcodebuild -resolvePackageDependencies \
+            -project "$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME"
+
+      - name: Build and archive (Release)
+        script: |
+          xcode-project use-profiles
+          xcodebuild \
+            -project "$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME" \
+            -configuration Release \
+            -archivePath "$CM_BUILD_DIR/VerifyBlind.xcarchive" \
+            archive \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            | xcpretty --color --simple
+
+      - name: Export IPA
+        script: |
+          xcode-project build-ipa \
+            --project "$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME" \
+            --archive-path "$CM_BUILD_DIR/VerifyBlind.xcarchive"
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+
+    publishing:
+      app_store_connect:
+        api_key: VerifyBlind_ASC_API_Key
+        submit_to_testflight: true
+        beta_groups:
+          - Internal Testers
+        expire_build_submitted_for_review: true
+
+  # ── MAIN branch → TestFlight External (hazır olmadıkça kullanma) ───────────
+  ios-prod:
+    name: iOS Prod → TestFlight External
+    max_build_duration: 60
+    integrations:
+      app_store_connect: VerifyBlind_ASC_API_Key
+    environment:
+      groups:
+        - verifyblind_ios_prod
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: app.verifyblind.ios
+      vars:
+        XCODE_SCHEME: VerifyBlind
+        XCODE_PROJECT: VerifyBlind.xcodeproj
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+    scripts:
+      - name: Install XcodeGen
+        script: brew install xcodegen
+
+      - name: Generate xcconfig from env vars
+        script: |
+          {
+            echo "API_BASE_URL = https:/\$()/api.verifyblind.com/api/verify/"
+            echo "CERT_PIN_1 = ${CERT_PIN_1:-}"
+            echo "CERT_PIN_2 = ${CERT_PIN_2:-}"
+            echo "ENCLAVE_DEVELOPER_PUBLIC_KEY = ${ENCLAVE_DEVELOPER_PUBLIC_KEY:-}"
+            echo "APPLE_TEAM_ID = ${APPLE_TEAM_ID}"
+            echo "IOS_BUNDLE_ID = app.verifyblind.ios"
+            echo "APP_ATTEST_ENVIRONMENT = production"
+            echo "ICLOUD_CONTAINER_ID = iCloud.app.verifyblind.ios"
+            echo "SENTRY_DSN = ${SENTRY_DSN:-}"
+            echo "DROPBOX_IOS_APP_KEY = ${DROPBOX_IOS_APP_KEY:-}"
+            echo "BUILD_NUMBER = $BUILD_NUMBER"
+          } > Config/Release.xcconfig
+
+      - name: Generate Xcode project (XcodeGen)
+        script: xcodegen generate
+
+      - name: Resolve Swift Package Manager dependencies
+        script: |
+          xcodebuild -resolvePackageDependencies \
+            -project "$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME"
+
+      - name: Build and archive (Release)
+        script: |
+          xcode-project use-profiles
+          xcodebuild \
+            -project "$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME" \
+            -configuration Release \
+            -archivePath "$CM_BUILD_DIR/VerifyBlind.xcarchive" \
+            archive \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            | xcpretty --color --simple
+
+      - name: Export IPA
+        script: |
+          xcode-project build-ipa \
+            --project "$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME" \
+            --archive-path "$CM_BUILD_DIR/VerifyBlind.xcarchive"
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+
+    publishing:
+      app_store_connect:
+        api_key: VerifyBlind_ASC_API_Key
+        submit_to_testflight: true
+        beta_groups:
+          - External Testers
+        expire_build_submitted_for_review: true
