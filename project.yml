@@ -64,12 +64,13 @@ targets:
         com.apple.developer.associated-domains:
           - applinks:verifyblind.com
           - applinks:api.verifyblind.com
-        com.apple.developer.icloud-services:
-          - CloudDocuments
-        com.apple.developer.icloud-container-identifiers:
-          - $(ICLOUD_CONTAINER_ID)
-        com.apple.developer.ubiquity-container-identifiers:
-          - $(ICLOUD_CONTAINER_ID)
+        # iCloud: Backup feature implement edilince eklenecek
+        # com.apple.developer.icloud-services:
+        #   - CloudDocuments
+        # com.apple.developer.icloud-container-identifiers:
+        #   - $(ICLOUD_CONTAINER_ID)
+        # com.apple.developer.ubiquity-container-identifiers:
+        #   - $(ICLOUD_CONTAINER_ID)
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(IOS_BUNDLE_ID)
