@@ -65,37 +65,12 @@ workflows:
       - name: Set Xcode project to use fetched profiles
         script: xcode-project use-profiles
 
-      - name: Archive
+      - name: Build and export IPA
         script: |
-          xcodebuild \
-            -project "$XCODE_PROJECT" \
-            -scheme "$XCODE_SCHEME" \
-            -configuration Release \
-            -archivePath "$CM_BUILD_DIR/VerifyBlind.xcarchive" \
-            archive \
-            CODE_SIGN_STYLE=Manual \
-            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            CODE_SIGN_IDENTITY="Apple Distribution"
-
-      - name: Export IPA
-        script: |
-          cat > /tmp/ExportOptions.plist << PLIST
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key>
-            <string>app-store</string>
-            <key>teamID</key>
-            <string>$APPLE_TEAM_ID</string>
-          </dict>
-          </plist>
-          PLIST
-
-          xcodebuild -exportArchive \
-            -archivePath "$CM_BUILD_DIR/VerifyBlind.xcarchive" \
-            -exportPath "$CM_BUILD_DIR/ipa" \
-            -exportOptionsPlist /tmp/ExportOptions.plist
+          xcode-project build-ipa \
+            --project "$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME" \
+            --config Release
 
     artifacts:
       - build/ios/ipa/*.ipa
@@ -176,37 +151,12 @@ workflows:
       - name: Set Xcode project to use fetched profiles
         script: xcode-project use-profiles
 
-      - name: Archive
+      - name: Build and export IPA
         script: |
-          xcodebuild \
-            -project "$XCODE_PROJECT" \
-            -scheme "$XCODE_SCHEME" \
-            -configuration Release \
-            -archivePath "$CM_BUILD_DIR/VerifyBlind.xcarchive" \
-            archive \
-            CODE_SIGN_STYLE=Manual \
-            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            CODE_SIGN_IDENTITY="Apple Distribution"
-
-      - name: Export IPA
-        script: |
-          cat > /tmp/ExportOptions.plist << PLIST
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key>
-            <string>app-store</string>
-            <key>teamID</key>
-            <string>$APPLE_TEAM_ID</string>
-          </dict>
-          </plist>
-          PLIST
-
-          xcodebuild -exportArchive \
-            -archivePath "$CM_BUILD_DIR/VerifyBlind.xcarchive" \
-            -exportPath "$CM_BUILD_DIR/ipa" \
-            -exportOptionsPlist /tmp/ExportOptions.plist
+          xcode-project build-ipa \
+            --project "$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME" \
+            --config Release
 
     artifacts:
       - build/ios/ipa/*.ipa
