@@ -56,12 +56,13 @@ workflows:
             --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
             --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
             --private-key "@env:APP_STORE_CONNECT_PRIVATE_KEY" \
+            --certificate-key "@env:CERTIFICATE_PRIVATE_KEY" \
             --create
 
       - name: Add certificate to keychain
         script: |
           keychain add-certificates \
-            --certificate-key "@env:APP_STORE_CONNECT_PRIVATE_KEY"
+            --certificate-key "@env:CERTIFICATE_PRIVATE_KEY"
 
       - name: Set Xcode project to use fetched profiles
         script: xcode-project use-profiles
@@ -156,12 +157,13 @@ workflows:
             --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
             --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
             --private-key "@env:APP_STORE_CONNECT_PRIVATE_KEY" \
+            --certificate-key "@env:CERTIFICATE_PRIVATE_KEY" \
             --create
 
       - name: Add certificate to keychain
         script: |
           keychain add-certificates \
-            --certificate-key "@env:APP_STORE_CONNECT_PRIVATE_KEY"
+            --certificate-key "@env:CERTIFICATE_PRIVATE_KEY"
 
       - name: Set Xcode project to use fetched profiles
         script: xcode-project use-profiles
