@@ -35,7 +35,9 @@ workflows:
             echo "SENTRY_DSN = ${SENTRY_DSN:-}"
             echo "DROPBOX_IOS_APP_KEY = ${DROPBOX_IOS_APP_KEY:-}"
             echo "BUILD_NUMBER = $BUILD_NUMBER"
-          } > Config/Debug.xcconfig
+          # Build --config Release ile alınıyor → Release.xcconfig okunur.
+          # Dev workflow'da da Release.xcconfig'e yazıyoruz ama development değerleriyle.
+          } | tee Config/Debug.xcconfig > Config/Release.xcconfig
 
       - name: Generate Xcode project (XcodeGen)
         script: xcodegen generate
