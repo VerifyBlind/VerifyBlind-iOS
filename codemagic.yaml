@@ -65,25 +65,15 @@ workflows:
       - name: Set Xcode project to use fetched profiles
         script: xcode-project use-profiles
 
-      - name: Build and archive (Release)
-        script: |
-          xcodebuild \
-            -project "$XCODE_PROJECT" \
-            -scheme "$XCODE_SCHEME" \
-            -configuration Release \
-            -archivePath "$CM_BUILD_DIR/VerifyBlind.xcarchive" \
-            archive \
-            CODE_SIGN_STYLE=Manual \
-            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
-            | xcpretty --color --simple
-
-      - name: Export IPA
+      - name: Build and export IPA
         script: |
           xcode-project build-ipa \
             --project "$XCODE_PROJECT" \
             --scheme "$XCODE_SCHEME" \
-            --archive-path "$CM_BUILD_DIR/VerifyBlind.xcarchive"
+            --config Release \
+            -- \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
 
     artifacts:
       - build/ios/ipa/*.ipa
@@ -164,25 +154,15 @@ workflows:
       - name: Set Xcode project to use fetched profiles
         script: xcode-project use-profiles
 
-      - name: Build and archive (Release)
-        script: |
-          xcodebuild \
-            -project "$XCODE_PROJECT" \
-            -scheme "$XCODE_SCHEME" \
-            -configuration Release \
-            -archivePath "$CM_BUILD_DIR/VerifyBlind.xcarchive" \
-            archive \
-            CODE_SIGN_STYLE=Manual \
-            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
-            | xcpretty --color --simple
-
-      - name: Export IPA
+      - name: Build and export IPA
         script: |
           xcode-project build-ipa \
             --project "$XCODE_PROJECT" \
             --scheme "$XCODE_SCHEME" \
-            --archive-path "$CM_BUILD_DIR/VerifyBlind.xcarchive"
+            --config Release \
+            -- \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
 
     artifacts:
       - build/ios/ipa/*.ipa
