@@ -28,8 +28,5 @@ xcuserdata/
 Config/Debug.local.xcconfig
 Config/Release.local.xcconfig
 
-# Backup folder
-Backup/
-
 # OS
 .DS_Store
