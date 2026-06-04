@@ -1,6 +1,6 @@
 workflows:
 
-  # ── DEV branch → TestFlight Internal ──────────────────────────────────────
+  # ── DEV branch → TestFlight Internal ───────────────────────────────────────
   ios-dev:
     name: iOS Dev → TestFlight Internal
     max_build_duration: 60
