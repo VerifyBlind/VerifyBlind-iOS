@@ -21,6 +21,16 @@ workflows:
       - name: Install XcodeGen
         script: brew install xcodegen
 
+      - name: Resolve next build number from TestFlight
+        script: |
+          LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APP_ID" \
+            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
+            --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            --private-key "@env:APP_STORE_CONNECT_PRIVATE_KEY" 2>/dev/null || echo 0)
+          NEW_BUILD=$(( ${LATEST:-0} + 1 ))
+          echo "BUILD_NUMBER=$NEW_BUILD" >> $CM_ENV
+          echo "TestFlight latest=${LATEST:-0} → new build number=$NEW_BUILD"
+
       - name: Generate xcconfig from env vars
         script: |
           {
@@ -108,6 +118,16 @@ workflows:
     scripts:
       - name: Install XcodeGen
         script: brew install xcodegen
+
+      - name: Resolve next build number from TestFlight
+        script: |
+          LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APP_ID" \
+            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
+            --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            --private-key "@env:APP_STORE_CONNECT_PRIVATE_KEY" 2>/dev/null || echo 0)
+          NEW_BUILD=$(( ${LATEST:-0} + 1 ))
+          echo "BUILD_NUMBER=$NEW_BUILD" >> $CM_ENV
+          echo "TestFlight latest=${LATEST:-0} → new build number=$NEW_BUILD"
 
       - name: Generate xcconfig from env vars
         script: |
