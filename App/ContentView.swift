@@ -5,6 +5,17 @@ struct ContentView: View {
     @State private var didSendTestEvent = false
     @State private var sendResult = ""
 
+    /// DSN public değer — Codemagic/Sentry karşılaştırması için tam göster.
+    private var dsnDisplay: String {
+        let dsn = Config.sentryDSN
+        guard !dsn.isEmpty else { return "BOŞ" }
+        // host + project path parçası (public key'i kısalt)
+        if let at = dsn.firstIndex(of: "@") {
+            return "…@" + dsn[dsn.index(after: at)...]
+        }
+        return dsn
+    }
+
     var body: some View {
         VStack(spacing: 24) {
             Spacer()
@@ -26,8 +37,8 @@ struct ContentView: View {
                 row("Version", "\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] ?? "?") (\(Bundle.main.infoDictionary?["CFBundleVersion"] ?? "?"))")
                 row("API", Config.apiBaseURL.absoluteString)
                 row("AppAttest env", Config.appAttestEnvironment.rawValue)
-                row("Sentry DSN", Config.sentryDSN.isEmpty ? "boş" : "var")
                 row("Sentry SDK", SentrySDK.isEnabled ? "ENABLED" : "DISABLED")
+                row("DSN", dsnDisplay)
                 if !sendResult.isEmpty {
                     row("Sonuç", sendResult)
                 }
@@ -43,14 +54,11 @@ struct ContentView: View {
                     didSendTestEvent = true
                     return
                 }
-                // Gerçek error event → Issues'da kesin görünür (info değil)
-                let eventId = SentrySDK.capture(message: "Manuel test event — \(Date())") { scope in
-                    scope.setLevel(.error)
-                    scope.setTag(value: "manual-test", key: "category")
-                }
-                // Event'i hemen gönder (uygulama idle kalmasın diye)
+                // En basit capture — scope callback yok
+                let eventId = SentrySDK.capture(message: "Manuel test event — \(Date())")
                 SentrySDK.flush(timeout: 5)
-                sendResult = "id: \(eventId.sentryIdString.prefix(8))"
+                let idStr = eventId.sentryIdString
+                sendResult = idStr.hasPrefix("00000000") ? "DROP (empty id)" : "OK: \(idStr.prefix(8))"
                 didSendTestEvent = true
             } label: {
                 Label(didSendTestEvent ? "Gönderildi" : "Sentry'e test event gönder", systemImage: "paperplane.fill")

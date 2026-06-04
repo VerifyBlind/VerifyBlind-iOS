@@ -85,19 +85,10 @@ enum LogBootstrap {
             return
         }
 
+        // TEŞHİS: en minimal init — sadece dsn. Diğer option'lar empty-id'ye sebep mi diye.
         SentrySDK.start { options in
             options.dsn = dsn
-            options.environment = Config.appAttestEnvironment.rawValue
-            options.releaseName = "VerifyBlind@\(Bundle.main.shortVersion)+\(Bundle.main.buildNumber)"
-            options.debug = true // TEŞHİS: release'de de Sentry iç logları
-            options.sampleRate = 1.0 // TEŞHİS: hiçbir event sampling ile drop edilmesin
-            options.enableAutoPerformanceTracing = false
-            options.attachStacktrace = true
-            // TEŞHİS: redactPII geçici devre dışı — capture empty id veriyordu
-            // options.beforeSend = { event in
-            //     Self.redactPII(in: event)
-            //     return event
-            // }
+            options.debug = true
         }
         Log.info("Sentry başlatıldı (env: \(Config.appAttestEnvironment.rawValue))", category: .app)
     }
