@@ -4,8 +4,6 @@ workflows:
   ios-dev:
     name: iOS Dev → TestFlight Internal
     max_build_duration: 60
-    integrations:
-      app_store_connect: VerifyBlind_ASC_API_Key
     environment:
       groups:
         - verifyblind_ios_dev
@@ -27,7 +25,6 @@ workflows:
 
       - name: Generate xcconfig from env vars
         script: |
-          # xcconfig syntax: // in URL must be written as $/()
           {
             echo "API_BASE_URL = https:/\$()/api.verifyblind.com/api/verify/"
             echo "CERT_PIN_1 = ${CERT_PIN_1:-}"
@@ -78,7 +75,9 @@ workflows:
 
     publishing:
       app_store_connect:
-        api_key: VerifyBlind_ASC_API_Key
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
         submit_to_testflight: true
         beta_groups:
           - Internal Testers
@@ -88,8 +87,6 @@ workflows:
   ios-prod:
     name: iOS Prod → TestFlight External
     max_build_duration: 60
-    integrations:
-      app_store_connect: VerifyBlind_ASC_API_Key
     environment:
       groups:
         - verifyblind_ios_prod
@@ -161,7 +158,9 @@ workflows:
 
     publishing:
       app_store_connect:
-        api_key: VerifyBlind_ASC_API_Key
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
         submit_to_testflight: true
         beta_groups:
           - External Testers
