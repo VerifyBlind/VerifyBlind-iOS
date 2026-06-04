@@ -1,7 +1,9 @@
 import SwiftUI
+import Sentry
 
 struct ContentView: View {
     @State private var didSendTestEvent = false
+    @State private var sendResult = ""
 
     var body: some View {
         VStack(spacing: 24) {
@@ -24,7 +26,11 @@ struct ContentView: View {
                 row("Version", "\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] ?? "?") (\(Bundle.main.infoDictionary?["CFBundleVersion"] ?? "?"))")
                 row("API", Config.apiBaseURL.absoluteString)
                 row("AppAttest env", Config.appAttestEnvironment.rawValue)
-                row("Sentry", Config.sentryDSN.isEmpty ? "kapalı" : "açık")
+                row("Sentry DSN", Config.sentryDSN.isEmpty ? "boş" : "var")
+                row("Sentry SDK", SentrySDK.isEnabled ? "ENABLED" : "DISABLED")
+                if !sendResult.isEmpty {
+                    row("Sonuç", sendResult)
+                }
             }
             .font(.footnote.monospaced())
             .padding()
@@ -32,7 +38,19 @@ struct ContentView: View {
             .padding(.horizontal)
 
             Button {
-                Log.info("Manuel test event — pipeline doğrulaması", category: .flow)
+                guard SentrySDK.isEnabled else {
+                    sendResult = "SDK DISABLED — gitmedi"
+                    didSendTestEvent = true
+                    return
+                }
+                // Gerçek error event → Issues'da kesin görünür (info değil)
+                let eventId = SentrySDK.capture(message: "Manuel test event — \(Date())") { scope in
+                    scope.setLevel(.error)
+                    scope.setTag(value: "manual-test", key: "category")
+                }
+                // Event'i hemen gönder (uygulama idle kalmasın diye)
+                SentrySDK.flush(timeout: 5)
+                sendResult = "id: \(eventId.sentryIdString.prefix(8))"
                 didSendTestEvent = true
             } label: {
                 Label(didSendTestEvent ? "Gönderildi" : "Sentry'e test event gönder", systemImage: "paperplane.fill")
