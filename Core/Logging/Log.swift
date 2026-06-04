@@ -89,13 +89,15 @@ enum LogBootstrap {
             options.dsn = dsn
             options.environment = Config.appAttestEnvironment.rawValue
             options.releaseName = "VerifyBlind@\(Bundle.main.shortVersion)+\(Bundle.main.buildNumber)"
-            options.debug = Config.isDebugBuild
+            options.debug = true // TEŞHİS: release'de de Sentry iç logları
+            options.sampleRate = 1.0 // TEŞHİS: hiçbir event sampling ile drop edilmesin
             options.enableAutoPerformanceTracing = false
             options.attachStacktrace = true
-            options.beforeSend = { event in
-                Self.redactPII(in: event)
-                return event
-            }
+            // TEŞHİS: redactPII geçici devre dışı — capture empty id veriyordu
+            // options.beforeSend = { event in
+            //     Self.redactPII(in: event)
+            //     return event
+            // }
         }
         Log.info("Sentry başlatıldı (env: \(Config.appAttestEnvironment.rawValue))", category: .app)
     }
