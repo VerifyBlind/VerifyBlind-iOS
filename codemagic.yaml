@@ -4,17 +4,13 @@ workflows:
   ios-dev:
     name: iOS Dev → TestFlight Internal
     max_build_duration: 60
-    integrations:
-      app_store_connect: VerifyBlind_ASC_API_Key
     environment:
       groups:
         - verifyblind_ios_dev
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: app.verifyblind.ios
       vars:
         XCODE_SCHEME: VerifyBlind
         XCODE_PROJECT: VerifyBlind.xcodeproj
+        BUNDLE_ID: app.verifyblind.ios
     triggering:
       events:
         - push
@@ -33,9 +29,9 @@ workflows:
             echo "CERT_PIN_2 = ${CERT_PIN_2:-}"
             echo "ENCLAVE_DEVELOPER_PUBLIC_KEY = ${ENCLAVE_DEVELOPER_PUBLIC_KEY:-}"
             echo "APPLE_TEAM_ID = ${APPLE_TEAM_ID}"
-            echo "IOS_BUNDLE_ID = app.verifyblind.ios"
+            echo "IOS_BUNDLE_ID = ${BUNDLE_ID}"
             echo "APP_ATTEST_ENVIRONMENT = development"
-            echo "ICLOUD_CONTAINER_ID = iCloud.app.verifyblind.ios"
+            echo "ICLOUD_CONTAINER_ID = iCloud.${BUNDLE_ID}"
             echo "SENTRY_DSN = ${SENTRY_DSN:-}"
             echo "DROPBOX_IOS_APP_KEY = ${DROPBOX_IOS_APP_KEY:-}"
             echo "BUILD_NUMBER = $BUILD_NUMBER"
@@ -50,9 +46,28 @@ workflows:
             -project "$XCODE_PROJECT" \
             -scheme "$XCODE_SCHEME"
 
+      - name: Initialize keychain
+        script: keychain initialize
+
+      - name: Fetch Distribution certificate + App Store provisioning profile
+        script: |
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
+            --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            --private-key "@env:APP_STORE_CONNECT_PRIVATE_KEY" \
+            --create
+
+      - name: Add certificate to keychain
+        script: |
+          keychain add-certificates \
+            --certificate-key "@env:APP_STORE_CONNECT_PRIVATE_KEY"
+
+      - name: Set Xcode project to use fetched profiles
+        script: xcode-project use-profiles
+
       - name: Build and archive (Release)
         script: |
-          xcode-project use-profiles
           xcodebuild \
             -project "$XCODE_PROJECT" \
             -scheme "$XCODE_SCHEME" \
@@ -89,17 +104,13 @@ workflows:
   ios-prod:
     name: iOS Prod → TestFlight External
     max_build_duration: 60
-    integrations:
-      app_store_connect: VerifyBlind_ASC_API_Key
     environment:
       groups:
         - verifyblind_ios_prod
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: app.verifyblind.ios
       vars:
         XCODE_SCHEME: VerifyBlind
         XCODE_PROJECT: VerifyBlind.xcodeproj
+        BUNDLE_ID: app.verifyblind.ios
     triggering:
       events:
         - push
@@ -118,9 +129,9 @@ workflows:
             echo "CERT_PIN_2 = ${CERT_PIN_2:-}"
             echo "ENCLAVE_DEVELOPER_PUBLIC_KEY = ${ENCLAVE_DEVELOPER_PUBLIC_KEY:-}"
             echo "APPLE_TEAM_ID = ${APPLE_TEAM_ID}"
-            echo "IOS_BUNDLE_ID = app.verifyblind.ios"
+            echo "IOS_BUNDLE_ID = ${BUNDLE_ID}"
             echo "APP_ATTEST_ENVIRONMENT = production"
-            echo "ICLOUD_CONTAINER_ID = iCloud.app.verifyblind.ios"
+            echo "ICLOUD_CONTAINER_ID = iCloud.${BUNDLE_ID}"
             echo "SENTRY_DSN = ${SENTRY_DSN:-}"
             echo "DROPBOX_IOS_APP_KEY = ${DROPBOX_IOS_APP_KEY:-}"
             echo "BUILD_NUMBER = $BUILD_NUMBER"
@@ -135,9 +146,28 @@ workflows:
             -project "$XCODE_PROJECT" \
             -scheme "$XCODE_SCHEME"
 
+      - name: Initialize keychain
+        script: keychain initialize
+
+      - name: Fetch Distribution certificate + App Store provisioning profile
+        script: |
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
+            --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            --private-key "@env:APP_STORE_CONNECT_PRIVATE_KEY" \
+            --create
+
+      - name: Add certificate to keychain
+        script: |
+          keychain add-certificates \
+            --certificate-key "@env:APP_STORE_CONNECT_PRIVATE_KEY"
+
+      - name: Set Xcode project to use fetched profiles
+        script: xcode-project use-profiles
+
       - name: Build and archive (Release)
         script: |
-          xcode-project use-profiles
           xcodebuild \
             -project "$XCODE_PROJECT" \
             -scheme "$XCODE_SCHEME" \
