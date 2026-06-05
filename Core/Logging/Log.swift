@@ -85,10 +85,17 @@ enum LogBootstrap {
             return
         }
 
-        // TEŞHİS: en minimal init — sadece dsn. Diğer option'lar empty-id'ye sebep mi diye.
         SentrySDK.start { options in
             options.dsn = dsn
-            options.debug = true
+            options.environment = Config.appAttestEnvironment.rawValue
+            options.releaseName = "VerifyBlind@\(Bundle.main.shortVersion)+\(Bundle.main.buildNumber)"
+            options.debug = Config.isDebugBuild
+            options.enableAutoPerformanceTracing = false
+            options.attachStacktrace = true
+            options.beforeSend = { event in
+                Self.redactPII(in: event)
+                return event
+            }
         }
         Log.info("Sentry başlatıldı (env: \(Config.appAttestEnvironment.rawValue))", category: .app)
     }

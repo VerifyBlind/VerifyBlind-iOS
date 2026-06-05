@@ -33,6 +33,9 @@ workflows:
 
       - name: Generate xcconfig from env vars
         script: |
+          # xcconfig'te '//' yorum karakteri → URL/DSN'lerdeki '//' kırpılır.
+          # '//' → '/$()/' kaçışı uygula ($() build sırasında boş expand olur).
+          DSN_ESC=$(printf '%s' "${SENTRY_DSN:-}" | sed 's|//|/$()/|g')
           {
             echo "API_BASE_URL = https:/\$()/api.verifyblind.com/api/verify/"
             echo "CERT_PIN_1 = ${CERT_PIN_1:-}"
@@ -42,7 +45,7 @@ workflows:
             echo "IOS_BUNDLE_ID = ${BUNDLE_ID}"
             echo "APP_ATTEST_ENVIRONMENT = development"
             echo "ICLOUD_CONTAINER_ID = iCloud.${BUNDLE_ID}"
-            echo "SENTRY_DSN = ${SENTRY_DSN:-}"
+            echo "SENTRY_DSN = $DSN_ESC"
             echo "DROPBOX_IOS_APP_KEY = ${DROPBOX_IOS_APP_KEY:-}"
             echo "BUILD_NUMBER = $BUILD_NUMBER"
           # Build --config Release ile alınıyor → Release.xcconfig okunur.
@@ -131,6 +134,8 @@ workflows:
 
       - name: Generate xcconfig from env vars
         script: |
+          # xcconfig'te '//' yorum karakteri → URL/DSN'lerdeki '//' kırpılır.
+          DSN_ESC=$(printf '%s' "${SENTRY_DSN:-}" | sed 's|//|/$()/|g')
           {
             echo "API_BASE_URL = https:/\$()/api.verifyblind.com/api/verify/"
             echo "CERT_PIN_1 = ${CERT_PIN_1:-}"
@@ -140,7 +145,7 @@ workflows:
             echo "IOS_BUNDLE_ID = ${BUNDLE_ID}"
             echo "APP_ATTEST_ENVIRONMENT = production"
             echo "ICLOUD_CONTAINER_ID = iCloud.${BUNDLE_ID}"
-            echo "SENTRY_DSN = ${SENTRY_DSN:-}"
+            echo "SENTRY_DSN = $DSN_ESC"
             echo "DROPBOX_IOS_APP_KEY = ${DROPBOX_IOS_APP_KEY:-}"
             echo "BUILD_NUMBER = $BUILD_NUMBER"
           } > Config/Release.xcconfig
