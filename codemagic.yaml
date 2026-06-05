@@ -4,6 +4,10 @@ workflows:
   ios-dev:
     name: iOS Dev → TestFlight Internal
     max_build_duration: 60
+    cache:
+      cache_paths:
+        - $HOME/Library/Caches/org.swift.swiftpm
+        - $HOME/Library/Developer/Xcode/DerivedData
     environment:
       groups:
         - verifyblind_ios_dev
@@ -105,6 +109,10 @@ workflows:
   ios-prod:
     name: iOS Prod → TestFlight External
     max_build_duration: 60
+    cache:
+      cache_paths:
+        - $HOME/Library/Caches/org.swift.swiftpm
+        - $HOME/Library/Developer/Xcode/DerivedData
     environment:
       groups:
         - verifyblind_ios_prod
