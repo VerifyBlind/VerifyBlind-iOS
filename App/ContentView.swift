@@ -3,10 +3,8 @@ import Sentry
 
 struct ContentView: View {
     @State private var didSendTestEvent = false
-    #if DEBUG
     @State private var selfTestResults: [SelfTestResult] = []
     @State private var runningSelfTest = false
-    #endif
 
     var body: some View {
         ScrollView {
@@ -43,9 +41,12 @@ struct ContentView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(didSendTestEvent)
 
-                #if DEBUG
-                selfTestSection
-                #endif
+                // Dev/TestFlight Internal'da görünür, prod App Store'da gizli.
+                // ÇALIŞMA-ZAMANI kontrolü: TestFlight build'i Release config olduğu için
+                // `#if DEBUG` İŞE YARAMAZDI (DEBUG tanımsız → buton hiç görünmezdi).
+                if Config.appAttestEnvironment == .development {
+                    selfTestSection
+                }
             }
             .padding()
         }
@@ -65,7 +66,6 @@ struct ContentView: View {
         }
     }
 
-    #if DEBUG
     private var selfTestSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Divider()
@@ -115,7 +115,6 @@ struct ContentView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
-    #endif
 }
 
 #Preview {
