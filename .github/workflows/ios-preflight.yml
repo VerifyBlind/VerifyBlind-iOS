@@ -69,33 +69,20 @@ jobs:
           path: VerifyBlind.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
           if-no-files-found: warn
 
-  # Preflight (derleme) YEŞİL + commit mesajında [build] varsa → Codemagic ios-dev'i
-  # otomatik başlat. Ucuz ubuntu runner (macOS dakikası HARCAMAZ). Codemagic yalnızca
-  # derlenen kodda çalışır → kırık build dakika yemez.
-  # NOT: "az build al" için [build] kapısı var. HER yeşil push'ta build istersen
-  # aşağıdaki if'ten `&& contains(...)` kısmını sil. Gerekli secret: CODEMAGIC_API_TOKEN.
-  trigger-codemagic:
+  # Preflight (derleme) YEŞİL + commit mesajında [build] varsa → dev'i `tflight` deploy
+  # branch'ine promote et. Bu GERÇEK push, GitHub→Codemagic webhook'unu tetikler; Codemagic
+  # ios-dev `tflight`'ta build alır. API TOKEN GEREKMEZ (ücretsiz planda token yok) — sadece
+  # git push + mevcut webhook. Ucuz ubuntu runner (macOS dakikası harcamaz).
+  # "Az build al" için [build] kapısı; her yeşilde build istersen `&& contains(...)`'i sil.
+  promote-to-codemagic:
     needs: build
     if: github.event_name == 'push' && contains(github.event.head_commit.message, '[build]')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - name: Codemagic ios-dev build başlat (Builds API)
-        env:
-          CM_TOKEN: ${{ secrets.CODEMAGIC_API_TOKEN }}
+      - uses: actions/checkout@v4
+      - name: dev → tflight promote (Codemagic webhook'unu tetikler)
         run: |
-          if [ -z "$CM_TOKEN" ]; then
-            echo "::warning::CODEMAGIC_API_TOKEN secret yok — Codemagic tetiklenmedi. Repo Settings → Secrets and variables → Actions'a ekle."
-            exit 0
-          fi
-          HTTP=$(curl -sS -o /tmp/cm.json -w '%{http_code}' -X POST https://api.codemagic.io/builds \
-            -H "Content-Type: application/json" \
-            -H "x-auth-token: $CM_TOKEN" \
-            --data '{"appId":"6a21d66e3f9f7d15b88b9baa","workflowId":"ios-dev","branch":"dev"}')
-          echo "Codemagic API HTTP $HTTP"
-          cat /tmp/cm.json 2>/dev/null || true
-          echo
-          if [ "$HTTP" != "200" ] && [ "$HTTP" != "201" ]; then
-            echo "::error::Codemagic build başlatılamadı (HTTP $HTTP)"
-            exit 1
-          fi
-          echo "✓ Codemagic ios-dev build başlatıldı (branch: dev)."
+          git push origin HEAD:refs/heads/tflight --force
+          echo "✓ tflight güncellendi → Codemagic ios-dev build'i webhook ile başlayacak."
