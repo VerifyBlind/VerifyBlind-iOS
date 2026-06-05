@@ -15,12 +15,16 @@ workflows:
         XCODE_SCHEME: VerifyBlind
         XCODE_PROJECT: VerifyBlind.xcodeproj
         BUNDLE_ID: app.verifyblind.ios
-    triggering:
-      events:
-        - push
-      branch_patterns:
-        - pattern: dev
-          include: true
+    # MANUEL tetikleme (otomatik push trigger KALDIRILDI). Akış: dev'e push →
+    # ücretsiz GitHub Actions "iOS Preflight" derleme+resolve kontrolü → YEŞİL olunca
+    # bu workflow Codemagic UI'dan ("Start new build", branch: dev) elle başlatılır.
+    # Böylece Codemagic'in 500 dk'sı yalnızca imza+TestFlight'a harcanır, derleme
+    # hatalarına değil. Geri otomatiğe almak için aşağıyı geri ekle:
+    #   triggering:
+    #     events: [push]
+    #     branch_patterns:
+    #       - pattern: dev
+    #         include: true
     scripts:
       - name: Install XcodeGen
         script: brew install xcodegen

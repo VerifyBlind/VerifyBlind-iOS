@@ -1,0 +1,62 @@
+name: iOS Preflight (resolve + unsigned build)
+
+# Ücretsiz GitHub Actions macOS runner'da derleme ön-kontrolü.
+# Amaç: SPM resolution VE Swift compile hatalarını Codemagic dakikası harcamadan yakalamak
+# (Windows'ta iOS derlenemiyor). İmza/TestFlight YOK — sadece "derleniyor mu?" kontrolü.
+# Yeşil olunca Codemagic ios-dev build'i MANUEL başlatılır (TestFlight için).
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+concurrency:
+  group: ios-preflight-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode sürümü
+        run: xcodebuild -version
+
+      - name: XcodeGen kur
+        run: brew install xcodegen
+
+      - name: Xcode projesi üret
+        run: xcodegen generate
+
+      - name: SPM bağımlılıklarını çöz
+        run: |
+          set -o pipefail
+          xcodebuild -resolvePackageDependencies \
+            -project VerifyBlind.xcodeproj \
+            -scheme VerifyBlind
+
+      - name: Derle (imzasız, iOS cihaz SDK — CoreNFC simülatörde yok)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project VerifyBlind.xcodeproj \
+            -scheme VerifyBlind \
+            -configuration Debug \
+            -destination 'generic/platform=iOS' \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM=""
+
+      # Yeşil build'in ürettiği Package.resolved'ı sakla → indirip commit'leyerek
+      # gerçek sürüm kilidi sağlanabilir (idiomatic SPM reproducibility).
+      - name: Package.resolved'ı artifact olarak yükle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Package.resolved
+          path: VerifyBlind.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          if-no-files-found: warn
