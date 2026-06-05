@@ -21,24 +21,27 @@ configs:
   Debug: debug
   Release: release
 
-# Reproducible build: exactVersion ile sürümler kilitli (Mac yok → Package.resolved Windows'ta
-# üretilemiyor). SPM resolution conflict çıkarsa ilgili paketi geçici `from:`'a alıp düzelt.
+# Sürüm aralıkları `from:` (Stage 0'da kanıtlanmış config). Gerçek kilit = Package.resolved
+# (idiomatic Swift yaklaşımı: manifest'te aralık + resolved'da kilit). exactVersion DENENMEDİ:
+# Xcode 26 SwiftPM, Sentry 8.36.0'ı (trait bildirmiyor) exact pinleyince "disabled default traits
+# on package that declares no traits" hatası veriyor; `from:` daha yeni trait-aware Sentry'ye çözülüp
+# bunu aşıyor. Reproducibility için Package.resolved commit'le (bir Mac/CI üretince).
 packages:
   NFCPassportReader:
     url: https://github.com/AndyQ/NFCPassportReader
-    exactVersion: 2.1.0
+    from: 2.1.0
   SwiftCBOR:
     url: https://github.com/valpackett/SwiftCBOR
-    exactVersion: 0.4.7
+    from: 0.4.7
   GRDB:
     url: https://github.com/groue/GRDB.swift
-    exactVersion: 6.29.0
+    from: 6.29.0
   SwiftyDropbox:
     url: https://github.com/dropbox/SwiftyDropbox
-    exactVersion: 10.0.0
+    from: 10.0.0
   Sentry:
     url: https://github.com/getsentry/sentry-cocoa
-    exactVersion: 8.36.0
+    from: 8.36.0
 
 targets:
   VerifyBlind:
