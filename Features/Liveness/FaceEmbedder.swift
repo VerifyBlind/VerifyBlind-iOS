@@ -61,7 +61,7 @@ final class FaceEmbedder {
     /// Hizalanmış 112×112 görüntüden L2-normalize edilmiş 192-dim embedding. Model yoksa nil.
     func embedding(from image: CGImage) -> [Float]? {
         guard let model, let inputName, inputIsImage else { return nil }
-        guard let pixelBuffer = Self.makePixelBuffer(from: image, size: inputSize) else { return nil }
+        guard let pixelBuffer = Self.makePixelBuffer(from: image, size: Self.inputSize) else { return nil }
 
         do {
             let featureValue = MLFeatureValue(pixelBuffer: pixelBuffer)
