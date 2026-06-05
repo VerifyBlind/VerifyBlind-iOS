@@ -63,6 +63,13 @@ workflows:
       - name: Generate Xcode project (XcodeGen)
         script: xcodegen generate
 
+      # Commit'lenmiş Package.resolved → sürüm kilidi (preflight'ın doğruladığı sürümler).
+      - name: Place locked Package.resolved
+        script: |
+          DEST="$XCODE_PROJECT/project.xcworkspace/xcshareddata/swiftpm"
+          mkdir -p "$DEST"
+          cp Package.resolved "$DEST/Package.resolved"
+
       - name: Resolve Swift Package Manager dependencies
         script: |
           xcodebuild -resolvePackageDependencies \
@@ -164,6 +171,13 @@ workflows:
 
       - name: Generate Xcode project (XcodeGen)
         script: xcodegen generate
+
+      # Commit'lenmiş Package.resolved → sürüm kilidi (preflight'ın doğruladığı sürümler).
+      - name: Place locked Package.resolved
+        script: |
+          DEST="$XCODE_PROJECT/project.xcworkspace/xcshareddata/swiftpm"
+          mkdir -p "$DEST"
+          cp Package.resolved "$DEST/Package.resolved"
 
       - name: Resolve Swift Package Manager dependencies
         script: |
