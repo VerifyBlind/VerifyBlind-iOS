@@ -8,8 +8,12 @@ import NFCPassportReader
 /// çipi okur ve ham veriyi `ScannedPassport`'a eşler.
 ///
 /// Passive Authentication İSTEMCİDE yapılmaz (`masterListURL: nil`) — CSCA/CRL doğrulaması
-/// Enclave'de gerçekleşir (zero-knowledge: istemci güvenilmez). Yalnızca DG1/DG2/DG15 istenir;
-/// SOD+COM kütüphane tarafından otomatik okunur, DG11/DG12 gibi ekstra PII okunmaz.
+/// Enclave'de gerçekleşir (zero-knowledge: istemci güvenilmez). SOD + DG1/DG2/DG15 açıkça istenir
+/// (COM her zaman okunur). DG11/DG13 gibi ekstra PII okunmaz.
+///
+/// ⚠️ `.SOD` `tags`'e AÇIKÇA eklenmeli: NFCPassportReader yalnızca BOŞ `tags`'te SOD'u otomatik
+/// ekler; non-boş `tags`'te `readDataGroups` "readAllDatagroups != true" filtresiyle SOD'u okuma
+/// listesinden çıkarır → `getDataGroup(.SOD)` nil döner ("Kart verisi eksik: SOD" hatası).
 final class PassportNFCReader {
 
     func read(documentNumber: String, dateOfBirth: String, dateOfExpiry: String, handshakeNonce: String) async throws -> ScannedPassport {
@@ -38,7 +42,7 @@ final class PassportNFCReader {
             // gerçek Register akışında (Aşama 4) eklenecek.
             model = try await reader.readPassport(
                 mrzKey: mrzKey,
-                tags: [.DG1, .DG2, .DG15],
+                tags: [.SOD, .DG1, .DG2, .DG15],
                 aaChallenge: challenge
             )
         } catch let e as NFCPassportReaderError {

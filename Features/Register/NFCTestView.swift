@@ -8,9 +8,11 @@ import SwiftUI
 /// (okunan veri grupları + boyutları, AA durumu, challenge eşleşmesi, belge tipi/uyruk).
 /// Dil: `feedback_never_share_identity_wording` — "Kart okundu / Çip doğrulandı" (yasak ifadeler yok).
 struct NFCTestView: View {
-    @State private var docNo = ""
-    @State private var dob = ""
-    @State private var doe = ""
+    // Geliştirici test kartı için ön-doldurulmuş MRZ (yalnızca bu dev test ekranı; gerçek
+    // Register akışı Aşama 4'te kullanıcı girişiyle çalışacak).
+    @State private var docNo = "A36S661356"
+    @State private var dob = "10.06.1981"
+    @State private var doe = "04.07.2032"
     @State private var scanning = false
     @State private var summary: [String] = []
     @State private var errorText: String?
