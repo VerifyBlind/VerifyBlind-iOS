@@ -15,7 +15,8 @@ DerivedData/
 .swiftpm/
 Packages/
 Package.pins
-Package.resolved
+# Package.resolved: reproducible build için commit edilebilir (Mac/CI ürettiğinde).
+# Sürüm pin'i şu an project.yml'de exactVersion ile sağlanıyor.
 
 # macOS
 .DS_Store

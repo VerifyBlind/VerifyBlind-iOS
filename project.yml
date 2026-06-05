@@ -21,22 +21,24 @@ configs:
   Debug: debug
   Release: release
 
+# Reproducible build: exactVersion ile sürümler kilitli (Mac yok → Package.resolved Windows'ta
+# üretilemiyor). SPM resolution conflict çıkarsa ilgili paketi geçici `from:`'a alıp düzelt.
 packages:
   NFCPassportReader:
     url: https://github.com/AndyQ/NFCPassportReader
-    from: 2.1.0
+    exactVersion: 2.1.0
   SwiftCBOR:
     url: https://github.com/valpackett/SwiftCBOR
-    from: 0.4.7
+    exactVersion: 0.4.7
   GRDB:
     url: https://github.com/groue/GRDB.swift
-    from: 6.29.0
+    exactVersion: 6.29.0
   SwiftyDropbox:
     url: https://github.com/dropbox/SwiftyDropbox
-    from: 10.0.0
+    exactVersion: 10.0.0
   Sentry:
     url: https://github.com/getsentry/sentry-cocoa
-    from: 8.36.0
+    exactVersion: 8.36.0
 
 targets:
   VerifyBlind:

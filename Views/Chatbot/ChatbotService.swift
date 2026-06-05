@@ -31,7 +31,9 @@ final class ChatbotService {
     }
 
     func chat(_ payload: ChatRequest) async throws -> ChatResponse {
-        let endpoint = Config.apiBaseURL.appendingPathComponent("api/chatbot/chat")
+        // Host origin'e göre çöz: taban `…/api/verify/` olsa bile doğru host-root path üretilir
+        // (aksi halde `…/api/verify/api/chatbot/chat` → 404). Bkz. APIClient.origin(of:).
+        let endpoint = APIClient.origin(of: Config.apiBaseURL).appendingPathComponent("api/chatbot/chat")
         var req = URLRequest(url: endpoint)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
