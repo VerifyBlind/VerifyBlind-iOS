@@ -40,7 +40,12 @@ struct ContentView: View {
                 row("Sentry SDK", SentrySDK.isEnabled ? "ENABLED" : "DISABLED")
                 row("DSN", dsnDisplay)
                 if !sendResult.isEmpty {
-                    row("Sonuç", sendResult)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Sonuç")
+                            .foregroundStyle(.secondary)
+                        Text(sendResult)
+                            .textSelection(.enabled)
+                    }
                 }
             }
             .font(.footnote.monospaced())
@@ -99,8 +104,8 @@ struct ContentView: View {
         do {
             let (data, resp) = try await URLSession.shared.data(for: req)
             let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
-            let respStr = String(data: data, encoding: .utf8)?.prefix(50) ?? ""
-            await MainActor.run { sendResult = "HTTP \(code) \(respStr)" }
+            let respStr = String(data: data, encoding: .utf8)?.prefix(300) ?? ""
+            await MainActor.run { sendResult = "HTTP \(code)\n\(respStr)" }
         } catch {
             await MainActor.run { sendResult = "NET ERR: \(error.localizedDescription.prefix(50))" }
         }
