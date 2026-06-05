@@ -113,8 +113,9 @@ workflows:
         key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
         issuer_id: $APP_STORE_CONNECT_ISSUER_ID
         submit_to_testflight: true
-        beta_groups:
-          - Internal Testers
+        # beta_groups YOK: internal testçiler işlenen her build'i OTOMATİK alır; ASC API
+        # internal gruba build atamayı reddeder ("Cannot add internal group to a build").
+        # beta_groups yalnızca EXTERNAL gruplar için (bkz. ios-prod).
         expire_build_submitted_for_review: true
 
   # ── MAIN branch → TestFlight External (hazır olmadıkça kullanma) ───────────
