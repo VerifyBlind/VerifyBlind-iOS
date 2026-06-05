@@ -6,6 +6,7 @@ struct ContentView: View {
     @State private var selfTestResults: [SelfTestResult] = []
     @State private var runningSelfTest = false
     @State private var stage2Results: [SelfTestResult] = []
+    @State private var stage3Results: [SelfTestResult] = []
 
     var body: some View {
         NavigationStack {
@@ -19,7 +20,7 @@ struct ContentView: View {
                     Text("VerifyBlind")
                         .font(.system(size: 34, weight: .semibold))
 
-                    Text("iOS — Aşama 2: NFC")
+                    Text("iOS — Aşama 3: Camera/OCR/Liveness")
                         .font(.system(size: 15))
                         .foregroundStyle(.secondary)
 
@@ -47,6 +48,7 @@ struct ContentView: View {
                     // ÇALIŞMA-ZAMANI kontrolü: TestFlight build'i Release config olduğu için
                     // `#if DEBUG` İŞE YARAMAZDI (DEBUG tanımsız → buton hiç görünmezdi).
                     if Config.appAttestEnvironment == .development {
+                        stage3Section
                         stage2Section
                         selfTestSection
                     }
@@ -68,6 +70,59 @@ struct ContentView: View {
                 .lineLimit(2)
                 .truncationMode(.middle)
         }
+    }
+
+    // MARK: - Aşama 3 (Camera/OCR/Liveness)
+
+    private var stage3Section: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Divider()
+
+            Text("Stage 3 — Camera / OCR / Liveness")
+                .font(.headline)
+
+            Text("Kamera/Vision/CoreML cihazda test ekranlarıyla; saf mantık (MRZ, jest, hizalama, kosinüs) aşağıdaki self-test ile doğrulanır.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            NavigationLink {
+                MRZScanTestView()
+            } label: {
+                Label("MRZ Tarama Testi", systemImage: "text.viewfinder")
+            }
+            .buttonStyle(.bordered)
+
+            NavigationLink {
+                QRScanTestView()
+            } label: {
+                Label("QR Tarama Testi", systemImage: "qrcode.viewfinder")
+            }
+            .buttonStyle(.bordered)
+
+            NavigationLink {
+                LivenessTestView()
+            } label: {
+                Label("Liveness Testi", systemImage: "face.smiling")
+            }
+            .buttonStyle(.bordered)
+
+            Button {
+                stage3Results = Stage3SelfTest.runAll()
+            } label: {
+                Label("Stage 3 self-test çalıştır", systemImage: "checklist")
+            }
+            .buttonStyle(.bordered)
+
+            ForEach(stage3Results) { resultRow($0) }
+
+            if !stage3Results.isEmpty {
+                let passed = stage3Results.filter { $0.passed }.count
+                Text("\(passed)/\(stage3Results.count) passed")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(passed == stage3Results.count ? .green : .red)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Aşama 2 (NFC)
