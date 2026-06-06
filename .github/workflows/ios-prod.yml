@@ -1,0 +1,63 @@
+name: iOS Prod → TestFlight External
+
+# FAZ 1: Sadece workflow_dispatch — imza+upload testi için. Faz 2'de push aktif edilecek.
+# FAZ 2 geçişinde: aşağıdaki push bloğunun yorumunu aç, CodeMagic webhook'unu durdur.
+on:
+  # push:
+  #   branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ios-prod-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  testflight:
+    name: Build + Sign + TestFlight External
+    runs-on: macos-latest
+    timeout-minutes: 60
+    environment: production
+    env:
+      BUNDLE_ID: app.verifyblind.ios
+      APP_ATTEST_ENVIRONMENT: production
+      BETA_GROUP: External Testers
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: SPM cache
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: Install tools
+        run: |
+          brew install xcodegen
+          pip3 install codemagic-cli-tools
+
+      - name: Build, sign, upload
+        env:
+          APP_STORE_APP_ID: ${{ secrets.APP_STORE_APP_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_IDENTIFIER }}
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          CERTIFICATE_PRIVATE_KEY: ${{ secrets.CERTIFICATE_PRIVATE_KEY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CERT_PIN_1: ${{ secrets.CERT_PIN_1 }}
+          CERT_PIN_2: ${{ secrets.CERT_PIN_2 }}
+          ENCLAVE_DEVELOPER_PUBLIC_KEY: ${{ secrets.ENCLAVE_DEVELOPER_PUBLIC_KEY }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          DROPBOX_IOS_APP_KEY: ${{ secrets.DROPBOX_IOS_APP_KEY }}
+        run: bash scripts/ci/ios-build-upload.sh
+
+      - name: Upload IPA artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ipa-prod-${{ github.run_number }}
+          path: build/ios/ipa/*.ipa
+          if-no-files-found: warn

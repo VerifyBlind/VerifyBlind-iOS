@@ -1,0 +1,126 @@
+name: iOS Dev → TestFlight Internal
+
+# FAZ 1: Sadece workflow_dispatch — imza+upload testi için. Faz 2'de push aktif edilecek.
+# FAZ 2 geçişinde: aşağıdaki push bloğunun yorumunu aç, ios-preflight.yml'i sil.
+on:
+  # push:
+  #   branches: [dev]
+  workflow_dispatch:
+
+concurrency:
+  group: ios-dev-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Preflight: imzasız derleme (her push için hızlı compile-fail kapısı) ────
+  preflight:
+    name: Preflight (unsigned build)
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode version
+        run: xcodebuild -version
+
+      - name: SPM cache
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Place locked Package.resolved
+        run: |
+          DEST="VerifyBlind.xcodeproj/project.xcworkspace/xcshareddata/swiftpm"
+          mkdir -p "$DEST"
+          cp Package.resolved "$DEST/Package.resolved"
+
+      - name: Resolve SPM dependencies
+        run: |
+          set -o pipefail
+          xcodebuild -resolvePackageDependencies \
+            -project VerifyBlind.xcodeproj \
+            -scheme VerifyBlind
+
+      - name: Build (unsigned, iOS device SDK — CoreNFC not available on simulator)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project VerifyBlind.xcodeproj \
+            -scheme VerifyBlind \
+            -configuration Debug \
+            -destination 'generic/platform=iOS' \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM=""
+
+      - name: Upload Package.resolved artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Package.resolved
+          path: VerifyBlind.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          if-no-files-found: warn
+
+  # ── TestFlight: imzalı build + upload → Internal testçiler ──────────────────
+  # [build] kapısı YOK — preflight yeşilse her dev push'unda çalışır.
+  # İleride yavaşlama olursa commit mesajında '[build]' kapısı eklenebilir:
+  #   if: contains(github.event.head_commit.message, '[build]')
+  testflight:
+    name: Build + Sign + TestFlight Internal
+    needs: preflight
+    runs-on: macos-latest
+    timeout-minutes: 60
+    environment: development
+    env:
+      BUNDLE_ID: app.verifyblind.ios
+      APP_ATTEST_ENVIRONMENT: development
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: SPM cache
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: Install tools
+        run: |
+          brew install xcodegen
+          pip3 install codemagic-cli-tools
+
+      - name: Build, sign, upload
+        env:
+          APP_STORE_APP_ID: ${{ secrets.APP_STORE_APP_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_IDENTIFIER }}
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          CERTIFICATE_PRIVATE_KEY: ${{ secrets.CERTIFICATE_PRIVATE_KEY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CERT_PIN_1: ${{ secrets.CERT_PIN_1 }}
+          CERT_PIN_2: ${{ secrets.CERT_PIN_2 }}
+          ENCLAVE_DEVELOPER_PUBLIC_KEY: ${{ secrets.ENCLAVE_DEVELOPER_PUBLIC_KEY }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          DROPBOX_IOS_APP_KEY: ${{ secrets.DROPBOX_IOS_APP_KEY }}
+        run: bash scripts/ci/ios-build-upload.sh
+
+      - name: Upload IPA artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ipa-dev-${{ github.run_number }}
+          path: build/ios/ipa/*.ipa
+          if-no-files-found: warn
