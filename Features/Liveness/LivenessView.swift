@@ -97,6 +97,12 @@ struct LivenessView: View {
 
             Spacer()
 
+            // Dev kalibrasyon: canlı göz-açıklık % (blink ayarı için)
+            Text("göz açıklığı: %\(viewModel.debugEyeOpen)")
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.white.opacity(0.6))
+                .padding(.bottom, 4)
+
             // Alt: canlı % + chip küçük resim
             if viewModel.showScore {
                 HStack(spacing: 12) {

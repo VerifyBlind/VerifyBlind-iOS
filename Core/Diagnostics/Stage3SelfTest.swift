@@ -113,6 +113,21 @@ enum Stage3SelfTest {
             return (approx(n[0], 0.6, tol: 1e-5) && approx(n[1], 0.8, tol: 1e-5), "\(n)")
         })
 
+        // ── BlinkDetector (göreceli kapan→açıl) ──
+        r.append(check("BlinkDetector: aç→kapa→aç → blink") {
+            let b = BlinkDetector()
+            for _ in 0..<5 { _ = b.feed(0.9) }   // baseline kur (açık)
+            _ = b.feed(0.3)                       // kapan
+            let fired = b.feed(0.9)               // açıl → blink
+            return (fired, fired ? "fired" : "fire yok")
+        })
+        r.append(check("BlinkDetector: sabit açık → blink YOK") {
+            let b = BlinkDetector()
+            var any = false
+            for _ in 0..<10 { if b.feed(0.9) { any = true } }
+            return (!any, any ? "yanlis fire" : "ok")
+        })
+
         // ── CoreML model varlığı (bilgilendirici — model commit'lenmemişse de PASS) ──
         r.append(check("FaceEmbedder model durumu (bilgi)") {
             let available = FaceEmbedder().isAvailable

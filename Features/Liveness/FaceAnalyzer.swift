@@ -23,9 +23,9 @@ final class FaceAnalyzer {
     var onFace: ((Frame) -> Void)?
     var onNoFace: (() -> Void)?
 
-    /// MLKit ↔ Vision yaw işareti farkı + ön kamera aynası için kalibrasyon. Cihaz testinde
-    /// sol/sağ ters çıkarsa bunu -1 yap (Android'deki "SWAPPED Directions" pragmatiği).
-    var yawSign: Float = 1
+    /// MLKit ↔ Vision yaw işareti + ön kamera aynası kalibrasyonu. **Cihaz testinde sol/sağ ters
+    /// çıktı (2026-06-06) → -1** (Android'deki "SWAPPED Directions" pragmatiğinin iOS karşılığı).
+    var yawSign: Float = -1
 
     private let request = VNDetectFaceLandmarksRequest()
     private var isAnalyzing = false

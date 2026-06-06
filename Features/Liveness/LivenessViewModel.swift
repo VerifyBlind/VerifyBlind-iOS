@@ -35,6 +35,7 @@ final class LivenessViewModel: ObservableObject {
     @Published var showScore = false   // chipEmbedding != nil
     @Published var checkmark = false
     @Published var wrongMove = false
+    @Published var debugEyeOpen = 0   // dev: canlı göz-açıklık % (blink kalibrasyonu)
     @Published private(set) var alignedSelfieJPEG: Data?
     @Published private(set) var selfiePreview: UIImage?
     @Published private(set) var chipPreview: UIImage?
@@ -60,6 +61,7 @@ final class LivenessViewModel: ObservableObject {
     private var lastActionTime: TimeInterval = 0
     private var lastCaptureTime: TimeInterval = 0
     private var selfieJPEG: Data?
+    private let blinkDetector = BlinkDetector()
 
     private var timer: Timer?
     private var startedAt: Date?
@@ -143,6 +145,7 @@ final class LivenessViewModel: ObservableObject {
 
     /// index'i (video kuyruğu) okur ve UI'yi ana kuyrukta sunar. index taşmışsa başarı değerlendir.
     private func presentChallengeForIndex() {
+        blinkDetector.resetArmed() // yeni challenge → yarım kalan blink durumu sıfırla
         if index >= challenges.count {
             finalizeSuccessAttempt()
             return
@@ -163,35 +166,58 @@ final class LivenessViewModel: ObservableObject {
     private func processAction(_ signals: FaceSignals) {
         guard !isDemo, index < challenges.count else { return }
         let now = Date().timeIntervalSince1970 * 1000
+
+        // Canlı göz-açıklık göstergesi (dev kalibrasyon) — her karede.
+        let eyeOpen = min(signals.leftEyeOpen, signals.rightEyeOpen)
+        let eyePct = Int(eyeOpen * 100)
+        DispatchQueue.main.async { [weak self] in self?.debugEyeOpen = eyePct }
+
         guard now - lastActionTime >= 2000 else { return }
-
         let target = challenges[index]
-        guard let detected = LivenessGestureDetector.detect(signals) else { return }
 
-        if detected == target {
-            lastActionTime = now
-            index += 1
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                self.checkmark = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                    self.camera.runOnVideoQueue { self.presentChallengeForIndex() }
-                }
+        // Blink: göreceli detektör (Vision gözü tam kapatmıyor) + statik fallback.
+        if target == .blink {
+            if blinkDetector.feed(eyeOpen) || LivenessGestureDetector.detect(signals) == .blink {
+                advanceOnSuccess(now: now)
             }
+            return
+        }
+
+        // left/right/smile: tek-kare detect.
+        guard let detected = LivenessGestureDetector.detect(signals) else { return }
+        if detected == target {
+            advanceOnSuccess(now: now)
         } else if target == .faceLeft || target == .faceRight {
-            // Yanlış kafa dönüşü → baştan (Android STRICT)
-            lastActionTime = now
-            index = 0
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                self.wrongMove = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                    self.wrongMove = false
-                    self.camera.runOnVideoQueue { self.presentChallengeForIndex() }
-                }
+            resetOnWrong(now: now) // yanlış kafa dönüşü → baştan (Android STRICT)
+        }
+        // smile yanlışı → yok say
+    }
+
+    private func advanceOnSuccess(now: TimeInterval) {
+        lastActionTime = now
+        index += 1
+        blinkDetector.resetArmed()
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.checkmark = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                self.camera.runOnVideoQueue { self.presentChallengeForIndex() }
             }
         }
-        // blink/smile yanlışı → yok say
+    }
+
+    private func resetOnWrong(now: TimeInterval) {
+        lastActionTime = now
+        index = 0
+        blinkDetector.resetArmed()
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.wrongMove = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                self.wrongMove = false
+                self.camera.runOnVideoQueue { self.presentChallengeForIndex() }
+            }
+        }
     }
 
     /// Best-frame yakalama (Android captureFrame). 400ms throttle.
