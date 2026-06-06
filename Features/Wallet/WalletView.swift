@@ -1,0 +1,227 @@
+import SwiftUI
+
+/// Wallet (home) — Android `WalletFragment` + `fragment_wallet.xml` birebir portu.
+/// Boş durum: NFC illüstrasyonu + "Kimlik Kartı Ekle" + (demo) + "Nasıl Çalışır?".
+/// Kayıtlı durum: kart (item_wallet_card) + "QR ile Doğrula" + "Kimliği Sil".
+struct WalletView: View {
+    @EnvironmentObject var appState: AppState
+
+    let onAddCard: () -> Void
+    let onDemo: () -> Void
+    let onVerifyQr: () -> Void
+    let onSettings: () -> Void
+    let onHistory: () -> Void
+    var onDevMenu: (() -> Void)? = nil
+
+    @State private var showDeleteConfirm = false
+    @State private var removing = false
+    @State private var removeError: String?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            TopAppBar(onSettings: onSettings)
+                // Dev menü: logoya uzun bas (yalnız development).
+                .onLongPressGesture(minimumDuration: 0.8) { onDevMenu?() }
+
+            if appState.hasCard {
+                registeredState
+            } else {
+                emptyState
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.background.ignoresSafeArea())
+        .confirmationDialog(L.t("delete_confirm_title"), isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+            Button(L.t("btn_delete_confirm"), role: .destructive) { Task { await removeIdentity() } }
+            Button(L.t("btn_cancel_upper"), role: .cancel) {}
+        } message: {
+            Text(L.t("delete_confirm_desc"))
+        }
+        .alert(L.t("operation_failed_title"), isPresented: Binding(get: { removeError != nil }, set: { if !$0 { removeError = nil } })) {
+            Button(L.t("common_ok"), role: .cancel) {}
+        } message: {
+            Text(removeError ?? "")
+        }
+        .onAppear { appState.refresh() }
+    }
+
+    // MARK: - Empty state
+
+    private var emptyState: some View {
+        VStack(spacing: 0) {
+            Spacer().frame(height: 8)
+            EmptyStateIllustration()
+                .padding(.top, 12)
+
+            Spacer().frame(height: 10)
+
+            Text(L.t("empty_state_title"))
+                .font(.system(size: 16, weight: .heavy))
+                .foregroundColor(Theme.onSurface)
+                .multilineTextAlignment(.center)
+                .lineSpacing(2)
+                .padding(.horizontal, 32)
+
+            Text(L.t("empty_state_desc"))
+                .font(.system(size: 14))
+                .foregroundColor(Theme.onSurfaceVariant)
+                .multilineTextAlignment(.center)
+                .lineSpacing(5)
+                .padding(.horizontal, 40)
+                .padding(.top, 12)
+
+            Spacer()
+
+            PrimaryGradientButton(title: L.t("btn_add_id"), systemImage: "creditcard.fill", action: onAddCard)
+                .padding(.horizontal, 32)
+
+            if appState.demoEnabled {
+                Button(action: onDemo) {
+                    Text(L.t("demo_mode_title"))
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(Theme.secondary)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 48)
+                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.secondary, lineWidth: 1.5))
+                }
+                .padding(.horizontal, 32)
+                .padding(.top, 8)
+            }
+
+            Button(action: howItWorks) {
+                HStack(spacing: 6) {
+                    Image(systemName: "questionmark.circle").font(.system(size: 18)).foregroundColor(Theme.secondary)
+                    Text(L.t("link_how_it_works"))
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(Theme.secondary)
+                }
+            }
+            .padding(.vertical, 10)
+            .padding(.top, 12)
+            .padding(.bottom, 28)
+        }
+    }
+
+    // "Nasıl Çalışır?" — Help ekranı Aşama 6; şimdilik geçmişe değil, no-op bilgi (parite için link durur).
+    private func howItWorks() {
+        Log.info("Nasıl Çalışır? linkine tıklandı (Help ekranı Aşama 6)", category: .flow)
+    }
+
+    // MARK: - Registered state
+
+    private var registeredState: some View {
+        VStack(spacing: 0) {
+            Spacer().frame(height: 92 - 16) // Android marginTop 92 (top bar padding telafisi)
+
+            Button(action: onHistory) {
+                WalletCardView(expiry: ExpiryFormatter.format(appState.expiryDate))
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 24)
+
+            Spacer()
+
+            PrimaryGradientButton(title: L.t("btn_qr_login"), systemImage: "qrcode.viewfinder", fontSize: 16, action: onVerifyQr)
+                .padding(.horizontal, 24)
+                .disabled(removing)
+
+            Button { showDeleteConfirm = true } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "trash").font(.system(size: 16)).foregroundColor(Theme.error)
+                    Text(L.t("btn_delete_identity")).font(.system(size: 14)).foregroundColor(Theme.error)
+                }
+            }
+            .padding(8)
+            .padding(.top, 8)
+            .padding(.bottom, 28)
+            .disabled(removing)
+        }
+    }
+
+    // MARK: - Kimliği kaldır (Android deleteTicket)
+
+    private func removeIdentity() async {
+        removing = true
+        defer { removing = false }
+        do {
+            // Biyometrik onay (Android BiometricHelper.authenticate).
+            try await BiometricGate.authenticate(reason: L.t("biometric_subtitle_decrypt"))
+        } catch {
+            Log.warning("Kimlik kaldırma biyometrik iptal", category: .flow)
+            return
+        }
+        let cardId = SecureStore.getCardId()
+        TicketStore.clear()
+        SecureStore.clear()
+        KeychainKeyStore.deleteUserKey()
+        HistoryRepository.shared.insert(
+            title: L.t("history_card_deleted_title"),
+            description: L.t("history_card_deleted_desc"),
+            status: 1,
+            actionType: .deletedCard,
+            cardId: cardId ?? ""
+        )
+        Log.info("Kimlik kaldırıldı", category: .flow)
+        appState.refresh()
+    }
+}
+
+/// item_wallet_card.xml birebir kart görünümü.
+struct WalletCardView: View {
+    let expiry: String
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: Theme.radiusCard)
+                .fill(Theme.walletCardGradient)
+                .overlay(RoundedRectangle(cornerRadius: Theme.radiusCard).stroke(Theme.walletCardStroke, lineWidth: 1))
+
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .top) {
+                    HStack(spacing: 5) {
+                        Image(systemName: "shield.fill").font(.system(size: 12)).foregroundColor(.white)
+                        Text("VerifyBlind").font(.system(size: 12, weight: .bold)).foregroundColor(.white)
+                    }
+                    Spacer()
+                    GreenBadge(text: L.t("wallet_verified"), showCheck: true)
+                }
+
+                Text("**** ****")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(.white)
+                    .tracking(4)
+                    .padding(.top, 24)
+
+                Text(L.t("wallet_verified_identity"))
+                    .font(.system(size: 12))
+                    .foregroundColor(Theme.walletCardType)
+                    .padding(.top, 4)
+
+                Spacer()
+
+                HStack(alignment: .bottom) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L.t("wallet_expiry_label"))
+                            .font(.system(size: 9))
+                            .foregroundColor(Theme.walletExpiryLabel)
+                        Text(expiry)
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                    Spacer()
+                    GreenBadge(text: L.t("wallet_active"))
+                }
+            }
+            .padding(20)
+
+            // NFC dalga — sağ kenarda dikey ortada (alpha 0.6)
+            .overlay(alignment: .trailing) {
+                Image(systemName: "wave.3.right")
+                    .font(.system(size: 26))
+                    .foregroundColor(.white.opacity(0.6))
+                    .padding(.trailing, 20)
+            }
+        }
+        .frame(height: 190)
+    }
+}

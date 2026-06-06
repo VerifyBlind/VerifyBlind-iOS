@@ -51,6 +51,17 @@ enum RSAKey {
 
     // MARK: - SecKey → SPKI SHA-256 (cert pinning)
 
+    /// RSA public `SecKey` → base64 X.509 SPKI. Android `publicKey.encoded` paritesi —
+    /// server'a gönderilen `UserPubKey`/history pub key bu formatta olmalı (iOS external rep PKCS#1).
+    static func spkiBase64(of key: SecKey) -> String? {
+        var error: Unmanaged<CFError>?
+        guard let pkcs1 = SecKeyCopyExternalRepresentation(key, &error) as Data? else {
+            Log.error("RSAKey.spkiBase64: SecKeyCopyExternalRepresentation başarısız: \(Self.cfErr(error))", category: .crypto)
+            return nil
+        }
+        return spkiDER(fromPKCS1: pkcs1).base64EncodedString()
+    }
+
     /// RSA public `SecKey` → SPKI DER'in SHA-256'sı. Cert pinning pin'iyle karşılaştırmak için.
     static func spkiSHA256(of key: SecKey) -> Data? {
         var error: Unmanaged<CFError>?

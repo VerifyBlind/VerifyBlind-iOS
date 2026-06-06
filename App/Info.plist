@@ -22,6 +22,15 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- Android light-mode-only paritesi: uygulama daima light görünür (sistem dark mode yok sayılır). -->
+	<key>UIUserInterfaceStyle</key>
+	<string>Light</string>
+	<!-- TR/EN lokalizasyon — bundle'da {tr,en}.lproj/Localizable.strings -->
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>tr</string>
+		<string>en</string>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>

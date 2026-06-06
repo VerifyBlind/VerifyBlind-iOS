@@ -137,6 +137,21 @@ struct HybridContent: Codable {
     }
 }
 
+/// Register dönüşünde çözülen birleşik payload (Android `UnifiedRegistrationPayload`).
+/// `ticket` alt-nesnesi RAW JSON olarak yeniden saklanır (typed round-trip ile alan kaybı riski yok) —
+/// login sarmalı bu raw ticket'i aynen gömer, imza geçerli kalır.
+struct UnifiedRegistrationPayload: Codable {
+    let ticket: SignedTicket
+    let personId: String
+    let cardId: String
+
+    enum CodingKeys: String, CodingKey {
+        case ticket
+        case personId = "person_id"
+        case cardId = "card_id"
+    }
+}
+
 // MARK: - Ticket (PascalCase wire keys)
 
 struct SignedTicket: Codable {

@@ -59,6 +59,27 @@ enum CryptoUtils {
         return cipher.base64EncodedString()
     }
 
+    // MARK: - RSA decrypt (Keychain private key — Aşama 4 ticket/history çözme)
+
+    /// Verilen `SecKey` (Keychain'de yaşayan private key) ile RSA-OAEP decrypt.
+    /// User/History anahtarları OAEP-SHA1 ile sarılır (Android `keystoreOaepSpec` paritesi) →
+    /// varsayılan algoritma `.rsaEncryptionOAEPSHA1`. Biyometrik kapılı anahtarlarda `SecKey`
+    /// LAContext ile çekilmiş olmalı (prompt erişimde tetiklenir). `KeychainKeyStore` kullanır.
+    static func rsaDecrypt(_ cipherBase64: String, privateKey: SecKey,
+                           algorithm: SecKeyAlgorithm = .rsaEncryptionOAEPSHA1) throws -> String {
+        guard let cipher = decodeBase64(cipherBase64) else { throw CryptoError.invalidBase64 }
+        guard SecKeyIsAlgorithmSupported(privateKey, .decrypt, algorithm) else {
+            throw CryptoError.algorithmUnsupported
+        }
+        var error: Unmanaged<CFError>?
+        guard let plain = SecKeyCreateDecryptedData(privateKey, algorithm, cipher as CFData, &error) as Data? else {
+            let msg = Self.cfErr(error)
+            Log.error("CryptoUtils.rsaDecrypt başarısız: \(msg)", category: .crypto)
+            throw CryptoError.decryptionFailed(msg)
+        }
+        return String(decoding: plain, as: UTF8.self)
+    }
+
     // MARK: - AES-GCM (rastgele key, IV blob içinde gömülü)
 
     /// Android `aesEncrypt`: rastgele 256-bit key. blob = nonce(12)‖ciphertext‖tag(16).
