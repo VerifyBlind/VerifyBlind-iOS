@@ -64,8 +64,8 @@ enum Stage3SelfTest {
         r.append(check("detect: yaw -25 → faceRight") {
             (LivenessGestureDetector.detect(signals(yaw: -25)) == .faceRight, "ok")
         })
-        r.append(check("detect: smile 0.9 → smile") {
-            (LivenessGestureDetector.detect(signals(smile: 0.9)) == .smile, "ok")
+        r.append(check("detect: smile oranı 1.6 → smile (statik fallback)") {
+            (LivenessGestureDetector.detect(signals(smile: 1.6)) == .smile, "ok")
         })
         r.append(check("detect: iki göz 0.05 → blink") {
             (LivenessGestureDetector.detect(signals(leftEyeOpen: 0.05, rightEyeOpen: 0.05)) == .blink, "ok")
@@ -125,6 +125,20 @@ enum Stage3SelfTest {
             let b = BlinkDetector()
             var any = false
             for _ in 0..<10 { if b.feed(0.9) { any = true } }
+            return (!any, any ? "yanlis fire" : "ok")
+        })
+
+        // ── SmileDetector (göreceli sürdürülen genişleme) ──
+        r.append(check("SmileDetector: nötr→geniş → smile") {
+            let s = SmileDetector()
+            for _ in 0..<5 { _ = s.feed(1.0) }   // nötr baseline
+            let fired = s.feed(1.3)               // geniş ağız
+            return (fired, fired ? "fired" : "fire yok")
+        })
+        r.append(check("SmileDetector: sabit nötr → smile YOK") {
+            let s = SmileDetector()
+            var any = false
+            for _ in 0..<10 { if s.feed(1.0) { any = true } }
             return (!any, any ? "yanlis fire" : "ok")
         })
 

@@ -97,8 +97,8 @@ struct LivenessView: View {
 
             Spacer()
 
-            // Dev kalibrasyon: canlı göz-açıklık % (blink ayarı için)
-            Text("göz açıklığı: %\(viewModel.debugEyeOpen)")
+            // Dev kalibrasyon: canlı göz-açıklık % + smile sinyali (blink/smile ayarı için)
+            Text("göz: %\(viewModel.debugEyeOpen)   ·   gülümseme: \(viewModel.debugSmile)")
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(.white.opacity(0.6))
                 .padding(.bottom, 4)

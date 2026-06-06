@@ -103,6 +103,25 @@ workflows:
             --scheme "$XCODE_SCHEME" \
             --config Release
 
+      # dSYM'leri Sentry'e yükle → crash trace'leri sembolize olur (fonksiyon adı + satır).
+      # Debug ID (UUID) ile eşleşir, release'ten bağımsız. Token/org/project eksikse atlar
+      # (henüz Codemagic env group'a eklenmemişse build kırılmasın). --include-sources:
+      # build anındaki kaynağı dSYM'e gömer → Sentry stack trace'inde satırın etrafındaki kod
+      # inline görünür ve tam build commit'iyle eşleşir (repo public, gizlilik kaygısı yok).
+      - name: Upload dSYMs to Sentry
+        script: |
+          if [ -z "${SENTRY_AUTH_TOKEN:-}" ] || [ -z "${SENTRY_ORG:-}" ] || [ -z "${SENTRY_PROJECT:-}" ]; then
+            echo "⚠️  SENTRY_AUTH_TOKEN/SENTRY_ORG/SENTRY_PROJECT eksik — dSYM upload atlandı."
+            exit 0
+          fi
+          command -v sentry-cli >/dev/null 2>&1 || curl -sL https://sentry.io/get-cli/ | bash
+          sentry-cli debug-files upload \
+            --org "$SENTRY_ORG" \
+            --project "$SENTRY_PROJECT" \
+            --include-sources \
+            build/ios \
+            "$HOME/Library/Developer/Xcode/DerivedData"
+
     artifacts:
       - build/ios/ipa/*.ipa
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
@@ -212,6 +231,25 @@ workflows:
             --project "$XCODE_PROJECT" \
             --scheme "$XCODE_SCHEME" \
             --config Release
+
+      # dSYM'leri Sentry'e yükle → crash trace'leri sembolize olur (fonksiyon adı + satır).
+      # Debug ID (UUID) ile eşleşir, release'ten bağımsız. Token/org/project eksikse atlar
+      # (henüz Codemagic env group'a eklenmemişse build kırılmasın). --include-sources:
+      # build anındaki kaynağı dSYM'e gömer → Sentry stack trace'inde satırın etrafındaki kod
+      # inline görünür ve tam build commit'iyle eşleşir (repo public, gizlilik kaygısı yok).
+      - name: Upload dSYMs to Sentry
+        script: |
+          if [ -z "${SENTRY_AUTH_TOKEN:-}" ] || [ -z "${SENTRY_ORG:-}" ] || [ -z "${SENTRY_PROJECT:-}" ]; then
+            echo "⚠️  SENTRY_AUTH_TOKEN/SENTRY_ORG/SENTRY_PROJECT eksik — dSYM upload atlandı."
+            exit 0
+          fi
+          command -v sentry-cli >/dev/null 2>&1 || curl -sL https://sentry.io/get-cli/ | bash
+          sentry-cli debug-files upload \
+            --org "$SENTRY_ORG" \
+            --project "$SENTRY_PROJECT" \
+            --include-sources \
+            build/ios \
+            "$HOME/Library/Developer/Xcode/DerivedData"
 
     artifacts:
       - build/ios/ipa/*.ipa

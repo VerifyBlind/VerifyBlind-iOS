@@ -66,11 +66,15 @@ final class FaceAnalyzer {
 
         let leftEyeOpen = eyeOpenProbability(face.landmarks?.leftEye, imageSize: imageSize)
         let rightEyeOpen = eyeOpenProbability(face.landmarks?.rightEye, imageSize: imageSize)
-        let smile = smileProbability(face.landmarks, imageSize: imageSize)
 
         let bbox = topLeftRect(face.boundingBox, imageSize: imageSize)
         let leftEye = eyeCenter(face.landmarks?.leftEye, imageSize: imageSize)
         let rightEye = eyeCenter(face.landmarks?.rightEye, imageSize: imageSize)
+
+        // Smile sinyali = ağız genişliği / göz arası mesafe (stabil referans). Nötr ~1.0,
+        // gülümseme ~1.2+. SmileDetector bunu kişinin nötr seviyesine göre değerlendirir.
+        let smile = smileSpread(face.landmarks, leftEye: leftEye, rightEye: rightEye,
+                                imageSize: imageSize, faceBox: bbox)
 
         return FaceSignals(
             yaw: yawDeg, pitch: pitchDeg, roll: rollDeg,
@@ -121,16 +125,23 @@ final class FaceAnalyzer {
         return CGPoint(x: sx / CGFloat(pts.count), y: sy / CGFloat(pts.count))
     }
 
-    /// Gülümseme olasılığı [0,1] — ağız genişlik/yükseklik oranından. Nötr ~2.8, gülümseme ~4.6+.
-    /// Heuristik (MLKit smilingProbability eşdeğeri yok) → cihazda kalibre edilebilir.
-    private func smileProbability(_ landmarks: VNFaceLandmarks2D?, imageSize: CGSize) -> Float {
-        let pts = topLeftPoints(landmarks?.outerLips, imageSize: imageSize)
-        guard pts.count >= 4 else { return 0 }
-        let xs = pts.map(\.x), ys = pts.map(\.y)
-        let w = (xs.max() ?? 0) - (xs.min() ?? 0)
-        let h = (ys.max() ?? 0) - (ys.min() ?? 0)
-        guard h > 0 else { return 0 }
-        let ratio = Float(w / h)
-        return min(max((ratio - 2.8) / (4.6 - 2.8), 0), 1)
+    /// Smile sinyali = ağız genişliği / göz arası mesafe (stabil referans → gülümseme ağzı genişletir).
+    /// Width/height yerine bunu kullanıyoruz: gülümseme dişlerle ağzı AÇABİLDİĞİ için yükseklik de
+    /// artar ve oran ayrışmaz. Ham oran döner (nötr ~1.0, gülümseme ~1.2+); kalibrasyon SmileDetector'da.
+    private func smileSpread(_ landmarks: VNFaceLandmarks2D?, leftEye: CGPoint?, rightEye: CGPoint?,
+                             imageSize: CGSize, faceBox: CGRect) -> Float {
+        let lips = topLeftPoints(landmarks?.outerLips, imageSize: imageSize)
+        guard lips.count >= 4 else { return 0 }
+        let xs = lips.map(\.x)
+        let mouthWidth = (xs.max() ?? 0) - (xs.min() ?? 0)
+        let ref: CGFloat
+        if let l = leftEye, let r = rightEye {
+            let dx = r.x - l.x, dy = r.y - l.y
+            ref = (dx * dx + dy * dy).squareRoot()
+        } else {
+            ref = faceBox.width * 0.5
+        }
+        guard ref > 1 else { return 0 }
+        return Float(mouthWidth / ref)
     }
 }

@@ -9,7 +9,9 @@ import CoreGraphics
 enum LivenessGestureDetector {
 
     static let yawThreshold: Float = 20
-    static let smileThreshold: Float = 0.8
+    /// Smile artık ham oran (ağız genişliği / göz arası); bu yüksek bar STATİK fallback'tir.
+    /// Asıl tespit göreceli `SmileDetector` ile (kişinin nötr seviyesine göre).
+    static let smileThreshold: Float = 1.45
     static let blinkThreshold: Float = 0.1
 
     /// Tespit edilen jest (yoksa nil). Android `detectGesture` ile birebir.

@@ -36,6 +36,7 @@ final class LivenessViewModel: ObservableObject {
     @Published var checkmark = false
     @Published var wrongMove = false
     @Published var debugEyeOpen = 0   // dev: canlı göz-açıklık % (blink kalibrasyonu)
+    @Published var debugSmile = 0     // dev: canlı smile sinyali ×100 (smile kalibrasyonu)
     @Published private(set) var alignedSelfieJPEG: Data?
     @Published private(set) var selfiePreview: UIImage?
     @Published private(set) var chipPreview: UIImage?
@@ -62,6 +63,7 @@ final class LivenessViewModel: ObservableObject {
     private var lastCaptureTime: TimeInterval = 0
     private var selfieJPEG: Data?
     private let blinkDetector = BlinkDetector()
+    private let smileDetector = SmileDetector()
 
     private var timer: Timer?
     private var startedAt: Date?
@@ -145,7 +147,7 @@ final class LivenessViewModel: ObservableObject {
 
     /// index'i (video kuyruğu) okur ve UI'yi ana kuyrukta sunar. index taşmışsa başarı değerlendir.
     private func presentChallengeForIndex() {
-        blinkDetector.resetArmed() // yeni challenge → yarım kalan blink durumu sıfırla
+        blinkDetector.resetArmed(); smileDetector.reset() // yeni challenge → yarım kalan blink durumu sıfırla
         if index >= challenges.count {
             finalizeSuccessAttempt()
             return
@@ -167,10 +169,14 @@ final class LivenessViewModel: ObservableObject {
         guard !isDemo, index < challenges.count else { return }
         let now = Date().timeIntervalSince1970 * 1000
 
-        // Canlı göz-açıklık göstergesi (dev kalibrasyon) — her karede.
+        // Canlı kalibrasyon göstergeleri (dev) — her karede.
         let eyeOpen = min(signals.leftEyeOpen, signals.rightEyeOpen)
         let eyePct = Int(eyeOpen * 100)
-        DispatchQueue.main.async { [weak self] in self?.debugEyeOpen = eyePct }
+        let smilePct = Int(signals.smile * 100)
+        DispatchQueue.main.async { [weak self] in
+            self?.debugEyeOpen = eyePct
+            self?.debugSmile = smilePct
+        }
 
         guard now - lastActionTime >= 2000 else { return }
         let target = challenges[index]
@@ -183,20 +189,27 @@ final class LivenessViewModel: ObservableObject {
             return
         }
 
-        // left/right/smile: tek-kare detect.
+        // Smile: göreceli detektör (Vision smile olasılığı yok) + statik fallback.
+        if target == .smile {
+            if smileDetector.feed(signals.smile) || LivenessGestureDetector.detect(signals) == .smile {
+                advanceOnSuccess(now: now)
+            }
+            return
+        }
+
+        // left/right: tek-kare detect.
         guard let detected = LivenessGestureDetector.detect(signals) else { return }
         if detected == target {
             advanceOnSuccess(now: now)
         } else if target == .faceLeft || target == .faceRight {
             resetOnWrong(now: now) // yanlış kafa dönüşü → baştan (Android STRICT)
         }
-        // smile yanlışı → yok say
     }
 
     private func advanceOnSuccess(now: TimeInterval) {
         lastActionTime = now
         index += 1
-        blinkDetector.resetArmed()
+        blinkDetector.resetArmed(); smileDetector.reset()
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.checkmark = true
@@ -209,7 +222,7 @@ final class LivenessViewModel: ObservableObject {
     private func resetOnWrong(now: TimeInterval) {
         lastActionTime = now
         index = 0
-        blinkDetector.resetArmed()
+        blinkDetector.resetArmed(); smileDetector.reset()
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.wrongMove = true
