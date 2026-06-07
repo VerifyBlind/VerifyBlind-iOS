@@ -113,14 +113,14 @@ PUBLISH_ARGS=(
   "--key-id" "$APP_STORE_CONNECT_KEY_IDENTIFIER"
   "--issuer-id" "$APP_STORE_CONNECT_ISSUER_ID"
   "--private-key" "@env:APP_STORE_CONNECT_PRIVATE_KEY"
+  "--expire-build-submitted-for-review"
 )
-# External (beta-group) + beta-review submission YALNIZ prod'da. Dev/internal: sadece upload —
-# internal testçiler işlenen her build'i otomatik alır (group/review gerekmez ve App Store Connect
-# "Test Information" eksikse external submission 'missing Beta App Review Information' ile patlar →
-# upload başarılı olsa bile CI kırmızı görünür). --expire-build-submitted-for-review review akışını
-# tetiklediği için sadece BETA_GROUP varken eklenir. gotcha #11/#13.
+# --expire-build-submitted-for-review her zaman eklenir (dev + prod): publish --testflight her
+# build'de BetaAppReviewSubmission oluşturur; önceki beklemedeyse "Another build in review" 422
+# hatası verir. expire ile eskiyi sil, yenisini gir. Internal testçiler review bitmeden build'i
+# alır (VALID olur olmaz otomatik dağıtım), bu sadece Apple'ın arka plan sürecidir. gotcha #13.
+# --beta-group yalnız prod: external testçilere yönlendirme + review zorunlu. gotcha #11.
 if [ -n "${BETA_GROUP:-}" ]; then
   PUBLISH_ARGS+=("--beta-group" "$BETA_GROUP")
-  PUBLISH_ARGS+=("--expire-build-submitted-for-review")
 fi
 "${PUBLISH_ARGS[@]}"
