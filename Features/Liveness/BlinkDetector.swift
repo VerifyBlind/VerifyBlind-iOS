@@ -16,7 +16,8 @@ final class BlinkDetector {
     private let reopenFrac: Float   // baseline'ın bu oranının ÜSTÜ = yeniden açık
     private let minBaseline: Float  // baseline bunun altındaysa henüz güvenilir açık göz yok
 
-    init(closeFrac: Float = 0.65, reopenFrac: Float = 0.85, minBaseline: Float = 0.3) {
+    // Cihaz geri bildirimi (2026-06-07): blink ~%85 doğruluk → eşik gevşetildi (kapan 0.65→0.70, açıl 0.85→0.82).
+    init(closeFrac: Float = 0.70, reopenFrac: Float = 0.82, minBaseline: Float = 0.3) {
         self.closeFrac = closeFrac
         self.reopenFrac = reopenFrac
         self.minBaseline = minBaseline

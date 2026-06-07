@@ -16,6 +16,7 @@ struct WalletView: View {
     @State private var showDeleteConfirm = false
     @State private var removing = false
     @State private var removeError: String?
+    @State private var showHowItWorks = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -41,6 +42,11 @@ struct WalletView: View {
             Button(L.t("common_ok"), role: .cancel) {}
         } message: {
             Text(removeError ?? "")
+        }
+        .alert(L.t("how_it_works_title"), isPresented: $showHowItWorks) {
+            Button(L.t("common_ok"), role: .cancel) {}
+        } message: {
+            Text(L.t("how_it_works_desc"))
         }
         .onAppear { appState.refresh() }
     }
@@ -102,9 +108,9 @@ struct WalletView: View {
         }
     }
 
-    // "Nasıl Çalışır?" — Help ekranı Aşama 6; şimdilik geçmişe değil, no-op bilgi (parite için link durur).
+    // "Nasıl Çalışır?" — tam Help ekranı Aşama 6; şimdilik açıklama alert'i (ölü link olmasın).
     private func howItWorks() {
-        Log.info("Nasıl Çalışır? linkine tıklandı (Help ekranı Aşama 6)", category: .flow)
+        showHowItWorks = true
     }
 
     // MARK: - Registered state

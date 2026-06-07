@@ -30,6 +30,12 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
         super.init()
     }
 
+    // Controller dealloc olunca kamerayı kesin bırak — aksi halde ekran yeniden açılışta
+    // siyah kalabiliyor (eski oturum cihazı tutuyor). Cihaz geri bildirimi 2026-06-07.
+    deinit {
+        if session.isRunning { session.stopRunning() }
+    }
+
     /// İzin ister, gerekiyorsa yapılandırır ve oturumu başlatır.
     func start() {
         switch AVCaptureDevice.authorizationStatus(for: .video) {

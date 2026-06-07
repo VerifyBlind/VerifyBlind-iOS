@@ -124,6 +124,26 @@ struct EncryptedTicketResponse: Codable {
         case encryptedTicket = "encrypted_ticket"
         case registrationNonce = "registration_nonce"
     }
+
+    init(encryptedTicket: String, registrationNonce: String?) {
+        self.encryptedTicket = encryptedTicket
+        self.registrationNonce = registrationNonce
+    }
+
+    /// Toleranslı decode: `encrypted_ticket` string VEYA obje olabilir; obje ise tekrar string'e
+    /// çevrilir (sonra HybridContent parse edilir). Gson leniency paritesi.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        if let s = try? c.decode(String.self, forKey: .encryptedTicket) {
+            encryptedTicket = s
+        } else if let obj = try? c.decode(JSONValue.self, forKey: .encryptedTicket) {
+            let data = try JSONEncoder().encode(obj)
+            encryptedTicket = String(decoding: data, as: UTF8.self)
+        } else {
+            encryptedTicket = ""
+        }
+        registrationNonce = try c.decodeIfPresent(String.self, forKey: .registrationNonce)
+    }
 }
 
 /// Hybrid zarf: RSA ile şifreli AES key + AES-GCM blob.
@@ -142,13 +162,20 @@ struct HybridContent: Codable {
 /// login sarmalı bu raw ticket'i aynen gömer, imza geçerli kalır.
 struct UnifiedRegistrationPayload: Codable {
     let ticket: SignedTicket
-    let personId: String
-    let cardId: String
+    var personId: String = ""
+    var cardId: String = ""
 
     enum CodingKeys: String, CodingKey {
         case ticket
         case personId = "person_id"
         case cardId = "card_id"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        ticket = try c.decode(SignedTicket.self, forKey: .ticket)
+        personId = try c.decodeIfPresent(String.self, forKey: .personId) ?? ""
+        cardId = try c.decodeIfPresent(String.self, forKey: .cardId) ?? ""
     }
 }
 
@@ -164,16 +191,19 @@ struct SignedTicket: Codable {
     }
 }
 
+/// ⚠️ Gson (Android) eksik/null alanları sessizce default'a düşürür; Swift `Codable` STRICT — eksik
+/// non-optional anahtar `keyNotFound` fırlatır. Bu yüzden custom `init(from:)` ile TÜM alanlar
+/// `decodeIfPresent ?? ""` (Gson paritesi) — server bazı alanları (DogumTarihi, vb.) atlayabilir.
 struct TicketPayload: Codable {
-    let tckn: String
-    let ad: String
-    let soyad: String
+    var tckn: String = ""
+    var ad: String = ""
+    var soyad: String = ""
     var dogumTarihi: String = ""
-    let seriNo: String
+    var seriNo: String = ""
     var gecerlilikTarihi: String = ""
     var cinsiyet: String = ""
     var uyruk: String = ""
-    let userPubKey: String
+    var userPubKey: String = ""
     var countryIsoCode: String = ""
     var personId: String = ""
     var cardId: String = ""
@@ -193,6 +223,23 @@ struct TicketPayload: Codable {
         case personId = "PersonId"
         case cardId = "CardId"
         case documentType = "DocumentType"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        tckn = try c.decodeIfPresent(String.self, forKey: .tckn) ?? ""
+        ad = try c.decodeIfPresent(String.self, forKey: .ad) ?? ""
+        soyad = try c.decodeIfPresent(String.self, forKey: .soyad) ?? ""
+        dogumTarihi = try c.decodeIfPresent(String.self, forKey: .dogumTarihi) ?? ""
+        seriNo = try c.decodeIfPresent(String.self, forKey: .seriNo) ?? ""
+        gecerlilikTarihi = try c.decodeIfPresent(String.self, forKey: .gecerlilikTarihi) ?? ""
+        cinsiyet = try c.decodeIfPresent(String.self, forKey: .cinsiyet) ?? ""
+        uyruk = try c.decodeIfPresent(String.self, forKey: .uyruk) ?? ""
+        userPubKey = try c.decodeIfPresent(String.self, forKey: .userPubKey) ?? ""
+        countryIsoCode = try c.decodeIfPresent(String.self, forKey: .countryIsoCode) ?? ""
+        personId = try c.decodeIfPresent(String.self, forKey: .personId) ?? ""
+        cardId = try c.decodeIfPresent(String.self, forKey: .cardId) ?? ""
+        documentType = try c.decodeIfPresent(String.self, forKey: .documentType)
     }
 }
 

@@ -11,7 +11,8 @@ final class SmileDetector {
     private let riseFactor: Float      // baseline'ın bu katından genişse = gülümseme
     private let minSignal: Float
 
-    init(riseFactor: Float = 1.16, minSignal: Float = 0.4) {
+    // Cihaz geri bildirimi (2026-06-07): smile çok zor algılanıyordu → eşik gevşetildi (1.16→1.10).
+    init(riseFactor: Float = 1.10, minSignal: Float = 0.35) {
         self.riseFactor = riseFactor
         self.minSignal = minSignal
     }

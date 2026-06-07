@@ -55,8 +55,17 @@ final class APIClient {
         let data = try await sendRaw(endpoint)
         do {
             return try decoder.decode(T.self, from: data)
-        } catch {
-            Log.error("APIClient: \(T.self) decode başarısız", error: error, category: .network)
+        } catch let firstError {
+            // Bazı uçlar gövdeyi JSON-string'e sarılı döndürür (ASP.NET `StatusCode(code, stringObject)`
+            // → ObjectResult string'i çift-encode edebiliyor → `"{...}"`). Önce String çöz, sonra
+            // içindeki JSON'ı T'ye decode et. (Register/login success yolları bu kalıbı kullanıyor.)
+            if let wrapped = try? decoder.decode(String.self, from: data),
+               let inner = wrapped.data(using: .utf8),
+               let value = try? decoder.decode(T.self, from: inner) {
+                Log.info("APIClient: \(T.self) çift-encode çözüldü (string-sarmalı gövde)", category: .network)
+                return value
+            }
+            Log.error("APIClient: \(T.self) decode başarısız", error: firstError, category: .network)
             throw APIClientError.decoding
         }
     }
