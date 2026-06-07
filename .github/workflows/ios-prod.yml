@@ -14,7 +14,8 @@ concurrency:
 jobs:
   testflight:
     name: Build + Sign + TestFlight External
-    runs-on: macos-latest
+    # macos-26 = Xcode 26 (Apple iOS 26 SDK upload şartı; bkz ios-dev.yml)
+    runs-on: macos-26
     timeout-minutes: 60
     environment: production
     env:

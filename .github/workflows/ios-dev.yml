@@ -78,7 +78,9 @@ jobs:
   testflight:
     name: Build + Sign + TestFlight Internal
     needs: preflight
-    runs-on: macos-latest
+    # macos-26 = Xcode 26 (default 26.2). Apple iOS 26 SDK upload şartı; macos-latest/15 yalnız
+    # Xcode 16.x içerir → upload 409 "iOS 26 SDK gerekli" verir. macos-26 GA (2026-02-26).
+    runs-on: macos-26
     timeout-minutes: 60
     environment: development
     env:
