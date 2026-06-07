@@ -34,7 +34,8 @@ jobs:
       - name: Install tools
         run: |
           brew install xcodegen
-          pip3 install codemagic-cli-tools
+          # PEP 668 (externally-managed) fix — bkz ios-dev.yml
+          pip3 install --break-system-packages codemagic-cli-tools
 
       - name: Build, sign, upload
         env:

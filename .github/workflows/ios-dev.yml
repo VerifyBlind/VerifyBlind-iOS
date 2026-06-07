@@ -97,7 +97,9 @@ jobs:
       - name: Install tools
         run: |
           brew install xcodegen
-          pip3 install codemagic-cli-tools
+          # macos-latest Homebrew Python PEP 668 (externally-managed) → --break-system-packages
+          # (CI runner ephemeral; codemagic-cli-tools komutları PATH'te kalır).
+          pip3 install --break-system-packages codemagic-cli-tools
 
       - name: Build, sign, upload
         env:
