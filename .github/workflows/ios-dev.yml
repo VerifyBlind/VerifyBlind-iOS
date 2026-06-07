@@ -1,10 +1,8 @@
 name: iOS Dev → TestFlight Internal
 
-# FAZ 1: Sadece workflow_dispatch — imza+upload testi için. Faz 2'de push aktif edilecek.
-# FAZ 2 geçişinde: aşağıdaki push bloğunun yorumunu aç, ios-preflight.yml'i sil.
 on:
-  # push:
-  #   branches: [dev]
+  push:
+    branches: [dev]
   workflow_dispatch:
 
 concurrency:
@@ -12,74 +10,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # ── Preflight: imzasız derleme (her push için hızlı compile-fail kapısı) ────
-  preflight:
-    name: Preflight (unsigned build)
-    runs-on: macos-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Xcode version
-        run: xcodebuild -version
-
-      - name: SPM cache
-        uses: actions/cache@v4
-        with:
-          path: ~/Library/Caches/org.swift.swiftpm
-          key: spm-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
-          restore-keys: spm-${{ runner.os }}-
-
-      - name: Install XcodeGen
-        run: brew install xcodegen
-
-      - name: Generate Xcode project
-        run: xcodegen generate
-
-      - name: Place locked Package.resolved
-        run: |
-          DEST="VerifyBlind.xcodeproj/project.xcworkspace/xcshareddata/swiftpm"
-          mkdir -p "$DEST"
-          cp Package.resolved "$DEST/Package.resolved"
-
-      - name: Resolve SPM dependencies
-        run: |
-          set -o pipefail
-          xcodebuild -resolvePackageDependencies \
-            -project VerifyBlind.xcodeproj \
-            -scheme VerifyBlind
-
-      - name: Build (unsigned, iOS device SDK — CoreNFC not available on simulator)
-        run: |
-          set -o pipefail
-          xcodebuild build \
-            -project VerifyBlind.xcodeproj \
-            -scheme VerifyBlind \
-            -configuration Debug \
-            -destination 'generic/platform=iOS' \
-            -skipPackagePluginValidation \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            DEVELOPMENT_TEAM=""
-
-      - name: Upload Package.resolved artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Package.resolved
-          path: VerifyBlind.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
-          if-no-files-found: warn
-
-  # ── TestFlight: imzalı build + upload → Internal testçiler ──────────────────
-  # [build] kapısı YOK — preflight yeşilse her dev push'unda çalışır.
-  # İleride yavaşlama olursa commit mesajında '[build]' kapısı eklenebilir:
-  #   if: contains(github.event.head_commit.message, '[build]')
   testflight:
     name: Build + Sign + TestFlight Internal
-    needs: preflight
-    # macos-26 = Xcode 26 (default 26.2). Apple iOS 26 SDK upload şartı; macos-latest/15 yalnız
-    # Xcode 16.x içerir → upload 409 "iOS 26 SDK gerekli" verir. macos-26 GA (2026-02-26).
     runs-on: macos-26
     timeout-minutes: 60
     environment: development
@@ -99,8 +31,6 @@ jobs:
       - name: Install tools
         run: |
           brew install xcodegen
-          # macos-latest Homebrew Python PEP 668 (externally-managed) → --break-system-packages
-          # (CI runner ephemeral; codemagic-cli-tools komutları PATH'te kalır).
           pip3 install --break-system-packages codemagic-cli-tools
 
       - name: Build, sign, upload

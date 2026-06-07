@@ -1,10 +1,8 @@
 name: iOS Prod → TestFlight External
 
-# FAZ 1: Sadece workflow_dispatch — imza+upload testi için. Faz 2'de push aktif edilecek.
-# FAZ 2 geçişinde: aşağıdaki push bloğunun yorumunu aç, CodeMagic webhook'unu durdur.
 on:
-  # push:
-  #   branches: [main]
+  push:
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
