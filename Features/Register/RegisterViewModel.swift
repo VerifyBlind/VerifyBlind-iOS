@@ -114,7 +114,7 @@ final class RegisterViewModel: ObservableObject {
                 }
             } catch {
                 // Beklenmeyen (ör. "memory failure" / kart kaydı) → kırma, tekrar dene.
-                Log.warning("NFC beklenmeyen hata (tekrar denenebilir)", error: error, category: .nfc)
+                Log.warning("NFC beklenmeyen hata (tekrar denenebilir): \(error.localizedDescription)", category: .nfc)
                 nfcRetryMessage = L.t("nfc_read_error")
             }
         }
