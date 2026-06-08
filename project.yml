@@ -81,7 +81,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: $(IOS_BUNDLE_ID)
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CURRENT_PROJECT_VERSION: $(BUILD_NUMBER)
-        MARKETING_VERSION: "1.0.0"
+        MARKETING_VERSION: "1.0.1"  # demo-register: app_version sunucu fallback "1.0.0" ile çakışmasın (DEMO_PUBLISHED_APP 403)
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Manual
         SWIFT_OBJC_BRIDGING_HEADER: ""

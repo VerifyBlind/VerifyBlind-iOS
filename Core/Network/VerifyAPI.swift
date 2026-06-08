@@ -39,8 +39,10 @@ struct VerifyAPI {
 
     // MARK: - Login / Revoke
 
-    func login(_ request: LoginRequest) async throws -> LoginResponse {
-        try await client.post("api/Verify/login", body: request)
+    /// Relay /login MOBİLE'a başarıda `{}` döner (encrypted_response partner callback'ine gider,
+    /// app'e DEĞİL) → gövde decode edilmez (postNoContent). Hata gövdeleri APIClient.apiError'da ele alınır.
+    func login(_ request: LoginRequest) async throws {
+        try await client.postNoContent("api/Verify/login", body: request)
     }
 
     func revoke(_ request: RevokeRequest) async throws -> RevokeResponse {

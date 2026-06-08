@@ -81,7 +81,7 @@ final class LoginViewModel: ObservableObject {
             let hybridJson = String(decoding: try JSONEncoder().encode(hybrid), as: UTF8.self)
 
             let req = LoginRequest(encrSignedTicket: hybridJson, nonce: nonce)
-            _ = try await VerifyAPI.shared.login(req)
+            try await VerifyAPI.shared.login(req)
 
             recordHistory()
             step = .success

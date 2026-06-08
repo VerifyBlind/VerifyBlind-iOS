@@ -257,16 +257,8 @@ struct LoginRequest: Codable {
     }
 }
 
-struct LoginResponse: Codable {
-    /// ⚠️ Relay /login başarı yanıtı MOBİLE `{}` (boş) döner (`VerifyController.Login:862` →
-    /// `return Ok(new { })`); `encrypted_response` partner callback'ine gider, mobile'a DEĞİL.
-    /// Bu yüzden OPTIONAL — eksik anahtar Swift Codable'ı kırmasın (Gson leniency paritesi).
-    let encryptedResponse: String?
-
-    enum CodingKeys: String, CodingKey {
-        case encryptedResponse = "encrypted_response"
-    }
-}
+// LoginResponse KALDIRILDI: relay /login mobile'a daima `{}` döner (encrypted_response partner
+// callback'ine gider, app'e değil). `VerifyAPI.login` artık postNoContent (Void) — decode yok.
 
 // MARK: - Partner / PoP
 
