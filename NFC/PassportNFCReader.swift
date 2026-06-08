@@ -42,6 +42,7 @@ final class PassportNFCReader {
             model = try await reader.readPassport(
                 mrzKey: mrzKey,
                 tags: [.SOD, .DG1, .DG2, .DG15],
+                aaChallenge: challenge,
                 customDisplayMessage: { msg in
                     switch msg {
                     case .requestPresentPassport: return L.t("nfc_id_card_instruction")
@@ -49,8 +50,7 @@ final class PassportNFCReader {
                     case .error:                  return nil
                     default:                      return L.t("nfc_reading") // authenticating / reading progress
                     }
-                },
-                aaChallenge: challenge
+                }
             )
         } catch let e as NFCPassportReaderError {
             Log.warning("NFC okuma başarısız: \(e)", category: .nfc)

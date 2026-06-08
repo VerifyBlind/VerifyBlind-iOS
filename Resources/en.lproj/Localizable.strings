@@ -1,5 +1,5 @@
-/* VerifyBlind iOS — EN. OTOMATİK ÜRETİLDİ: Tools/sync-strings-from-android.ps1
-   Kaynak: Android values/strings.xml — ELLE DÜZENLEME. */
+/* VerifyBlind iOS — EN strings. MANUEL bakım: bir metni değiştirince Android values/strings.xml'de de
+   AYNI değişikliği yap (iki uygulama ayrı repo, otomatik senkron YOK). */
 
 "app_name" = "VerifyBlind";
 "common_ok" = "OK";
