@@ -74,14 +74,14 @@ struct ConsentBottomSheet: View {
                     .font(.system(size: 16, weight: .bold)).foregroundColor(.white)
                     .frame(maxWidth: .infinity).frame(height: 60)
                     .background(Theme.consentButtonGradient)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .opacity(kvkkChecked ? 1 : 0.5)
             }
             .disabled(!kvkkChecked)
             .padding(.bottom, 12)
 
             Button(action: onReject) {
-                Text(L.t("consent_btn_reject"))
+                Text(L.t("btn_reject"))
                     .font(.system(size: 15)).foregroundColor(Theme.onSurfaceVariant)
                     .padding(12)
             }
@@ -94,10 +94,13 @@ struct ConsentBottomSheet: View {
 
     private var logo: some View {
         ZStack {
-            Circle().fill(Theme.themePrimary).frame(width: 72, height: 72)
+            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.lockIconBg)
+                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Theme.lockIconStroke, lineWidth: 1.5))
+                .frame(width: 72, height: 72)
             if let b64 = info.logoBase64, let data = Data(base64Encoded: stripDataURL(b64)), let ui = UIImage(data: data) {
-                Image(uiImage: ui).resizable().scaledToFill()
-                    .frame(width: 72, height: 72).clipShape(Circle())
+                Image(uiImage: ui).resizable().scaledToFit().padding(4)
+                    .frame(width: 72, height: 72)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             } else {
                 Text(initials).font(.system(size: 24, weight: .bold)).foregroundColor(.white)
             }

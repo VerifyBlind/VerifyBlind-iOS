@@ -4,6 +4,7 @@ import SwiftUI
 /// içeriği `DevMenuView`'a taşındı (Wallet'ta logo'ya uzun bas ile dev'de açılır).
 /// Biyometrik kilit açıksa cold-launch'ta `AppLockView` gösterilir.
 struct ContentView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @State private var locked = AppPrefs.biometricEnabled
     @State private var unlocking = false
 
@@ -16,6 +17,19 @@ struct ContentView: View {
         }
         .onAppear {
             if locked { unlock() }
+        }
+        .onChange(of: scenePhase) { phase in
+            switch phase {
+            case .background:
+                // Arka plana geçince kilitle (başka uygulamaya geçip dönünce de sorar).
+                // SADECE .background — Face ID/NFC/kamera sistem UI'sı .inactive yapar, .background DEĞİL,
+                // bu yüzden akış ortasında yanlış kilitlenme olmaz.
+                if AppPrefs.biometricEnabled { locked = true }
+            case .active:
+                if locked { unlock() }
+            default:
+                break
+            }
         }
     }
 
