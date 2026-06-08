@@ -54,10 +54,12 @@ final class GoogleDriveProvider: CloudProvider {
     }
 
     private static func map(_ error: Error) -> CloudProviderError {
-        if let gid = error as? GIDSignInError, gid.code == .canceled {
+        // GIDSignInErrorCode.canceled = -5. Tip-bağımsız (bridging belirsizliği yok) NSError kontrolü.
+        let ns = error as NSError
+        if ns.domain == "com.google.GIDSignIn" && ns.code == -5 {
             return .cancelled
         }
-        return .message((error as NSError).localizedDescription)
+        return .message(ns.localizedDescription)
     }
 
     // MARK: - Erişim token'ı

@@ -20,7 +20,7 @@ enum BackupBootstrap {
         let googleClientID = Config.googleClientID
         if !googleClientID.isEmpty {
             GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: googleClientID)
-            GIDSignIn.sharedInstance.restorePreviousSignIn()
+            GIDSignIn.sharedInstance.restorePreviousSignIn { _, _ in }   // ObjC completion zorunlu (default yok)
         } else {
             Log.info("BackupBootstrap: GOOGLE_IOS_CLIENT_ID boş — Google Drive devre dışı", category: .app)
         }

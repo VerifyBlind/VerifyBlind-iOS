@@ -48,7 +48,9 @@ final class DropboxProvider: CloudProvider {
     /// `onOpenURL`'den çağrılır. URL bu sağlayıcıya aitse işler ve true döner.
     static func handleRedirect(_ url: URL) -> Bool {
         guard url.scheme?.hasPrefix("db-") == true else { return false }
-        _ = DropboxClientsManager.handleRedirectURL(url) { result in
+        // SwiftyDropbox 10.x: handleRedirectURL(_:completion:) overload'u YOK; foreground için
+        // includeBackgroundClient zorunlu. Arka plan client kullanmıyoruz (setupWithAppKey default false).
+        _ = DropboxClientsManager.handleRedirectURL(url, includeBackgroundClient: false) { result in
             shared.finishLogin(result)
         }
         return true
@@ -91,7 +93,7 @@ final class DropboxProvider: CloudProvider {
         let client = try client()
         let bytes = Data(data.utf8)
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            client.files.upload(path: "/\(filename)", mode: .overwrite, autorename: false, mute: true, input: bytes)
+            _ = client.files.upload(path: "/\(filename)", mode: .overwrite, autorename: false, mute: true, input: bytes)
                 .response { _, error in
                     if let error = error {
                         cont.resume(throwing: CloudProviderError.message("Dropbox upload: \(error.description)"))
@@ -105,7 +107,7 @@ final class DropboxProvider: CloudProvider {
     func download(filename: String) async throws -> String? {
         let client = try client()
         return try await withCheckedThrowingContinuation { (cont: CheckedContinuation<String?, Error>) in
-            client.files.download(path: "/\(filename)")
+            _ = client.files.download(path: "/\(filename)")
                 .response { response, error in
                     if let response = response {
                         cont.resume(returning: String(decoding: response.1, as: UTF8.self))
@@ -126,7 +128,7 @@ final class DropboxProvider: CloudProvider {
     func delete(filename: String) async throws {
         let client = try client()
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            client.files.deleteV2(path: "/\(filename)")
+            _ = client.files.deleteV2(path: "/\(filename)")
                 .response { _, error in
                     if let error = error {
                         if error.description.contains("not_found") || error.description.contains("path_lookup") {

@@ -17,7 +17,7 @@ struct VerifyBlindApp: App {
                 .preferredColorScheme(.light) // Android light-mode paritesi
                 .onOpenURL { url in
                     // Bulut yedekleme OAuth redirect'leri (Dropbox db-<key>://, Google reversed-client-id).
-                    BackupBootstrap.handleOpenURL(url)
+                    _ = BackupBootstrap.handleOpenURL(url)
                 }
         }
     }
