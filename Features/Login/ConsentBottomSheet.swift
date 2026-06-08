@@ -10,8 +10,7 @@ struct ConsentBottomSheet: View {
     let onReject: () -> Void
 
     @State private var kvkkChecked = AppPrefs.kvkkConsentAccepted
-    @State private var showPrivacy = false
-    @State private var privacyText = ""
+    @State private var privacyDoc: PrivacyDoc?
     @State private var loadingPrivacy = false
 
     var body: some View {
@@ -81,6 +80,7 @@ struct ConsentBottomSheet: View {
 
             Button(action: approve) {
                 Text(L.t("btn_approve"))
+                    .textCase(.uppercase) // Android MaterialButton textAllCaps paritesi (APPROVE / ONAYLA)
                     .font(.system(size: 16, weight: .bold)).foregroundColor(.white)
                     .frame(maxWidth: .infinity).frame(height: 60)
                     .background(Theme.consentButtonGradient)
@@ -100,7 +100,9 @@ struct ConsentBottomSheet: View {
         .padding(.bottom, 32)
         .background(Theme.surface)
         .clipShape(RoundedCorners(radius: 24, corners: [.topLeft, .topRight]))
-        .sheet(isPresented: $showPrivacy) { PrivacyNoticeView(text: privacyText) }
+        // .sheet(item:) — metni item içinde taşır; isPresented'in async set'te bayat snapshot
+        // yakalama yarışını (boş içerik) engeller.
+        .sheet(item: $privacyDoc) { doc in PrivacyNoticeView(text: doc.text) }
     }
 
     // Logo VARSA: şeffaf zemin (sadece görsel). YOKSA: #1287BE + baş harfler (Android paritesi).
@@ -161,14 +163,15 @@ struct ConsentBottomSheet: View {
         loadingPrivacy = true
         Task { @MainActor in
             defer { loadingPrivacy = false }
+            var text = L.t("privacy_notice_load_failed")
             do {
                 let resp = try await VerifyAPI.shared.privacyNotice()
-                privacyText = resp.text ?? L.t("privacy_notice_load_error")
+                let t = resp.text ?? ""
+                text = t.isEmpty ? L.t("privacy_notice_load_error") : t
             } catch {
                 Log.warning("Aydınlatma metni yüklenemedi: \(error.localizedDescription)", category: .flow)
-                privacyText = L.t("privacy_notice_load_failed")
             }
-            showPrivacy = true
+            privacyDoc = PrivacyDoc(text: text)
         }
     }
 
@@ -176,6 +179,12 @@ struct ConsentBottomSheet: View {
         if let range = s.range(of: "base64,") { return String(s[range.upperBound...]) }
         return s
     }
+}
+
+/// .sheet(item:) için metni taşıyan Identifiable sarmalayıcı (bayat-snapshot yarışını önler).
+struct PrivacyDoc: Identifiable {
+    let id = UUID()
+    let text: String
 }
 
 /// Aydınlatma metni görüntüleyici (Android AlertDialog eşdeğeri).
