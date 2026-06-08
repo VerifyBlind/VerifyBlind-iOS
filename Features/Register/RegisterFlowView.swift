@@ -33,6 +33,20 @@ struct RegisterFlowView: View {
                 SuccessStepView(onHome: onFinish)
             case .failed(let title, let message):
                 FailedStepView(title: title, message: message, onClose: onFinish)
+            case .biometricConsent:
+                ZStack(alignment: .bottom) {
+                    VStack(spacing: 0) {
+                        header
+                        StepperHeader(steps: [L.t("step_prepare"), L.t("step_mrz"), L.t("step_nfc"), L.t("step_face")], current: 4)
+                        Spacer()
+                    }
+                    Color.black.opacity(0.5).ignoresSafeArea()
+                    BiometricConsentSheet(
+                        onApprove: { vm.approveBiometricConsent() },
+                        onReject: onFinish
+                    )
+                    .transition(.move(edge: .bottom))
+                }
             default:
                 VStack(spacing: 0) {
                     header
@@ -62,7 +76,7 @@ struct RegisterFlowView: View {
         case .nfc:
             NfcStepView(status: vm.nfcStatus, isDemo: vm.isDemo, onStart: {
                 if vm.isDemo {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) { vm.demoAdvanceToLiveness() }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) { vm.demoAfterNfc() }
                 } else {
                     vm.startNfc()
                 }
@@ -165,18 +179,22 @@ private struct MRZScanStepView: View {
             if camera.permissionDenied || camera.configurationFailed {
                 cameraError
             } else {
-                VStack {
-                    Text(L.t("scan_mrz_instruction"))
-                        .font(.system(size: 16, weight: .bold)).foregroundColor(.white)
-                        .padding(10).background(.black.opacity(0.5), in: Capsule())
-                        .padding(.top, 16)
-                    Text(L.t("scan_mrz_subtitle"))
-                        .font(.system(size: 13)).foregroundColor(.white.opacity(0.85))
-                        .multilineTextAlignment(.center).padding(.top, 4)
+                VStack(spacing: 0) {
+                    VStack(spacing: 4) {
+                        Text(L.t("scan_mrz_instruction"))
+                            .font(.system(size: 16, weight: .bold)).foregroundColor(.white)
+                        Text(L.t("scan_mrz_subtitle"))
+                            .font(.system(size: 13)).foregroundColor(.white.opacity(0.9))
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(.horizontal, 18).padding(.vertical, 12)
+                    .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 16))
+                    .padding(.top, 24).padding(.horizontal, 24)
+
                     Spacer()
-                    RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.85), lineWidth: 2)
-                        .frame(height: 120).padding(.horizontal, 24)
-                    Spacer()
+                    RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.9), lineWidth: 2)
+                        .frame(height: 130).padding(.horizontal, 24)
+                    Spacer().frame(height: 140) // çerçeve merkez-alt (Android bias)
                 }
             }
         }

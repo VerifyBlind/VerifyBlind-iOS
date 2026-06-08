@@ -9,6 +9,7 @@ final class RegisterViewModel: ObservableObject {
         case preparation
         case mrz
         case nfc
+        case biometricConsent   // KVKK biyometrik rıza — liveness'tan hemen önce (Android paritesi)
         case liveness
         case processing
         case success
@@ -92,7 +93,7 @@ final class RegisterViewModel: ObservableObject {
                     step = .processing
                     await finalizeReal()
                 } else {
-                    step = .liveness
+                    step = .biometricConsent   // rıza → liveness
                 }
             } catch let e as NFCReadError {
                 if case .cancelled = e {
@@ -126,9 +127,14 @@ final class RegisterViewModel: ObservableObject {
         step = .mrz
     }
 
-    /// Demo: NFC ekranı ~2s sonra liveness'a geçer (Android `demoProceedAfterNfc`).
-    func demoAdvanceToLiveness() {
+    /// Demo: NFC ekranı ~2s sonra biyometrik rızaya geçer (Android `demoProceedAfterNfc`).
+    func demoAfterNfc() {
         guard isDemo else { return }
+        step = .biometricConsent
+    }
+
+    /// Biyometrik rıza onaylandı → liveness (gerçek + demo ortak).
+    func approveBiometricConsent() {
         step = .liveness
     }
 

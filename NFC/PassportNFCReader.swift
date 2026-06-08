@@ -38,11 +38,18 @@ final class PassportNFCReader {
         let reader = PassportReader(masterListURL: nil)
         let model: NFCPassportModel
         do {
-            // customDisplayMessage atlandı → kütüphane varsayılan metni. Türkçe ekran metinleri
-            // gerçek Register akışında (Aşama 4) eklenecek.
+            // NFC sistem sheet'i TR metinleri (Android paritesi). nil → kütüphane varsayılanı.
             model = try await reader.readPassport(
                 mrzKey: mrzKey,
                 tags: [.SOD, .DG1, .DG2, .DG15],
+                customDisplayMessage: { msg in
+                    switch msg {
+                    case .requestPresentPassport: return L.t("nfc_id_card_instruction")
+                    case .successfulRead:         return L.t("nfc_completed")
+                    case .error:                  return nil
+                    default:                      return L.t("nfc_reading") // authenticating / reading progress
+                    }
+                },
                 aaChallenge: challenge
             )
         } catch let e as NFCPassportReaderError {
