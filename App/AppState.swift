@@ -9,6 +9,9 @@ final class AppState: ObservableObject {
     @Published var currentCardId: String?
     /// Demo modu (kartsız cihaz testi). Dev'de açık; prod'da gizli. (Android `isDemoEnabled`.)
     @Published var demoEnabled: Bool = (Config.appAttestEnvironment == .development)
+    /// Register/Login tam-ekran akışı açıkken otomatik biyometrik kilidi bastır — NFC/kamera/Face ID
+    /// sistem UI'sı akış ortasında .background tetikleyip sahte kilit/döngü yaratmasın.
+    @Published var suppressAutoLock = false
 
     init() {
         hasCard = TicketStore.hasTicket

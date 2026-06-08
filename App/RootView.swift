@@ -48,6 +48,8 @@ struct RootView: View {
             }
         }
         .sheet(isPresented: $showDevMenu) { DevMenuView() }
+        // Register/Login akışı açıkken otomatik kilidi bastır (NFC/kamera/Face ID mid-flow çakışmasın).
+        .onChange(of: activeFlow) { flow in appState.suppressAutoLock = (flow != nil) }
     }
 
     private func popPath() {
