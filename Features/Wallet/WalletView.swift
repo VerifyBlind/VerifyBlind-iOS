@@ -43,10 +43,8 @@ struct WalletView: View {
         } message: {
             Text(removeError ?? "")
         }
-        .alert(L.t("how_it_works_title"), isPresented: $showHowItWorks) {
-            Button(L.t("common_ok"), role: .cancel) {}
-        } message: {
-            Text(L.t("how_it_works_desc"))
+        .sheet(isPresented: $showHowItWorks) {
+            HelpView(onBack: { showHowItWorks = false })
         }
         .onAppear { appState.refresh() }
     }
@@ -108,7 +106,7 @@ struct WalletView: View {
         }
     }
 
-    // "Nasıl Çalışır?" — tam Help ekranı Aşama 6; şimdilik açıklama alert'i (ölü link olmasın).
+    // "Nasıl Çalışır?" — tam Help ekranını (Aşama 6) sheet olarak aç.
     private func howItWorks() {
         showHowItWorks = true
     }

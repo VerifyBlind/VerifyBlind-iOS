@@ -198,6 +198,7 @@
 "lang_turkish" = "Turkish";
 "lang_english" = "English";
 "lang_system" = "System (default)";
+"language_restart_hint" = "The language change will take effect the next time you open the app.";
 "backup_sync_now" = "Sync Now";
 "backup_disconnect" = "Disconnect";
 "backup_provider_title" = "Select Cloud Provider";

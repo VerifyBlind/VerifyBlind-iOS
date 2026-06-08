@@ -8,7 +8,7 @@ struct RootView: View {
     @State private var activeFlow: Flow?
     @State private var showDevMenu = false
 
-    enum Route: Hashable { case settings, history, backup }
+    enum Route: Hashable { case settings, history, backup, help, security }
     enum Flow: Int, Identifiable { case register, registerDemo, login; var id: Int { rawValue } }
 
     var body: some View {
@@ -28,7 +28,9 @@ struct RootView: View {
                     SettingsView(
                         onBack: { popPath() },
                         onHistory: { path.append(.history) },
-                        onBackup: { path.append(.backup) }
+                        onBackup: { path.append(.backup) },
+                        onHelp: { path.append(.help) },
+                        onSecurity: { path.append(.security) }
                     )
                     .navigationBarHidden(true)
                 case .history:
@@ -36,6 +38,12 @@ struct RootView: View {
                         .navigationBarHidden(true)
                 case .backup:
                     BackupSettingsView(onBack: { popPath() })
+                        .navigationBarHidden(true)
+                case .help:
+                    HelpView(onBack: { popPath() })
+                        .navigationBarHidden(true)
+                case .security:
+                    SecurityInfoView(onBack: { popPath() })
                         .navigationBarHidden(true)
                 }
             }

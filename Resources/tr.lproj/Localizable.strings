@@ -198,6 +198,7 @@
 "lang_turkish" = "Türkçe";
 "lang_english" = "English";
 "lang_system" = "Sistem (varsayılan)";
+"language_restart_hint" = "Dil değişikliği uygulamayı bir sonraki açışınızda geçerli olur.";
 "backup_sync_now" = "Şimdi Eşitle";
 "backup_disconnect" = "Bağlantıyı Kes";
 "backup_provider_title" = "Bulut Sağlayıcı Seçin";

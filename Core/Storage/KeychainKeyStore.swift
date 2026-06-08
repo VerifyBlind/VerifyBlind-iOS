@@ -51,6 +51,11 @@ enum KeychainKeyStore {
         return try CryptoUtils.rsaDecrypt(cipherBase64, privateKey: priv, algorithm: .rsaEncryptionOAEPSHA1)
     }
 
+    /// Reset/Verilerimi Sil — history key kaldırılır (Android `deleteHistoryKey`).
+    static func deleteHistoryKey() {
+        delete(tag: historyKeyTag)
+    }
+
     // MARK: - Çekirdek
 
     private static func ensureKey(tag: Data, biometric: Bool) throws -> String {

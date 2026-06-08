@@ -21,6 +21,10 @@ enum AppPrefs {
         // Bulut yedekleme (Aşama 5) — hassas değil: sağlayıcı adı + son yedek zaman damgası
         static let cloudProvider = "cloud_provider"
         static let cloudLastBackup = "cloud_last_backup"
+        // Uygulama-içi dil seçimi (Android vb_prefs/user_lang paritesi): "system"/"tr"/"en"
+        static let appLanguage = "app_language"
+        // App Attest (Aşama 6) — anahtar sunucuya kaydedildi mi (enroll). KeyId SecureStore'da.
+        static let appAttestEnrolled = "appattest_enrolled"
     }
 
     /// Hibrit-şifreli ticket zarfı (HybridContent JSON string).
@@ -89,5 +93,27 @@ enum AppPrefs {
         d.removeObject(forKey: Key.ticket)
         d.removeObject(forKey: Key.userPubKey)
         d.removeObject(forKey: Key.expiryDate)
+    }
+
+    /// Uygulama-içi dil tercihi: "system" (cihaz dili), "tr", "en". Boş/yoksa "system".
+    static var appLanguage: String {
+        get { d.string(forKey: Key.appLanguage) ?? "system" }
+        set { d.set(newValue, forKey: Key.appLanguage) }
+    }
+
+    /// App Attest anahtarı sunucuya kaydedildi mi (enroll tamam). Reset'te temizlenir.
+    static var appAttestEnrolled: Bool {
+        get { d.bool(forKey: Key.appAttestEnrolled) }
+        set { d.set(newValue, forKey: Key.appAttestEnrolled) }
+    }
+
+    /// Verilerimi Sil / Sıfırla — TÜM UserDefaults anahtarlarını temizler (Android `prefs.clear()` paritesi).
+    /// Dil tercihi korunur (UI dili sıfırlama sonrası değişmesin); attestation teşhis bayrakları sıfırlanır.
+    static func clearAll() {
+        for key in [Key.ticket, Key.userPubKey, Key.expiryDate, Key.kvkkConsent, Key.biometricEnabled,
+                    Key.lastPcr0, Key.lastHardwareVerified, Key.lastIsMock, Key.lastAttestationTime,
+                    Key.cloudProvider, Key.cloudLastBackup, Key.appAttestEnrolled] {
+            d.removeObject(forKey: key)
+        }
     }
 }
