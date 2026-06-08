@@ -23,6 +23,10 @@ final class DropboxProvider: CloudProvider {
 
     @MainActor
     func login() async throws {
+        // App key yoksa setupWithAppKey çağrılmamıştır → authorizeFromControllerV2 ÇÖKER. Önce kibarca hata ver.
+        guard !Config.dropboxAppKey.isEmpty else {
+            throw CloudProviderError.message("Dropbox yapılandırılmamış (DROPBOX_IOS_APP_KEY eksik).")
+        }
         guard let controller = UIApplication.topViewController() else {
             throw CloudProviderError.presentationFailed
         }

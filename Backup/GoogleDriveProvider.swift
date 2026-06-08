@@ -23,6 +23,10 @@ final class GoogleDriveProvider: CloudProvider {
 
     @MainActor
     func login() async throws {
+        // Configuration (clientID) set edilmemişse GIDSignIn.signIn ÇÖKER (NSException). Önce kibarca hata ver.
+        guard GIDSignIn.sharedInstance.configuration != nil else {
+            throw CloudProviderError.message("Google Drive yapılandırılmamış (GOOGLE_IOS_CLIENT_ID eksik).")
+        }
         guard let controller = UIApplication.topViewController() else {
             throw CloudProviderError.presentationFailed
         }
