@@ -258,7 +258,10 @@ struct LoginRequest: Codable {
 }
 
 struct LoginResponse: Codable {
-    let encryptedResponse: String
+    /// ⚠️ Relay /login başarı yanıtı MOBİLE `{}` (boş) döner (`VerifyController.Login:862` →
+    /// `return Ok(new { })`); `encrypted_response` partner callback'ine gider, mobile'a DEĞİL.
+    /// Bu yüzden OPTIONAL — eksik anahtar Swift Codable'ı kırmasın (Gson leniency paritesi).
+    let encryptedResponse: String?
 
     enum CodingKeys: String, CodingKey {
         case encryptedResponse = "encrypted_response"
