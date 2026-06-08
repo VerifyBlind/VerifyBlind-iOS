@@ -2,14 +2,17 @@ import SwiftUI
 import UIKit
 
 /// Partner consent bottom sheet — Android `ConsentBottomSheet` + `bottomsheet_consent.xml` portu.
-/// Partner ad/logo, doğrulanacak bilgiler (scopes), KVKK onay kutusu, Onayla/Reddet.
-/// Dil [[feedback_never_share_identity_wording]] uyumlu ("DOĞRULANACAK BİLGİLER").
+/// Doğrulanacak bilgiler `validations` JSON'undan (user_id / age) madde işaretiyle, "Aydınlatma
+/// Metnini Oku" linki, KVKK onay kutusu, Onayla/Reddet. Dil [[feedback_never_share_identity_wording]].
 struct ConsentBottomSheet: View {
     let info: PartnerInfoResponse
     let onApprove: () -> Void
     let onReject: () -> Void
 
-    @State private var kvkkChecked = false
+    @State private var kvkkChecked = AppPrefs.kvkkConsentAccepted
+    @State private var showPrivacy = false
+    @State private var privacyText = ""
+    @State private var loadingPrivacy = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -36,14 +39,22 @@ struct ConsentBottomSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.bottom, 12)
 
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(scopeList, id: \.self) { scope in
-                    HStack(spacing: 10) {
-                        Image(systemName: "checkmark.circle.fill").font(.system(size: 16)).foregroundColor(Theme.success)
-                        Text(scope).font(.system(size: 14)).foregroundColor(Theme.onSurface)
-                        Spacer()
-                    }
+            // Doğrulanacak bilgiler — Android: madde işareti "•", validations'tan türetilir.
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(scopeItems, id: \.self) { scope in
+                    Text("•  \(scope)")
+                        .font(.system(size: 14))
+                        .foregroundColor(Theme.onSurfaceVariant)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                // Aydınlatma Metnini Oku (altı çizili mavi link → /api/kvkk/privacy-notice)
+                Button { fetchPrivacy() } label: {
+                    Text(L.t("read_privacy_notice"))
+                        .font(.system(size: 13))
+                        .foregroundColor(Theme.themePrimary)
+                        .underline()
+                }
+                .padding(.top, 6)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -68,8 +79,7 @@ struct ConsentBottomSheet: View {
             .buttonStyle(.plain)
             .padding(.bottom, 16)
 
-            // Onayla (consent gradient, radius 14)
-            Button(action: { if kvkkChecked { onApprove() } }) {
+            Button(action: approve) {
                 Text(L.t("btn_approve"))
                     .font(.system(size: 16, weight: .bold)).foregroundColor(.white)
                     .frame(maxWidth: .infinity).frame(height: 60)
@@ -90,47 +100,102 @@ struct ConsentBottomSheet: View {
         .padding(.bottom, 32)
         .background(Theme.surface)
         .clipShape(RoundedCorners(radius: 24, corners: [.topLeft, .topRight]))
+        .sheet(isPresented: $showPrivacy) { PrivacyNoticeView(text: privacyText) }
     }
 
+    // Logo VARSA: şeffaf zemin (sadece görsel). YOKSA: #1287BE + baş harfler (Android paritesi).
     private var logo: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.lockIconBg)
-                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Theme.lockIconStroke, lineWidth: 1.5))
-                .frame(width: 72, height: 72)
-            if let b64 = info.logoBase64, let data = Data(base64Encoded: stripDataURL(b64)), let ui = UIImage(data: data) {
-                Image(uiImage: ui).resizable().scaledToFit().padding(4)
-                    .frame(width: 72, height: 72)
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        Group {
+            if let ui = partnerLogoImage {
+                Image(uiImage: ui).resizable().scaledToFit().frame(width: 72, height: 72)
             } else {
-                Text(initials).font(.system(size: 24, weight: .bold)).foregroundColor(.white)
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color(hex: "#1287BE")).frame(width: 72, height: 72)
+                    Text(initials).font(.system(size: 24, weight: .bold)).foregroundColor(.white)
+                }
             }
         }
     }
 
+    private var partnerLogoImage: UIImage? {
+        guard let b64 = info.logoBase64, !b64.isEmpty,
+              let data = Data(base64Encoded: stripDataURL(b64)), let ui = UIImage(data: data) else { return nil }
+        return ui
+    }
+
     private var initials: String {
-        let first = info.name.first.map { String($0).uppercased() } ?? "?"
-        return first
+        let parts = info.name.trimmingCharacters(in: .whitespaces).split(separator: " ")
+        if parts.count >= 2 { return (parts[0].prefix(1) + parts[1].prefix(1)).uppercased() }
+        return String(info.name.prefix(2)).uppercased()
     }
 
-    private var scopeList: [String] {
-        guard let scopes = info.scopes, !scopes.isEmpty else { return [L.t("consent_default_scope")] }
-        return scopes.map(scopeText)
-    }
-
-    private func scopeText(_ s: String) -> String {
-        let lower = s.lowercased()
-        if lower.contains("user") { return L.t("scope_user_id") }
-        if lower.contains("age") {
-            let parts = s.split(whereSeparator: { $0 == ":" || $0 == "_" || $0 == "=" })
-            let val = parts.count > 1 ? String(parts.last!) : "18+"
-            return L.t("scope_age", val)
+    /// Android: validations JSON object'inden user_id / age maddeleri (scopes listesi DEĞİL).
+    private var scopeItems: [String] {
+        var items: [String] = []
+        if case .object(let obj)? = info.validations {
+            if obj["user_id"] != nil { items.append(L.t("scope_user_id")) }
+            if let age = obj["age"] { items.append(L.t("scope_age", jsonString(age))) }
         }
-        return s
+        if items.isEmpty { items.append(L.t("consent_default_scope")) }
+        return items
+    }
+
+    private func jsonString(_ v: JSONValue) -> String {
+        switch v {
+        case .string(let s): return s
+        case .number(let n): return n == n.rounded() ? String(Int(n)) : String(n)
+        case .bool(let b): return b ? "true" : "false"
+        default: return ""
+        }
+    }
+
+    private func approve() {
+        guard kvkkChecked else { return }
+        AppPrefs.kvkkConsentAccepted = true
+        onApprove()
+    }
+
+    private func fetchPrivacy() {
+        guard !loadingPrivacy else { return }
+        loadingPrivacy = true
+        Task { @MainActor in
+            defer { loadingPrivacy = false }
+            do {
+                let resp = try await VerifyAPI.shared.privacyNotice()
+                privacyText = resp.text ?? L.t("privacy_notice_load_error")
+            } catch {
+                Log.warning("Aydınlatma metni yüklenemedi: \(error.localizedDescription)", category: .flow)
+                privacyText = L.t("privacy_notice_load_failed")
+            }
+            showPrivacy = true
+        }
     }
 
     private func stripDataURL(_ s: String) -> String {
         if let range = s.range(of: "base64,") { return String(s[range.upperBound...]) }
         return s
+    }
+}
+
+/// Aydınlatma metni görüntüleyici (Android AlertDialog eşdeğeri).
+struct PrivacyNoticeView: View {
+    let text: String
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                Text(text)
+                    .font(.system(size: 13))
+                    .foregroundColor(Theme.onSurface)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(16)
+            }
+            .navigationTitle(L.t("privacy_notice_title"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button(L.t("btn_close")) { dismiss() } } }
+        }
     }
 }
 

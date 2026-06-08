@@ -341,6 +341,15 @@ struct KvkkBlockCardRequest: Codable {
     }
 }
 
+// MARK: - Privacy notice (KVKK aydınlatma metni)
+
+/// `GET /api/kvkk/privacy-notice?format=text` → `{ version, effectiveDate, language, text }`.
+struct PrivacyNoticeResponse: Codable {
+    let text: String?
+    let version: String?
+    let language: String?
+}
+
 // MARK: - Error body
 
 /// Sunucu hata gövdesi (`{error, code, details}`) — Android `ApiError`/`parseApiError` eşdeğeri.

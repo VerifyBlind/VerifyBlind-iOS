@@ -75,6 +75,11 @@ struct VerifyAPI {
         try await client.postNoContent("api/kvkk/block-card", body: request)
     }
 
+    /// Aydınlatma metni (consent ekranı "Aydınlatma Metnini Oku"). format=text → `{text}`.
+    func privacyNotice(format: String = "text") async throws -> PrivacyNoticeResponse {
+        try await client.get("api/kvkk/privacy-notice?format=\(format)")
+    }
+
     // MARK: - Yardımcı
 
     /// Play Integrity (Android) başlığı. iOS'ta App Attest eşdeğeri Aşama 6'da gelir; şimdilik opsiyonel.

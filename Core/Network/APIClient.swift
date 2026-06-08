@@ -119,7 +119,9 @@ final class APIClient {
     }
 
     private func buildRequest(_ endpoint: Endpoint) -> URLRequest {
-        let url = origin.appendingPathComponent(endpoint.path)
+        // origin = scheme://host[:port] (path yok). String birleştirme query string'i KORUR
+        // (appendingPathComponent "?"yi encode edip query'yi bozardı). Path'ler URL-güvenli.
+        let url = URL(string: origin.absoluteString + "/" + endpoint.path) ?? origin.appendingPathComponent(endpoint.path)
         var req = URLRequest(url: url)
         req.httpMethod = endpoint.method.rawValue
         req.setValue("application/json", forHTTPHeaderField: "Accept")
