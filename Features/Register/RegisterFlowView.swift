@@ -74,13 +74,19 @@ struct RegisterFlowView: View {
         case .mrz:
             MRZScanStepView(isDemo: vm.isDemo, onResult: { vm.onMrz($0) })
         case .nfc:
-            NfcStepView(status: vm.nfcStatus, isDemo: vm.isDemo, onStart: {
-                if vm.isDemo {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) { vm.demoAfterNfc() }
-                } else {
-                    vm.startNfc()
-                }
-            })
+            NfcStepView(
+                status: vm.nfcStatus,
+                isDemo: vm.isDemo,
+                retryMessage: vm.nfcRetryMessage,
+                onStart: {
+                    if vm.isDemo {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { vm.demoAfterNfc() }
+                    } else {
+                        vm.startNfc()
+                    }
+                },
+                onRetry: { vm.retryNfc() }
+            )
         default:
             EmptyView()
         }
@@ -233,30 +239,45 @@ private struct MRZScanStepView: View {
 private struct NfcStepView: View {
     let status: String
     var isDemo: Bool = false
+    var retryMessage: String? = nil
     var onStart: () -> Void = {}
+    var onRetry: () -> Void = {}
 
     var body: some View {
         VStack(spacing: 24) {
             Spacer()
-            ZStack {
-                Circle().stroke(Theme.nfcRing.opacity(0.3), lineWidth: 2).frame(width: 200, height: 200)
-                Circle().stroke(Theme.nfcRing.opacity(0.2), lineWidth: 2).frame(width: 150, height: 150)
-                Image(systemName: "wave.3.right")
-                    .font(.system(size: 64))
-                    .foregroundColor(Theme.themePrimary)
+            if let retry = retryMessage {
+                // Recoverable (kart kaydı/bağlantı koptu) — akış kırılmaz, tekrar dene.
+                ZStack {
+                    Circle().stroke(Theme.error.opacity(0.25), lineWidth: 2).frame(width: 160, height: 160)
+                    Image(systemName: "wave.3.right").font(.system(size: 56)).foregroundColor(Theme.error)
+                }
+                Text(retry)
+                    .font(.system(size: 16)).foregroundColor(Theme.onSurface)
+                    .multilineTextAlignment(.center).padding(.horizontal, 40)
+                PrimaryGradientButton(title: L.t("handshake_retry"), action: onRetry)
+                    .padding(.horizontal, 40)
+            } else {
+                ZStack {
+                    Circle().stroke(Theme.nfcRing.opacity(0.3), lineWidth: 2).frame(width: 200, height: 200)
+                    Circle().stroke(Theme.nfcRing.opacity(0.2), lineWidth: 2).frame(width: 150, height: 150)
+                    Image(systemName: "wave.3.right")
+                        .font(.system(size: 64))
+                        .foregroundColor(Theme.themePrimary)
+                }
+                Text(L.t("nfc_id_card_instruction"))
+                    .font(.system(size: 16))
+                    .foregroundColor(Theme.onSurface)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+                Text(isDemo ? L.t("nfc_searching") : status)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(Theme.onSurfaceVariant)
             }
-            Text(L.t("nfc_id_card_instruction"))
-                .font(.system(size: 16))
-                .foregroundColor(Theme.onSurface)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-            Text(isDemo ? L.t("nfc_searching") : status)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(Theme.onSurfaceVariant)
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // Gerçek: NFC okumayı başlat. Demo: ~2s sonra liveness'a geç (onStart parent'ta sürer).
+        // Gerçek: NFC okumayı başlat. Demo: ~2s sonra biyometrik rızaya geç (onStart parent'ta sürer).
         .onAppear { onStart() }
     }
 }

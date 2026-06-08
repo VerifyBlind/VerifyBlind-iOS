@@ -19,6 +19,8 @@ final class RegisterViewModel: ObservableObject {
     @Published var step: Step = .preparation
     @Published var kvkkAccepted = false
     @Published var nfcStatus: String = L.t("nfc_searching")
+    /// Kart kaydı/bağlantı koparsa: akışı kırmadan NFC adımında "tekrar dene" mesajı (Android UX).
+    @Published var nfcRetryMessage: String? = nil
 
     let isDemo: Bool
 
@@ -78,6 +80,7 @@ final class RegisterViewModel: ObservableObject {
             fail(title: L.t("error_system_title"), message: L.t("err_passport_data_lost"), error: nil)
             return
         }
+        nfcRetryMessage = nil
         Task {
             do {
                 nfcStatus = L.t("nfc_reading")
@@ -96,21 +99,30 @@ final class RegisterViewModel: ObservableObject {
                     step = .biometricConsent   // rıza → liveness
                 }
             } catch let e as NFCReadError {
-                if case .cancelled = e {
+                switch e {
+                case .cancelled:
                     // İptal → MRZ'ye geri dön (kullanıcı tekrar deneyebilir).
                     Log.info("NFC iptal edildi", category: .nfc)
                     step = .mrz
-                } else {
-                    fail(title: L.t("nfc_connection_failed_status"),
-                         message: e.errorDescription ?? L.t("nfc_read_error"),
-                         error: e)
+                case .notAvailable, .invalidInput:
+                    // Cihaz/MRZ verisi sorunu → tekrar denemek anlamsız, hata ekranı.
+                    fail(title: L.t("nfc_not_found_title"), message: e.errorDescription ?? L.t("nfc_read_error"), error: e)
+                default:
+                    // Kart kaydı/bağlantı/timeout → AKIŞI KIRMA, NFC adımında tekrar dene (Android UX).
+                    Log.warning("NFC okuma başarısız (tekrar denenebilir): \(e)", category: .nfc)
+                    nfcRetryMessage = L.t("nfc_read_error") // "Kart Okunamadı. Kartı uzaklaştırıp tekrar yaklaştırın."
                 }
             } catch {
-                fail(title: L.t("nfc_connection_failed_status"),
-                     message: (error as? LocalizedError)?.errorDescription ?? error.localizedDescription,
-                     error: error)
+                // Beklenmeyen (ör. "memory failure" / kart kaydı) → kırma, tekrar dene.
+                Log.warning("NFC beklenmeyen hata (tekrar denenebilir)", error: error, category: .nfc)
+                nfcRetryMessage = L.t("nfc_read_error")
             }
         }
+    }
+
+    /// NFC "tekrar dene" — recoverable hatadan sonra (Android: kartı uzaklaştır + yeniden dokundur).
+    func retryNfc() {
+        startNfc()
     }
 
     // MARK: - Liveness
