@@ -60,3 +60,13 @@ jobs:
           name: ipa-dev-${{ github.run_number }}
           path: build/ios/ipa/*.ipa
           if-no-files-found: warn
+
+      # SPM çözümü sonrası kesin Package.resolved'ı (GoogleSignIn + transitive dahil) yakala.
+      # Reproducibility: indirip src/VerifyBlind.iOS/Package.resolved'a koy + commit et.
+      - name: Upload resolved Package.resolved
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-resolved-${{ github.run_number }}
+          path: VerifyBlind.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          if-no-files-found: warn
