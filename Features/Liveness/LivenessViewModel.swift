@@ -178,12 +178,20 @@ final class LivenessViewModel: ObservableObject {
             self?.debugSmile = smilePct
         }
 
-        guard now - lastActionTime >= 2000 else { return }
         let target = challenges[index]
+
+        // Göreceli detektörleri HER karede besle (throttle'dan ÖNCE) → nötr baseline erken yakalanır.
+        // Smile bug'ı: throttle (2s) bitene kadar besleme yoktu; kullanıcı "Gülümseyin"i görüp hemen
+        // gülünce baseline yüksek başlıyor, ilk gülümseme "yükseliş" sayılmıyordu (ikincide oluyordu).
+        let blinkFired = (target == .blink) ? blinkDetector.feed(eyeOpen) : false
+        let smileFired = (target == .smile) ? smileDetector.feed(signals.smile) : false
+
+        // İlerleme throttle'dan SONRA (önceki jestin yeni challenge'a sızmasını önler).
+        guard now - lastActionTime >= 2000 else { return }
 
         // Blink: göreceli detektör (Vision gözü tam kapatmıyor) + statik fallback.
         if target == .blink {
-            if blinkDetector.feed(eyeOpen) || LivenessGestureDetector.detect(signals) == .blink {
+            if blinkFired || LivenessGestureDetector.detect(signals) == .blink {
                 advanceOnSuccess(now: now)
             }
             return
@@ -191,7 +199,7 @@ final class LivenessViewModel: ObservableObject {
 
         // Smile: göreceli detektör (Vision smile olasılığı yok) + statik fallback.
         if target == .smile {
-            if smileDetector.feed(signals.smile) || LivenessGestureDetector.detect(signals) == .smile {
+            if smileFired || LivenessGestureDetector.detect(signals) == .smile {
                 advanceOnSuccess(now: now)
             }
             return

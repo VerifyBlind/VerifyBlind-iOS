@@ -22,6 +22,8 @@ final class RegisterViewModel: ObservableObject {
     /// Kart kaydı/bağlantı koparsa: akışı kırmadan NFC adımında "tekrar dene" mesajı (Android UX).
     @Published var nfcRetryMessage: String? = nil
 
+    private var nfcAttempt = 0   // sessiz oto-tekrar sayacı (en fazla 3)
+
     let isDemo: Bool
 
     private var userPubKey: String?
@@ -75,12 +77,23 @@ final class RegisterViewModel: ObservableObject {
 
     // MARK: - NFC
 
+    /// NFC giriş noktası (MRZ→NFC veya manuel "Yeniden Dene"): deneme sayacını sıfırlar.
     func startNfc() {
+        nfcAttempt = 0
+        nfcRetryMessage = nil
+        runNfcAttempt()
+    }
+
+    /// Manuel "Yeniden Dene" (3 sessiz deneme de başarısız olduktan sonraki hata ekranından).
+    func retryNfc() {
+        startNfc()
+    }
+
+    private func runNfcAttempt() {
         guard let mrz, let session else {
             fail(title: L.t("error_system_title"), message: L.t("err_passport_data_lost"), error: nil)
             return
         }
-        nfcRetryMessage = nil
         Task {
             do {
                 nfcStatus = L.t("nfc_reading")
@@ -91,6 +104,7 @@ final class RegisterViewModel: ObservableObject {
                     dateOfExpiry: mrz.dateOfExpiry,
                     handshakeNonce: session.nonce
                 )
+                nfcAttempt = 0
                 scanned = result
                 if challenges.isEmpty {
                     step = .processing
@@ -101,28 +115,32 @@ final class RegisterViewModel: ObservableObject {
             } catch let e as NFCReadError {
                 switch e {
                 case .cancelled:
-                    // İptal → MRZ'ye geri dön (kullanıcı tekrar deneyebilir).
                     Log.info("NFC iptal edildi", category: .nfc)
                     step = .mrz
                 case .notAvailable, .invalidInput:
-                    // Cihaz/MRZ verisi sorunu → tekrar denemek anlamsız, hata ekranı.
                     fail(title: L.t("nfc_not_found_title"), message: e.errorDescription ?? L.t("nfc_read_error"), error: e)
                 default:
-                    // Kart kaydı/bağlantı/timeout → AKIŞI KIRMA, NFC adımında tekrar dene (Android UX).
-                    Log.warning("NFC okuma başarısız (tekrar denenebilir): \(e)", category: .nfc)
-                    nfcRetryMessage = L.t("nfc_read_error") // "Kart Okunamadı. Kartı uzaklaştırıp tekrar yaklaştırın."
+                    await retryOrFail(reason: "\(e)")
                 }
             } catch {
-                // Beklenmeyen (ör. "memory failure" / kart kaydı) → kırma, tekrar dene.
-                Log.warning("NFC beklenmeyen hata (tekrar denenebilir): \(error.localizedDescription)", category: .nfc)
-                nfcRetryMessage = L.t("nfc_read_error")
+                await retryOrFail(reason: error.localizedDescription)
             }
         }
     }
 
-    /// NFC "tekrar dene" — recoverable hatadan sonra (Android: kartı uzaklaştır + yeniden dokundur).
-    func retryNfc() {
-        startNfc()
+    /// Bağlantı koparsa (kart kaydı/timeout/unknown): UYARI ÇIKARMADAN 1s bekleyip sessizce tekrar
+    /// dener — en fazla 3 kez. Üçü de başarısızsa hata ekranı + "Yeniden Dene" (Android UX).
+    private func retryOrFail(reason: String) async {
+        if nfcAttempt < 3 {
+            nfcAttempt += 1
+            Log.warning("NFC denemesi başarısız (\(reason)) → 1s sonra sessiz tekrar #\(nfcAttempt)/3", category: .nfc)
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            runNfcAttempt()
+        } else {
+            Log.warning("NFC 3 sessiz deneme başarısız → hata ekranı (\(reason))", category: .nfc)
+            nfcAttempt = 0
+            nfcRetryMessage = L.t("nfc_read_error")
+        }
     }
 
     // MARK: - Liveness
