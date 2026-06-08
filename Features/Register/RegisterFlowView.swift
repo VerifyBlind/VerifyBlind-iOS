@@ -18,9 +18,12 @@ struct RegisterFlowView: View {
             Theme.background.ignoresSafeArea()
             switch vm.step {
             case .liveness:
-                // Liveness tam ekran (Android ayrı LivenessActivity).
+                // Liveness tam ekran (Android ayrı LivenessActivity). Demo: sahte jest + chip yok.
                 LivenessView(
-                    viewModel: LivenessViewModel(challenges: vm.challenges, chipPhotoData: vm.chipPhoto, isDemo: false),
+                    viewModel: LivenessViewModel(
+                        challenges: vm.isDemo ? [1, 2, 3] : vm.challenges,
+                        chipPhotoData: vm.isDemo ? nil : vm.chipPhoto,
+                        isDemo: vm.isDemo),
                     onSuccess: { selfie, score in vm.onLiveness(selfie: selfie, score: score) },
                     onCancel: { vm.onLivenessCancel() }
                 )
@@ -55,9 +58,15 @@ struct RegisterFlowView: View {
         case .preparation:
             PreparationStepView(vm: vm)
         case .mrz:
-            MRZScanStepView(onResult: { vm.onMrz($0) })
+            MRZScanStepView(isDemo: vm.isDemo, onResult: { vm.onMrz($0) })
         case .nfc:
-            NfcStepView(status: vm.nfcStatus).onAppear { vm.startNfc() }
+            NfcStepView(status: vm.nfcStatus, isDemo: vm.isDemo, onStart: {
+                if vm.isDemo {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) { vm.demoAdvanceToLiveness() }
+                } else {
+                    vm.startNfc()
+                }
+            })
         default:
             EmptyView()
         }
@@ -143,6 +152,7 @@ private struct PreparationStepView: View {
 // MARK: - MRZ tarama
 
 private struct MRZScanStepView: View {
+    var isDemo: Bool = false
     let onResult: (MRZParser.Result) -> Void
     @StateObject private var camera = CameraController(position: .back)
     @State private var scanner = MRZScanner()
@@ -171,13 +181,23 @@ private struct MRZScanStepView: View {
             }
         }
         .onAppear {
-            scanner.onResult = { r in
-                camera.stop()
-                Log.info("MRZ okundu (register): type=\(r.documentType)", category: .nfc)
-                onResult(r)
+            if isDemo {
+                // Android demo: kamera ~2s açık kalır, sonra sahte MRZ enjekte edilir.
+                camera.start()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    camera.stop()
+                    onResult(MRZParser.Result(documentNumber: "A12345678", dateOfBirth: "920101",
+                                              dateOfExpiry: "301231", documentType: "ID"))
+                }
+            } else {
+                scanner.onResult = { r in
+                    camera.stop()
+                    Log.info("MRZ okundu (register): type=\(r.documentType)", category: .nfc)
+                    onResult(r)
+                }
+                camera.onFrame = { buf, o in scanner.process(buf, orientation: o) }
+                camera.start()
             }
-            camera.onFrame = { buf, o in scanner.process(buf, orientation: o) }
-            camera.start()
         }
         .onDisappear { camera.stop() }
     }
@@ -194,6 +214,8 @@ private struct MRZScanStepView: View {
 
 private struct NfcStepView: View {
     let status: String
+    var isDemo: Bool = false
+    var onStart: () -> Void = {}
 
     var body: some View {
         VStack(spacing: 24) {
@@ -210,12 +232,14 @@ private struct NfcStepView: View {
                 .foregroundColor(Theme.onSurface)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
-            Text(status)
+            Text(isDemo ? L.t("nfc_searching") : status)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(Theme.onSurfaceVariant)
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Gerçek: NFC okumayı başlat. Demo: ~2s sonra liveness'a geç (onStart parent'ta sürer).
+        .onAppear { onStart() }
     }
 }
 

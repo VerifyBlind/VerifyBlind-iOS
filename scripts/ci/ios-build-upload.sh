@@ -123,4 +123,21 @@ PUBLISH_ARGS=(
 if [ -n "${BETA_GROUP:-}" ]; then
   PUBLISH_ARGS+=("--beta-group" "$BETA_GROUP")
 fi
-"${PUBLISH_ARGS[@]}"
+
+# Apple altyapısı upload SONRASI adımlarda (RETRIEVE UPLOAD OPERATIONS / beta-review) zaman zaman
+# geçici 500 verip altool'u exit≠0 yapıyor — IPA aslında YÜKLENMİŞ oluyor ("UPLOAD SUCCEEDED").
+# Internal testçiler binary VALID olunca otomatik alır; post-adımlar best-effort. Bu yüzden:
+# yalnızca çıktıda "UPLOAD SUCCEEDED" VARSA publish hatasını yut; YOKSA gerçekten başarısızdır → fail.
+PUBLISH_LOG="$(mktemp)"
+set +e
+"${PUBLISH_ARGS[@]}" 2>&1 | tee "$PUBLISH_LOG"
+PUBLISH_RC=${PIPESTATUS[0]}
+set -e
+if [ "$PUBLISH_RC" -ne 0 ]; then
+  if grep -q "UPLOAD SUCCEEDED" "$PUBLISH_LOG"; then
+    echo "⚠️  publish exit=$PUBLISH_RC ama IPA yüklendi (UPLOAD SUCCEEDED) — Apple geçici post-adım hatası, build YEŞİL sayılıyor."
+  else
+    echo "❌ publish başarısız (UPLOAD SUCCEEDED yok) — gerçek yükleme hatası."
+    exit "$PUBLISH_RC"
+  fi
+fi

@@ -49,8 +49,9 @@ final class RegisterViewModel: ObservableObject {
                 return
             }
             if isDemo {
-                step = .processing
-                await runDemo()
+                // Demo: handshake yok; gerçek akışla aynı ekranlardan geçer (Android demo paritesi).
+                // MRZ(~2s, sahte) → NFC(~2s) → Liveness(demo, oto-jest) → İşlem → demoRegister.
+                step = .mrz
             } else {
                 do {
                     session = try await HandshakeService.shared.performRegisterHandshake()
@@ -116,11 +117,19 @@ final class RegisterViewModel: ObservableObject {
     func onLiveness(selfie: Data, score: Float) {
         selfieData = selfie
         step = .processing
-        Task { await finalizeReal() }
+        Task {
+            if isDemo { await runDemo() } else { await finalizeReal() }
+        }
     }
 
     func onLivenessCancel() {
         step = .mrz
+    }
+
+    /// Demo: NFC ekranı ~2s sonra liveness'a geçer (Android `demoProceedAfterNfc`).
+    func demoAdvanceToLiveness() {
+        guard isDemo else { return }
+        step = .liveness
     }
 
     // MARK: - Gerçek kayıt finalize
