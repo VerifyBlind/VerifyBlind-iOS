@@ -18,6 +18,9 @@ enum AppPrefs {
         static let lastHardwareVerified = "last_hardware_verified"
         static let lastIsMock = "last_is_mock"
         static let lastAttestationTime = "last_attestation_time"
+        // Bulut yedekleme (Aşama 5) — hassas değil: sağlayıcı adı + son yedek zaman damgası
+        static let cloudProvider = "cloud_provider"
+        static let cloudLastBackup = "cloud_last_backup"
     }
 
     /// Hibrit-şifreli ticket zarfı (HybridContent JSON string).
@@ -61,6 +64,24 @@ enum AppPrefs {
     static var lastAttestationTime: Int64 {
         get { Int64(d.integer(forKey: Key.lastAttestationTime)) }
         set { d.set(Int(newValue), forKey: Key.lastAttestationTime) }
+    }
+
+    /// Seçili bulut yedekleme sağlayıcısı id'si ("dropbox"/"google_drive") veya nil (bağlı değil).
+    static var cloudProvider: String? {
+        get { d.string(forKey: Key.cloudProvider) }
+        set { d.set(newValue, forKey: Key.cloudProvider) }
+    }
+
+    /// Son başarılı yedek epoch ms; 0 = henüz yedeklenmedi.
+    static var cloudLastBackup: Int64 {
+        get { Int64(d.integer(forKey: Key.cloudLastBackup)) }
+        set { d.set(Int(newValue), forKey: Key.cloudLastBackup) }
+    }
+
+    /// Bulut bağlantısı kesildiğinde sağlayıcı seçimi + son yedek zamanı temizlenir.
+    static func clearCloud() {
+        d.removeObject(forKey: Key.cloudProvider)
+        d.removeObject(forKey: Key.cloudLastBackup)
     }
 
     /// Android `clearTicket()` — kart kaldırıldığında ticket+pubkey+expiry temizlenir.

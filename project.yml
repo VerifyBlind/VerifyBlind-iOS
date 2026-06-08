@@ -39,6 +39,11 @@ packages:
   SwiftyDropbox:
     url: https://github.com/dropbox/SwiftyDropbox
     from: 10.0.0
+  GoogleSignIn:
+    # Aşama 5 yedekleme: yalnız OAuth (Drive işlemleri elle URLSession REST). AppAuth/
+    # GTMSessionFetcher/GTMAppAuth transitive gelir; ağır GoogleAPIClientForREST KULLANILMAZ.
+    url: https://github.com/google/GoogleSignIn-iOS
+    from: 7.1.0
   Sentry:
     url: https://github.com/getsentry/sentry-cocoa
     from: 8.36.0
@@ -69,13 +74,9 @@ targets:
         com.apple.developer.associated-domains:
           - applinks:verifyblind.com
           - applinks:api.verifyblind.com
-        # iCloud: Backup feature implement edilince eklenecek
-        # com.apple.developer.icloud-services:
-        #   - CloudDocuments
-        # com.apple.developer.icloud-container-identifiers:
-        #   - $(ICLOUD_CONTAINER_ID)
-        # com.apple.developer.ubiquity-container-identifiers:
-        #   - $(ICLOUD_CONTAINER_ID)
+        # iCloud KASITLI OLARAK YOK (Aşama 5 kararı, ZKP): yedekleme yalnız Dropbox + Google Drive
+        # ile, uygulama kontrolünde. iCloud device backup + Keychain sync engellendi
+        # ([[project_ios_backup_zkp_hardening]]). iCloud entitlement EKLEME.
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(IOS_BUNDLE_ID)
@@ -102,6 +103,8 @@ targets:
       - package: GRDB
         product: GRDB
       - package: SwiftyDropbox
+      - package: GoogleSignIn
+        product: GoogleSignIn
       - package: Sentry
         product: Sentry
     scheme:

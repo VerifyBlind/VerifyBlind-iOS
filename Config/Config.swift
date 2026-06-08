@@ -31,11 +31,14 @@ enum Config {
         return AppAttestEnvironment(rawValue: raw) ?? .development
     }()
 
-    static let iCloudContainerID: String = string("ICLOUD_CONTAINER_ID")
+    // iCloud KALDIRILDI (Aşama 5, ZKP): yedekleme yalnız Dropbox + Google Drive.
 
     static let sentryDSN: String = string("SENTRY_DSN")
 
     static let dropboxAppKey: String = string("DROPBOX_IOS_APP_KEY")
+
+    /// Google Sign-In OAuth client id (Aşama 5 yedekleme). Boşsa Google Drive devre dışı.
+    static let googleClientID: String = string("GOOGLE_IOS_CLIENT_ID")
 
     static var isDebugBuild: Bool {
         #if DEBUG

@@ -5,6 +5,7 @@ import SwiftUI
 struct SettingsView: View {
     let onBack: () -> Void
     let onHistory: () -> Void
+    let onBackup: () -> Void
 
     @State private var biometricEnabled = AppPrefs.biometricEnabled
 
@@ -38,6 +39,22 @@ struct SettingsView: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(L.t("settings_history_title")).font(.system(size: 14, weight: .bold)).foregroundColor(Theme.onSurface)
                                     Text(L.t("settings_history_desc")).font(.system(size: 12)).foregroundColor(Theme.onSurfaceVariant)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right").font(.system(size: 14)).foregroundColor(Theme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+
+                    // Şifreli Yedekleme (Aşama 5 — Dropbox + Google Drive, iCloud YOK)
+                    Button(action: onBackup) {
+                        CardSurface {
+                            HStack(spacing: 16) {
+                                IconCircle(systemName: "lock.icloud", fill: Theme.blueSoft, tint: Theme.themePrimary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(L.t("settings_backup_title")).font(.system(size: 14, weight: .bold)).foregroundColor(Theme.onSurface)
+                                    Text(L.t("settings_backup_desc")).font(.system(size: 12)).foregroundColor(Theme.onSurfaceVariant)
                                 }
                                 Spacer()
                                 Image(systemName: "chevron.right").font(.system(size: 14)).foregroundColor(Theme.onSurfaceVariant)

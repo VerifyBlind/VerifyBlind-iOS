@@ -12,6 +12,7 @@ struct DevMenuView: View {
     @State private var stage2Results: [SelfTestResult] = []
     @State private var stage3Results: [SelfTestResult] = []
     @State private var stage4Results: [SelfTestResult] = []
+    @State private var stage5Results: [SelfTestResult] = []
 
     var body: some View {
         NavigationStack {
@@ -37,6 +38,7 @@ struct DevMenuView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(didSendTestEvent)
 
+                    stage5Section
                     stage4Section
                     stage3Section
                     stage2Section
@@ -55,6 +57,26 @@ struct DevMenuView: View {
             Text(label).foregroundStyle(.secondary).frame(width: 110, alignment: .leading)
             Text(value).lineLimit(2).truncationMode(.middle)
         }
+    }
+
+    // MARK: - Aşama 5 (Backup)
+
+    private var stage5Section: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Divider()
+            Text("Stage 5 — Backup (Dropbox / Google Drive)").font(.headline)
+            Text("personId-AES-GCM çapraz-platform şifreleme, bulut yedek JSON şema/anahtar paritesi, GRDB DB iCloud yedeğinden hariç + keychain ThisDeviceOnly, HistoryRepository sync zinciri. Sonuçlar Sentry'e loglanır.")
+                .font(.caption).foregroundStyle(.secondary)
+            Button {
+                stage5Results = Stage5SelfTest.runAll()
+            } label: {
+                Label("Stage 5 self-test çalıştır", systemImage: "checklist")
+            }
+            .buttonStyle(.bordered)
+            ForEach(stage5Results) { resultRow($0) }
+            summary(stage5Results)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Aşama 4 (Storage / GRDB / payload)

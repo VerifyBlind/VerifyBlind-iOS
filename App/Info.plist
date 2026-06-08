@@ -74,6 +74,30 @@
 				<string>verifyblind</string>
 			</array>
 		</dict>
+		<!-- Dropbox OAuth redirect (Aşama 5): db-<appkey>. Build-time $(DROPBOX_IOS_APP_KEY) substitüsyonu. -->
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.verifyblind.dropbox</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>db-$(DROPBOX_IOS_APP_KEY)</string>
+			</array>
+		</dict>
+		<!-- Google Sign-In OAuth redirect (Aşama 5): reversed client id. -->
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.verifyblind.google</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>$(GOOGLE_IOS_REVERSED_CLIENT_ID)</string>
+			</array>
+		</dict>
+	</array>
+	<!-- SwiftyDropbox'ın yüklü Dropbox uygulamasını sorgulaması için (opsiyonel app-switch OAuth). -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>dbapi-2</string>
+		<string>dbapi-8-emm</string>
 	</array>
 	<!-- xcconfig'ten Info.plist'e enjekte edilen build-time config — Config.swift bunları okur -->
 	<key>API_BASE_URL</key>
@@ -86,11 +110,13 @@
 	<string>$(ENCLAVE_DEVELOPER_PUBLIC_KEY)</string>
 	<key>APP_ATTEST_ENVIRONMENT</key>
 	<string>$(APP_ATTEST_ENVIRONMENT)</string>
-	<key>ICLOUD_CONTAINER_ID</key>
-	<string>$(ICLOUD_CONTAINER_ID)</string>
 	<key>SENTRY_DSN</key>
 	<string>$(SENTRY_DSN)</string>
 	<key>DROPBOX_IOS_APP_KEY</key>
 	<string>$(DROPBOX_IOS_APP_KEY)</string>
+	<key>GOOGLE_IOS_CLIENT_ID</key>
+	<string>$(GOOGLE_IOS_CLIENT_ID)</string>
+	<key>GOOGLE_IOS_REVERSED_CLIENT_ID</key>
+	<string>$(GOOGLE_IOS_REVERSED_CLIENT_ID)</string>
 </dict>
 </plist>

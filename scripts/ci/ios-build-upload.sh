@@ -24,6 +24,14 @@ echo "=== Generate xcconfig ==="
 # Escape '//' → '/$()/' ($() expands to empty string at Xcode build time). gotcha #10.
 DSN_ESC=$(printf '%s' "${SENTRY_DSN:-}" | sed 's|//|/$()/|g')
 
+# Google Sign-In (Aşama 5 yedekleme): reversed client id yoksa client id'den türet.
+# client id "<NUM>-<HASH>.apps.googleusercontent.com" → reversed "com.googleusercontent.apps.<NUM>-<HASH>".
+GCID="${GOOGLE_IOS_CLIENT_ID:-}"
+GREV="${GOOGLE_IOS_REVERSED_CLIENT_ID:-}"
+if [ -z "$GREV" ] && [ -n "$GCID" ]; then
+  GREV="com.googleusercontent.apps.${GCID%.apps.googleusercontent.com}"
+fi
+
 xcconfig_body() {
   echo "API_BASE_URL = https:/\$()/api.verifyblind.com/api/verify/"
   echo "CERT_PIN_1 = ${CERT_PIN_1:-}"
@@ -32,9 +40,10 @@ xcconfig_body() {
   echo "APPLE_TEAM_ID = ${APPLE_TEAM_ID}"
   echo "IOS_BUNDLE_ID = ${BUNDLE_ID}"
   echo "APP_ATTEST_ENVIRONMENT = ${APP_ATTEST_ENVIRONMENT}"
-  echo "ICLOUD_CONTAINER_ID = iCloud.${BUNDLE_ID}"
   echo "SENTRY_DSN = $DSN_ESC"
   echo "DROPBOX_IOS_APP_KEY = ${DROPBOX_IOS_APP_KEY:-}"
+  echo "GOOGLE_IOS_CLIENT_ID = ${GCID}"
+  echo "GOOGLE_IOS_REVERSED_CLIENT_ID = ${GREV}"
   echo "BUILD_NUMBER = $BUILD_NUMBER"
 }
 
