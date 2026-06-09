@@ -46,21 +46,19 @@ actor AppAttestService {
     // MARK: - Enroll
 
     private func ensureEnrolledKeyId() async throws -> String {
-        // KeyId'i ENROLL'DAN ÖNCE sakla → enroll başarısız olsa (ör. rollout'ta sunucu hazır değilken)
-        // bir sonraki denemede aynı anahtar kullanılır; `generateKey`/`attestKey` Apple rate-limit'ine
-        // takılmaz.
-        let keyId: String
-        if let existing = SecureStore.getAppAttestKeyId() {
-            keyId = existing
-            if AppPrefs.appAttestEnrolled { return keyId }
-        } else {
-            keyId = try await service.generateKey()
-            SecureStore.saveAppAttestKeyId(keyId)
+        // Zaten enroll'lu anahtar varsa yeniden kullan.
+        if let existing = SecureStore.getAppAttestKeyId(), AppPrefs.appAttestEnrolled {
+            return existing
         }
+        // Enroll'lu DEĞİL → TAZE anahtar üret. ⚠️ `attestKey` Apple'da anahtar başına YALNIZCA BİR KEZ
+        // çağrılabilir → önceki başarısız denemenin (enroll reddedilmiş) anahtarını ASLA yeniden
+        // attest etme; o anahtarı bırak, yenisini üret. KeyId yalnızca enroll BAŞARILI olunca saklanır.
+        let keyId = try await service.generateKey()
         let challenge = try await fetchChallenge()
         let hash = clientDataHash(challenge)
         let attestation = try await service.attestKey(keyId, clientDataHash: hash)
         try await enroll(keyId: keyId, attestation: attestation.base64EncodedString(), challenge: challenge)
+        SecureStore.saveAppAttestKeyId(keyId)
         AppPrefs.appAttestEnrolled = true
         Log.info("App Attest anahtarı enroll edildi", category: .crypto)
         return keyId
