@@ -14,7 +14,17 @@ import Foundation
 /// Üst seviye yedek payload'ı. (Android `SyncManager.CloudPayload`.)
 struct CloudPayload: Codable {
     var history: [CloudHistoryItem]?
-    var partners: [String: BackupPartnerItem]?
+    /// Partnerler artık geçmiş öğeleri gibi `personId`-AES-GCM ile şifreli (Android `partnersEnc`).
+    /// Eski düz-metin `partners` haritası kaldırıldı; eski dosyalardaki o anahtar decode'da yok sayılır.
+    var partnersEnc: [EncPartner]?
+}
+
+/// Şifreli partner girdisi — Android `SyncManager.EncPartner`. `enc` = AES-GCM(personId)( BackupPartnerItem
+/// JSON ), `iv` ayrı. Çözülünce elde edilen düz metin = `BackupPartnerItem` (id/name/logoUrl/logoBase64/
+/// lastUpdated) — Android `PartnerItem` alan adlarıyla birebir (çapraz platform).
+struct EncPartner: Codable {
+    let enc: String
+    let iv: String
 }
 
 /// Şifreli bulut geçmiş öğesi. `enc` = AES-GCM(personId) ciphertext‖tag (base64), `iv` ayrı.

@@ -56,14 +56,28 @@ actor SyncManager {
         var cloudNonces = Set<String>()
         // Yerel anahtarlarla çözülemeyen (başka kimliğe ait) öğeler — yüklemede aynen geri yazılır.
         var foreignCloudItems: [CloudHistoryItem] = []
+        // Aynı koruma partnerler için: yerel anahtarla çözülemeyen şifreli partner girdileri.
+        var foreignPartnerEntries: [EncPartner] = []
 
         if let json, let data = json.data(using: .utf8),
            let payload = try? JSONDecoder().decode(CloudPayload.self, from: data) {
-            // Partnerleri birleştir (yenisini koru).
-            for (_, cloudPartner) in payload.partners ?? [:] {
-                let local = PartnerManager.get(cloudPartner.id)
-                if local == nil || cloudPartner.lastUpdated > local!.timestamp {
-                    PartnerManager.save(cloudPartner.toPartnerItem())
+            // Partnerleri çöz: her şifreli girdiyi yerel personId'lerle dene; çözüleni keep-newer
+            // (lastUpdated) ile birleştir, çözülemeyeni (başka kimliğe ait) aynen koru.
+            for entry in payload.partnersEnc ?? [] {
+                var decrypted: BackupPartnerItem?
+                for pid in localPersonIds {
+                    guard let jsonStr = try? CryptoUtils.aesGcmDecrypt(ciphertextBase64: entry.enc, ivBase64: entry.iv, personId: pid),
+                          let obj = try? JSONDecoder().decode(BackupPartnerItem.self, from: Data(jsonStr.utf8)) else { continue }
+                    decrypted = obj
+                    break
+                }
+                if let p = decrypted, !p.id.isEmpty {
+                    let local = PartnerManager.get(p.id)
+                    if local == nil || p.lastUpdated > local!.timestamp {
+                        PartnerManager.save(p.toPartnerItem())
+                    }
+                } else {
+                    foreignPartnerEntries.append(entry)   // başka kimliğin partneri → koru
                 }
             }
             for raw in payload.history ?? [] {
@@ -141,7 +155,30 @@ actor SyncManager {
         let needsUpload = !unsentNonces.isEmpty || itemsDeleted > 0 || itemsAdded > 0
             || (!cloudFileExists && !uploadList.isEmpty)
         if needsUpload {
-            let cloudPayload = CloudPayload(history: uploadList, partners: backupPartners())
+            // Partnerleri şifrele: her partner, geçmişte onu İLK referans veren personId ile şifrelenir.
+            // Cache'te olmayan ya da hiçbir geçmiş öğesinin referans vermediği (orphan) partner
+            // yedeklenmez — re-fetch edilebilir. Çözülemeyen foreign girdiler aynen korunur.
+            var partnerOwner: [String: String] = [:]   // partnerId -> personId (ilk sahip)
+            for item in allLocal {
+                if let pid = item.partnerId, !pid.isEmpty, !item.personId.isEmpty, partnerOwner[pid] == nil {
+                    partnerOwner[pid] = item.personId
+                }
+            }
+            var partnersEnc: [EncPartner] = []
+            for (partnerId, personId) in partnerOwner {
+                guard let local = PartnerManager.get(partnerId) else { continue }
+                let backupItem = BackupPartnerItem(from: local)
+                guard let pData = try? JSONEncoder().encode(backupItem),
+                      let pJson = String(data: pData, encoding: .utf8),
+                      let pair = try? CryptoUtils.aesGcmEncrypt(pJson, personId: personId) else {
+                    Log.error("Eşitleme: partner şifrelenemedi (\(partnerId))", category: .flow)
+                    continue
+                }
+                partnersEnc.append(EncPartner(enc: pair.ciphertext, iv: pair.iv))
+            }
+            partnersEnc.append(contentsOf: foreignPartnerEntries)
+
+            let cloudPayload = CloudPayload(history: uploadList, partnersEnc: partnersEnc.isEmpty ? nil : partnersEnc)
             guard let payloadData = try? JSONEncoder().encode(cloudPayload),
                   let payloadJson = String(data: payloadData, encoding: .utf8) else {
                 return SyncResult(itemsAdded: itemsAdded, itemsDeleted: itemsDeleted, error: "Yük serileştirilemedi")
@@ -159,11 +196,5 @@ actor SyncManager {
 
         CloudBackupManager.saveLastBackupTimestamp()
         return SyncResult(itemsAdded: itemsAdded, itemsDeleted: itemsDeleted, itemsUploaded: itemsUploaded)
-    }
-
-    private func backupPartners() -> [String: BackupPartnerItem]? {
-        let all = PartnerManager.all()
-        guard !all.isEmpty else { return nil }
-        return all.mapValues { BackupPartnerItem(from: $0) }
     }
 }

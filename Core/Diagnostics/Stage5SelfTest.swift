@@ -50,7 +50,7 @@ enum Stage5SelfTest {
             let innerJson = String(decoding: try JSONEncoder().encode(inner), as: UTF8.self)
             let pair = try CryptoUtils.aesGcmEncrypt(innerJson, personId: pid)
             let item = CloudHistoryItem(enc: pair.ciphertext, iv: pair.iv, actionType: 2, status: 1, transactionId: nil)
-            let payload = CloudPayload(history: [item], partners: nil)
+            let payload = CloudPayload(history: [item], partnersEnc: nil)
             let payloadJson = try JSONEncoder().encode(payload)
             // parse back
             let parsed = try JSONDecoder().decode(CloudPayload.self, from: payloadJson)
@@ -62,18 +62,50 @@ enum Stage5SelfTest {
             return (ok, "nonce=\(decInner.nonce) title=\(decInner.title)")
         })
 
-        // ── CloudPayload/CloudHistoryItem JSON anahtarları (Android Gson birebir) ──
-        r.append(check("CloudPayload JSON anahtarları: history/partners/enc/iv/actionType/status") {
+        // ── CloudPayload/CloudHistoryItem/EncPartner JSON anahtarları (Android Gson birebir) ──
+        r.append(check("CloudPayload JSON anahtarları: history/partnersEnc/enc/iv") {
             let item = CloudHistoryItem(enc: "e", iv: "i", actionType: 2, status: 1, transactionId: "t")
-            let partner = BackupPartnerItem(from: PartnerItem(partnerId: "p1", name: "Acme", logoUrl: "u", logoBase64: nil, timestamp: 9))
-            let payload = CloudPayload(history: [item], partners: ["p1": partner])
+            let encP = EncPartner(enc: "pe", iv: "pi")
+            let payload = CloudPayload(history: [item], partnersEnc: [encP])
             let top = try jsonKeys(payload)
             let itemKeys = try jsonKeys(item)
-            let partnerKeys = try jsonKeys(partner)
-            let ok = top.contains("history") && top.contains("partners")
+            let encPKeys = try jsonKeys(encP)
+            let ok = top.contains("history") && top.contains("partnersEnc")
                 && itemKeys.isSuperset(of: ["enc", "iv", "actionType", "status"])
-                && partnerKeys.isSuperset(of: ["id", "name", "lastUpdated"])
-            return (ok, "top=\(top.sorted()) item=\(itemKeys.sorted())")
+                && encPKeys == ["enc", "iv"]
+            return (ok, "top=\(top.sorted()) encP=\(encPKeys.sorted())")
+        })
+
+        // ── Şifreli partner round-trip: PartnerItem→enc→EncPartner→JSON→parse→decrypt→BackupPartnerItem ──
+        r.append(check("Şifreli partner round-trip (encrypt→payload→parse→decrypt)") {
+            let pid = "pid-partner"
+            let local = PartnerItem(partnerId: "Acme-123", name: "Acme A.Ş.", logoUrl: "https://x/y.png",
+                                    logoBase64: "QUJD", timestamp: 1_700_000_000_000)
+            let pJson = String(decoding: try JSONEncoder().encode(BackupPartnerItem(from: local)), as: UTF8.self)
+            let pair = try CryptoUtils.aesGcmEncrypt(pJson, personId: pid)
+            let entry = EncPartner(enc: pair.ciphertext, iv: pair.iv)
+            let payload = CloudPayload(history: nil, partnersEnc: [entry])
+            let parsed = try JSONDecoder().decode(CloudPayload.self, from: try JSONEncoder().encode(payload))
+            guard let first = parsed.partnersEnc?.first else { return (false, "partnersEnc boş") }
+            let decJson = try CryptoUtils.aesGcmDecrypt(ciphertextBase64: first.enc, ivBase64: first.iv, personId: pid)
+            let dec = try JSONDecoder().decode(BackupPartnerItem.self, from: Data(decJson.utf8))
+            let ok = dec.id == "Acme-123" && dec.name == "Acme A.Ş." && dec.logoBase64 == "QUJD"
+                && dec.lastUpdated == local.timestamp
+            return (ok, "id=\(dec.id) name=\(dec.name)")
+        })
+
+        // ── Sızıntı kanıtı (F2): üretilen yedek JSON'unda partner adı/logosu/ID'si DÜZ METİN olmamalı ──
+        r.append(check("Partner adı/logo/ID yedek JSON'unda düz metin DEĞİL (F2)") {
+            let pid = "pid-leak"
+            let name = "Gizli_Partner_Adı"          // "_" base64 alfabesinde YOK → yanlış-pozitif olmaz
+            let logo = "LOGO_marker_gizli"          // "_" içerir → ciphertext'te bulunamaz
+            let local = PartnerItem(partnerId: "p_leak_id", name: name, logoUrl: "u", logoBase64: logo, timestamp: 1)
+            let pJson = String(decoding: try JSONEncoder().encode(BackupPartnerItem(from: local)), as: UTF8.self)
+            let pair = try CryptoUtils.aesGcmEncrypt(pJson, personId: pid)
+            let payload = CloudPayload(history: nil, partnersEnc: [EncPartner(enc: pair.ciphertext, iv: pair.iv)])
+            let payloadStr = String(decoding: try JSONEncoder().encode(payload), as: UTF8.self)
+            let leaks = payloadStr.contains(name) || payloadStr.contains(logo) || payloadStr.contains("p_leak_id")
+            return (!leaks, leaks ? "SIZINTI VAR!" : "düz metin yok ✓")
         })
 
         // ── InnerPayload JSON anahtarları (Android InnerPayload alan adları) ──
