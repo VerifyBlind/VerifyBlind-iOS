@@ -360,6 +360,11 @@ final class LivenessViewModel: ObservableObject {
         if step >= demoList.count {
             invalidateTimer()
             camera.stop()
+            // Demo selfie gerektirmez (runDemo selfieData'yı kullanmaz). Ama telefon masadaysa/yüz
+            // yoksa captureFrame hiç çalışmaz → alignedSelfieJPEG nil kalır ve View'ın onSuccess
+            // koşulu (`let jpeg = alignedSelfieJPEG`) sağlanmaz → akış .processing'e geçemez, ekran
+            // durmuş kamerada kilitlenir. Yüz yakalanmadıysa boş placeholder ver ki demo tıkanmasın.
+            if alignedSelfieJPEG == nil { alignedSelfieJPEG = Data() }
             phase = .success
             return
         }

@@ -34,9 +34,18 @@ App Store prod makbuzu `receipt` olur. Yani:
       penceresi boyunca prod API + Enclave ayakta olmalı, yoksa reviewer demo'da hata görür → red.
 
 ### Adım 1 — Privacy Policy URL (zorunlu)
-Apple, review için **herkese açık bir gizlilik politikası URL'i** ister.
-- [ ] `https://verifyblind.com/...` altında TR/EN erişilebilir bir gizlilik politikası sayfası olsun
-      (KVKK metinleriniz temel alınabilir). URL'i not al — Adım 3 ve 5'te lazım.
+Apple, review için **herkese açık bir gizlilik politikası URL'i** ister. Politika zaten yayında ve
+KVKK açısından kapsamlı (7 bölüm). Apple'ın 6 şartını (ne toplanıyor, 3. taraflar, saklama, silme,
+haklar, iletişim) karşılıyor.
+- [ ] App Store Connect'e **locale önekli** URL ver — çıplak `/privacy` için redirect YOK:
+      **`https://verifyblind.com/en/gizlilik`** (reviewer için İngilizce) veya `/en/privacy` (→ 301 gizlilik'e).
+- [ ] **Submit öncesi 3 tutarlılık düzeltmesi** (label ↔ politika uyumu; kaynak:
+      `src/landing-site/app/[locale]/gizlilik/page.tsx` TR+EN):
+  1. **Sentry/çökme teşhisi 3. taraf olarak EKSİK** — App Privacy label'ın "Crash Data" diyecek ama
+     politikanın "Paylaştığımız Taraflar" tablosunda Sentry yok. Bir satır ekle (PII redakte, kimlik gitmez).
+  2. **Güvenlik bölümü yalnız "Android Keystore" diyor** — iOS Keychain/Secure Enclave de ekle.
+  3. (İyi olur) **Bulut yedek (Dropbox/Google Drive)** politikada yok — kullanıcı-başlatımlı, uçtan
+     uca şifreli, kullanıcının kendi hesabına olduğunu belirten bir cümle ekle.
 
 ### Adım 2 — Export Compliance kararı (ŞİFRELEME) — **senin/hukuk kararın**
 Şu an `App/Info.plist` → `ITSAppUsesNonExemptEncryption = false`.
@@ -54,14 +63,35 @@ Apple, review için **herkese açık bir gizlilik politikası URL'i** ister.
 ### Adım 3 — App Privacy (Privacy Nutrition Labels)
 App Store Connect → uygulaman → **App Privacy** → "Get Started / Edit".
 
+**Akış (ASC ekranları sırası):** önce "Veri topluyor musun?" → **Yes**. Sonra bir **veri tipi
+ızgarası** çıkar (Contact, Identifiers, Diagnostics, Usage Data, …) — burada SADECE topladığını seç.
+**"Data Linked / Not Linked / Tracking" ayrı seçenek DEĞİL** — onları, seçtiğin her tip için sonradan
+sorulan "ne amaçla / kimliğe bağlı mı / takip için mi" sorularından ASC kendi üretir.
+
+Seç:
+- **Diagnostics → Crash Data** ✅ → sonraki sorular: Purpose = **App Functionality**, Linked = **No**,
+  Tracking = **No**. (Sonuç: "Data Not Linked to You → Diagnostics → Crash Data".)
+- **Identifiers → Device ID → ŞİMDİLİK SEÇME.** Label mevcut build'i yansıtır; push bildirimi henüz
+  yok → cihaz token'ı toplanmıyor. Sentry'nin kurulum UUID'si "Crash Data" altında sayılır, takip
+  Device ID'si değil. **Push'u eklediğinde** Device ID'yi (App Functionality, Not Linked, No tracking)
+  ekle — label'ı yeni build olmadan da güncelleyebilirsin.
+- Başka tip seçme.
+
 Cevaplar (zero-knowledge mimariye göre):
-- **Do you collect data from this app?** → **Yes** (yalnız çökme/performans teşhisi — Sentry).
+- **Do you collect data from this app?** → **Yes** (yalnız çökme teşhisi — Sentry).
 - **Tracking (Used to Track You):** → **None.** ("Ask App Not to Track" gerektiren takip yok.)
-- **Data Linked to You:** → **None.** (Kimlik verisi sunucuya gitmez, kullanıcıya bağlı veri yok.)
+- **Data Linked to You:** → **None.** (Kimlik verisi sunucuda saklanmaz; kullanıcıya bağlı veri yok.)
 - **Data Not Linked to You → Diagnostics:**
   - ✅ **Crash Data** — Purpose: *App Functionality*
-  - ✅ **Performance Data** — Purpose: *App Functionality*
+  - ❌ Performance Data EKLEME — `enableAutoPerformanceTracing = false`, Sentry yalnız çökme/hata topluyor.
 - Başka hiçbir kategori işaretleme (Contact, Identifiers, Location, Health, Financial, vb. → hayır).
+
+> **Kimlik/biyometrik veri neden "collected" DEĞİL?** Apple'ın "collect" tanımı = veriyi cihaz dışına
+> gönderip *gerçek-zamanlı isteği işlemek için gerekenden uzun süre* erişilebilir tutmak. VerifyBlind'de
+> kimlik verisi Enclave'in public key'iyle uçtan uca şifrelenir (Relay okuyamaz bile), Enclave gerçek
+> zamanlı işler ve **saklamaz** → tanım gereği "collected" değildir. Sentry'de de `beforeSend` PII'ı
+> redact ediyor. Bu yüzden kimlik/biyometriği label'a EKLEMİYORUZ — zero-knowledge iddianla tutarlı.
+> (Koşul: backend gerçekten saklamıyor olmalı — ki çekirdek mimarin bu.)
 
 > Not: Uygulama içi **chatbot şu an UI'da açık DEĞİL** (kod var ama hiçbir ekrandan çağrılmıyor).
 > İleride chatbot'u bağlarsan label'a **User Content → Customer Support (Not Linked)** ekle.
@@ -71,22 +101,41 @@ App Store Connect → TestFlight → Groups → **+** :
 - [ ] Grup adı **tam olarak**: `External Testers`  *(workflow'daki `BETA_GROUP` ile birebir aynı olmalı)*.
 - [ ] En az 1 harici testçi e-postası ekle (kendi 2. mailin olabilir) ya da Public Link aç.
 
+### Adım 4.5 — App Information (uygulama-seviyesi minimum)
+App Store Connect → uygulaman → **App Information** / **Age Rating**. Beta için gereken minimum:
+
+| Alan | Beta için | Not |
+|------|-----------|-----|
+| **Age Rating** | ✅ Doldur | Kısa anket; sakıncalı içerik yok → 4+ |
+| **Content Rights** | ✅ Doldur | "Üçüncü taraf içeriği içeriyor mu?" → Hayır |
+| **Category** | ⚠️ Önerilir | Utilities veya Business |
+| Subtitle | ⏭️ Atla | Store listing alanı |
+| App Encryption Documentation | ⏭️ Boş bırak | plist `false` zaten kapsıyor |
+| Screenshots (App Store) | ⏭️ Atla | **Sadece production yayınında** gerekli (6.7"+6.5") |
+
+> "Atla" denenler production'a submit ederken gerekli olacak — beta için değil.
+
 ### Adım 5 — Test Information (External için zorunlu)
 App Store Connect → TestFlight → **Test Information** (tüm diller için):
 - [ ] **Beta App Description** → aşağıdaki metin
 - [ ] **Feedback Email** → senin destek/iletişim mailin (örn. `ercumente@gmail.com` veya destek adresi)
 - [ ] **Marketing URL** → `https://verifyblind.com`
-- [ ] **Privacy Policy URL** → Adım 1'deki URL
-- [ ] **What to Test** → aşağıdaki metin
+- [ ] **Privacy Policy URL** → Adım 1'deki URL (`https://verifyblind.com/en/gizlilik`)
 - [ ] **App Review Information** (beta review notu + iletişim) → aşağıdaki **Reviewer Notes** metni,
       ve First/Last name + telefon + email doldur. (Demo butonlu olduğu için ayrı "demo account"
       kullanıcı adı/şifresi GEREKMEZ — notta bunu belirttim.)
 
+> **"What to Test" burada DEĞİL** — build'e özeldir. Build yüklendikten sonra (Adım 6) ilgili build'in
+> üzerinde "Test Details / What to Test" alanına aşağıdaki metni gir.
+>
+> **"Invitation Experience → Show approved screenshots and category"** → işaretleme/boş bırak;
+> onaylı store screenshot'ın yok, beta review'a etkisi yok (sadece davet görselleri).
+
 ### Adım 6 — Build üret + yükle
 - [ ] GitHub → Actions → **"iOS Prod → TestFlight External"** workflow'unu `workflow_dispatch` ile
       çalıştır (veya `main`'e push). Build numarası TestFlight'tan otomatik +1 alınır.
-- [ ] Build işlenince (ASC'de "Processing" biter, ~5-30 dk) → TestFlight'ta build'i **External
-      Testers** grubuna ata → **Submit for Beta App Review**.
+- [ ] Build işlenince (ASC'de "Processing" biter, ~5-30 dk) → build'in üzerinde **What to Test**
+      metnini gir → build'i **External Testers** grubuna ata → **Submit for Beta App Review**.
 - [ ] Export compliance sorusu çıkarsa Adım 2 kararına göre cevapla (`false` ise sormaz).
 
 ### Adım 7 — Bekle

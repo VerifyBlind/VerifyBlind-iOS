@@ -14,7 +14,8 @@ enum Config {
     static let apiBaseURL: URL = {
         let raw = string("API_BASE_URL")
         guard let url = URL(string: raw) else {
-            fatalError("Config: API_BASE_URL geçersiz veya eksik. xcconfig dosyasını kontrol edin.")
+            // Çökmeden önce Sentry'e açıklayıcı mesajı gönderir (düz fatalError'da bu metin rapora girmez).
+            Log.fatal("Config: API_BASE_URL geçersiz veya eksik. xcconfig dosyasını kontrol edin.", category: .app)
         }
         return url
     }()

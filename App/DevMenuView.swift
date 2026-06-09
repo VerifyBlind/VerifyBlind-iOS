@@ -39,6 +39,8 @@ struct DevMenuView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(didSendTestEvent)
 
+                    crashTestSection
+
                     stage6Section
                     stage5Section
                     stage4Section
@@ -59,6 +61,35 @@ struct DevMenuView: View {
             Text(label).foregroundStyle(.secondary).frame(width: 110, alignment: .leading)
             Text(value).lineLimit(2).truncationMode(.middle)
         }
+    }
+
+    // MARK: - Crash testi (Sentry teslim doğrulaması)
+
+    /// Crash raporu cihazda gerçekten Sentry'e gidiyor mu? Düğmeye bas → uygulama çöker →
+    /// TEKRAR AÇ → rapor bir sonraki açılışta otomatik gönderilir (`onCrashedLastRun` log'u görünür).
+    private var crashTestSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Divider()
+            Text("Crash Testi — Sentry teslimi").font(.headline)
+            Text("Crash anında gönderilemez; SDK diske yazar, UYGULAMAYI TEKRAR AÇINCA otomatik gönderir. Test sonrası uygulamayı yeniden başlat ve Sentry panosunu kontrol et.")
+                .font(.caption).foregroundStyle(.secondary)
+            Button(role: .destructive) {
+                Log.breadcrumb("Dev menü: SentrySDK.crash() tetiklendi", category: .app)
+                SentrySDK.crash()   // gerçek hard crash (sinyal yolu)
+            } label: {
+                Label("Force Crash (SentrySDK.crash)", systemImage: "exclamationmark.triangle.fill")
+            }
+            .buttonStyle(.bordered)
+            Button(role: .destructive) {
+                Log.breadcrumb("Dev menü: Swift nil-unwrap crash tetiklendi", category: .app)
+                let nilValue: String? = nil
+                _ = nilValue!   // Swift fatal: force-unwrap nil → sinyal yolu, stack trace yakalanır
+            } label: {
+                Label("Force Crash (Swift nil-unwrap)", systemImage: "xmark.octagon.fill")
+            }
+            .buttonStyle(.bordered)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Aşama 6 (Settings/Help/Security/Consent + App Attest)

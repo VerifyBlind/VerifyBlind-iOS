@@ -56,11 +56,42 @@ enum Log {
     static func sensitive(_ message: String, value: String, category: LogCategory = .app) {
         loggers[category]?.debug("\(message, privacy: .public): \(value, privacy: .private)")
     }
+
+    /// Crash izi (breadcrumb). Event değil → kotaya yazılmaz; bir crash olduğunda son adımların
+    /// listesi raporun "Breadcrumbs" bölümüne eklenir. Akış adımlarında çağır (NFC başladı, login gönderildi…).
+    static func breadcrumb(_ message: String, category: LogCategory = .app) {
+        guard SentrySDK.isEnabled else { return }
+        let crumb = Breadcrumb(level: .info, category: category.rawValue)
+        crumb.message = message
+        SentrySDK.addBreadcrumb(crumb)
+    }
+
+    /// Bilinçli (deterministik) ölümcül hata. Önce Sentry'e mesajı SENKRON gönderip flush eder, SONRA
+    /// çöker — böylece Swift `fatalError`'ın stderr'e giden açıklayıcı metni rapora dahil olur (normalde
+    /// hard-crash sinyalinde sadece stack trace gider, metin GİTMEZ). Deterministik `fatalError` yollarında
+    /// bunu kullan (örn. zorunlu config eksik). Hard crash'leri (nil-unwrap, sinyaller) SDK zaten otomatik yakalar.
+    static func fatal(_ message: String, category: LogCategory = .app,
+                      file: StaticString = #fileID, line: UInt = #line) -> Never {
+        loggers[category]?.fault("\(message, privacy: .public)")
+        if SentrySDK.isEnabled {
+            let event = Event(level: .fatal)
+            event.message = SentryMessage(formatted: message)
+            event.tags = ["category": category.rawValue, "deterministic_fatal": "true"]
+            SentrySDK.capture(event: event)
+            SentrySDK.flush(timeout: 3.0)   // çökmeden önce ağ teslimini bekle
+        }
+        fatalError(message, file: file, line: line)
+    }
 }
 
 private enum SentryBridge {
     static func capture(level: SentryLevel, category: LogCategory, message: String, error: Error? = nil) {
         guard SentrySDK.isEnabled else { return }
+
+        // Her log aynı zamanda bir breadcrumb bırakır → crash raporu son adımların izini taşır.
+        let crumb = Breadcrumb(level: level, category: category.rawValue)
+        crumb.message = message
+        SentrySDK.addBreadcrumb(crumb)
 
         if let error {
             SentrySDK.capture(error: error) { scope in
@@ -92,9 +123,27 @@ enum LogBootstrap {
             options.debug = Config.isDebugBuild
             options.enableAutoPerformanceTracing = false
             options.attachStacktrace = true
+
+            // --- Crash yakalama ---
+            // Crash anında ağ isteği güvenli değil (process ölüyor); SDK raporu DİSKE yazar ve
+            // bir SONRAKİ açılışta otomatik gönderir. Aşağıdakiler hard-crash kapsamasını açık tutar.
+            options.enableCrashHandler = true                  // sinyaller (SIGSEGV/SIGABRT/SIGBUS…) + NSException
+            options.enableWatchdogTerminationTracking = true   // OOM / watchdog kill
+            options.attachViewHierarchy = true                 // crash anındaki ekran ağacı raporu zenginleştirir
+            options.onCrashedLastRun = { event in
+                Log.info("Önceki oturum CRASH ile kapanmıştı — rapor Sentry'e iletildi (id: \(event.eventId.sentryIdString))", category: .app)
+            }
+
             options.beforeSend = { event in
                 Self.redactPII(in: event)
                 return event
+            }
+            // Breadcrumb mesajları da PII filtresinden geçsin (TCKN sızıntısına karşı emniyet).
+            options.beforeBreadcrumb = { crumb in
+                if let msg = crumb.message {
+                    crumb.message = Self.redactTCKN(in: msg)
+                }
+                return crumb
             }
         }
         Log.info("Sentry başlatıldı (env: \(Config.appAttestEnvironment.rawValue))", category: .app)
@@ -112,12 +161,15 @@ enum LogBootstrap {
         }
 
         if let msg = event.message?.formatted {
-            var redacted = msg
-            if redacted.contains(where: \.isNumber), redacted.range(of: "\\b\\d{11}\\b", options: .regularExpression) != nil {
-                redacted = redacted.replacingOccurrences(of: "\\b\\d{11}\\b", with: "<TCKN-redacted>", options: .regularExpression)
-            }
-            event.message = SentryMessage(formatted: redacted)
+            event.message = SentryMessage(formatted: redactTCKN(in: msg))
         }
+    }
+
+    /// 11 haneli TCKN benzeri sayı dizilerini maskeler. Hem event mesajı hem breadcrumb için kullanılır.
+    private static func redactTCKN(in text: String) -> String {
+        guard text.contains(where: \.isNumber),
+              text.range(of: "\\b\\d{11}\\b", options: .regularExpression) != nil else { return text }
+        return text.replacingOccurrences(of: "\\b\\d{11}\\b", with: "<TCKN-redacted>", options: .regularExpression)
     }
 }
 
