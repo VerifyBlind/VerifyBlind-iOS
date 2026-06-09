@@ -59,6 +59,7 @@ targets:
           - "*.xcconfig"
       - path: Core
       - path: Features
+      - path: Views
       - path: NFC
       - path: Camera
       - path: OCR
