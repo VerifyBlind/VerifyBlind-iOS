@@ -13,6 +13,7 @@ struct DevMenuView: View {
     @State private var stage3Results: [SelfTestResult] = []
     @State private var stage4Results: [SelfTestResult] = []
     @State private var stage5Results: [SelfTestResult] = []
+    @State private var stage6Results: [SelfTestResult] = []
 
     var body: some View {
         NavigationStack {
@@ -38,6 +39,7 @@ struct DevMenuView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(didSendTestEvent)
 
+                    stage6Section
                     stage5Section
                     stage4Section
                     stage3Section
@@ -57,6 +59,28 @@ struct DevMenuView: View {
             Text(label).foregroundStyle(.secondary).frame(width: 110, alignment: .leading)
             Text(value).lineLimit(2).truncationMode(.middle)
         }
+    }
+
+    // MARK: - Aşama 6 (Settings/Help/Security/Consent + App Attest)
+
+    private var stage6Section: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Divider()
+            Text("Stage 6 — Settings/Help/Security + App Attest").font(.headline)
+            Text("App Attest clientDataHash konvansiyonu (sunucu paritesi), token zarf round-trip, enroll anahtar şeması, enclave PCR0 CBOR çıkarımı (+ graceful), dil tercihi. Sonuçlar Sentry'e loglanır.")
+                .font(.caption).foregroundStyle(.secondary)
+            Button {
+                stage6Results = Stage6SelfTest.runAll()
+                let passed = stage6Results.filter { $0.passed }.count
+                Log.info("Stage6 self-test: \(passed)/\(stage6Results.count) passed", category: .flow)
+            } label: {
+                Label("Stage 6 self-test çalıştır", systemImage: "checklist")
+            }
+            .buttonStyle(.bordered)
+            ForEach(stage6Results) { resultRow($0) }
+            summary(stage6Results)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Aşama 5 (Backup)

@@ -3,9 +3,11 @@ import Foundation
 /// El sıkışma durumu yönetimi — Android `MainViewModel` handshake state'i (enclavePubKey, nonce,
 /// timestamp, nonceSignature, challenges, 5dk TTL) eşdeğeri.
 ///
-/// ⚠️ Attestation/PCR0 doğrulaması Aşama 4'te YAPILMAZ (dev-skip — Android dev paritesi). Gerçek
-/// AWS Nitro attestation verify + App Attest integrity token Aşama 6'ya bırakıldı. Dev/staging
-/// sunucusuna güvenilir; enclavePubKey doğrudan kullanılır.
+/// App Attest (cihaz → sunucu) Aşama 6'da `VerifyAPI.handshake`/`loginHandshake` içinden
+/// `AppAttestService.attestationHeaders()` ile EKLENİR (relay doğrular). ⚠️ Enclave PCR0 imza
+/// doğrulaması (sunucu → cihaz) hâlâ dev-skip: dev/staging sunucusuna güvenilir, enclavePubKey
+/// doğrudan kullanılır (ayrı sertleştirme görevi). Güvenlik ekranı teşhisi enclave attestation'dan
+/// gelir (App Attest'ten DEĞİL).
 actor HandshakeService {
     static let shared = HandshakeService()
 
@@ -42,6 +44,7 @@ actor HandshakeService {
             completedAt: Date()
         )
         session = s
+        recordAttestationDiagnostics(attestationDocument: resp.attestationDocument)
         Log.info("Register handshake tamam (challenges=\(s.challenges.count))", category: .flow)
         return s
     }
@@ -57,8 +60,23 @@ actor HandshakeService {
         }
         session = Session(enclavePubKey: pub, nonce: "", timestamp: 0, nonceSignature: "",
                           challenges: [], completedAt: Date())
+        recordAttestationDiagnostics(attestationDocument: resp.attestationDocument)
         Log.info("Login handshake tamam", category: .flow)
         return pub
+    }
+
+    /// Güvenlik ekranı (Sistem Güvenliği) teşhislerini el sıkışma yanıtından yazar — Android
+    /// `MainViewModel`'in `last_*` prefs paritesi. PCR0 attestation belgesinden çıkarılır.
+    /// ⚠️ PCR0 imza doğrulaması hâlâ dev-skip: dev/staging ortamı "Geliştirici Modu (Mock)" olarak
+    /// işaretlenir (Android `LOCAL_DEV` davranışı). Gerçek doğrulama prod + ayrı sertleştirme görevi.
+    private func recordAttestationDiagnostics(attestationDocument: String?) {
+        let pcr0 = EnclaveAttestation.extractPcr0(fromBase64: attestationDocument)
+        let hasRealDoc = (pcr0 != nil)
+        let isMock = (Config.appAttestEnvironment == .development) || !hasRealDoc
+        AppPrefs.lastPcr0 = pcr0 ?? "N/A"
+        AppPrefs.lastIsMock = isMock
+        AppPrefs.lastHardwareVerified = hasRealDoc && !isMock
+        AppPrefs.lastAttestationTime = Int64(Date().timeIntervalSince1970 * 1000)
     }
 }
 

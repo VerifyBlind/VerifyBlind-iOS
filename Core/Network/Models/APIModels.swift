@@ -350,6 +350,27 @@ struct PrivacyNoticeResponse: Codable {
     let language: String?
 }
 
+// MARK: - App Attest (Aşama 6)
+
+/// `GET /api/Verify/appattest/challenge` → `{ challenge }` (base64 rastgele, tek-kullanımlık, Redis TTL).
+struct AppAttestChallengeResponse: Codable {
+    let challenge: String
+}
+
+/// `POST /api/Verify/appattest/enroll` gövdesi — attestation + challenge ile anahtar kaydı.
+struct AppAttestEnrollRequest: Codable {
+    let keyId: String
+    let attestation: String   // base64 CBOR attestation object
+    let challenge: String
+}
+
+/// Korunan isteklerin `X-App-Attest` başlığı (JSON → base64). Assertion belirli bir challenge'a bağlı.
+struct AppAttestToken: Codable {
+    let keyId: String
+    let challenge: String
+    let assertion: String     // base64 CBOR assertion
+}
+
 // MARK: - Error body
 
 /// Sunucu hata gövdesi (`{error, code, details}`) — Android `ApiError`/`parseApiError` eşdeğeri.

@@ -183,7 +183,9 @@ final class RegisterViewModel: ObservableObject {
                 nonceSignature: session.nonceSignature
             )
             if let selfieData { payload.userSelfie = selfieData.base64EncodedString() }
-            // integrityToken = "" (Aşama 4 dev-skip)
+            // iOS App Attest (Aşama 6) relay'de el sıkışmada doğrulanır; register enclave'e proxy'lenir
+            // ve el sıkışma nonce'una bağlıdır → şifreli IntegrityToken iOS'ta BOŞ bırakılır (Android'de
+            // bu alan Play Integrity taşır). Bkz. AppAttestService + sunucu ClientAttestationGate.
 
             let json = try encodeToString(payload)
             let (aesBlob, aesKey) = try CryptoUtils.aesEncrypt(json)

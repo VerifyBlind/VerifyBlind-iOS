@@ -19,12 +19,14 @@ struct VerifyAPI {
 
     // MARK: - Handshake
 
-    func handshake(integrityToken: String? = nil) async throws -> HandshakeResponse {
-        try await client.post("api/Verify/handshake", body: HandshakeRequest(), headers: integrityHeader(integrityToken))
+    func handshake() async throws -> HandshakeResponse {
+        let headers = await AppAttestService.shared.attestationHeaders()
+        return try await client.post("api/Verify/handshake", body: HandshakeRequest(), headers: headers)
     }
 
-    func loginHandshake(integrityToken: String? = nil) async throws -> LoginHandshakeResponse {
-        try await client.post("api/Verify/login-handshake", body: HandshakeRequest(), headers: integrityHeader(integrityToken))
+    func loginHandshake() async throws -> LoginHandshakeResponse {
+        let headers = await AppAttestService.shared.attestationHeaders()
+        return try await client.post("api/Verify/login-handshake", body: HandshakeRequest(), headers: headers)
     }
 
     // MARK: - Register
@@ -42,17 +44,20 @@ struct VerifyAPI {
     /// Relay /login MOBİLE'a başarıda `{}` döner (encrypted_response partner callback'ine gider,
     /// app'e DEĞİL) → gövde decode edilmez (postNoContent). Hata gövdeleri APIClient.apiError'da ele alınır.
     func login(_ request: LoginRequest) async throws {
-        try await client.postNoContent("api/Verify/login", body: request)
+        let headers = await AppAttestService.shared.attestationHeaders()
+        try await client.postNoContent("api/Verify/login", body: request, headers: headers)
     }
 
     func revoke(_ request: RevokeRequest) async throws -> RevokeResponse {
-        try await client.post("api/Verify/revoke", body: request)
+        let headers = await AppAttestService.shared.attestationHeaders()
+        return try await client.post("api/Verify/revoke", body: request, headers: headers)
     }
 
     // MARK: - Partner / PoP
 
-    func partnerInfo(nonce: String, integrityToken: String? = nil) async throws -> PartnerInfoResponse {
-        try await client.get("api/PartnerRequest/info/\(nonce)", headers: integrityHeader(integrityToken))
+    func partnerInfo(nonce: String) async throws -> PartnerInfoResponse {
+        let headers = await AppAttestService.shared.attestationHeaders()
+        return try await client.get("api/PartnerRequest/info/\(nonce)", headers: headers)
     }
 
     func cancelPop(_ request: PopCancelRequest) async throws {
@@ -80,11 +85,4 @@ struct VerifyAPI {
         try await client.get("api/kvkk/privacy-notice?format=\(format)")
     }
 
-    // MARK: - Yardımcı
-
-    /// Play Integrity (Android) başlığı. iOS'ta App Attest eşdeğeri Aşama 6'da gelir; şimdilik opsiyonel.
-    private func integrityHeader(_ token: String?) -> [String: String] {
-        guard let token, !token.isEmpty else { return [:] }
-        return ["X-Play-Integrity": token]
-    }
 }
