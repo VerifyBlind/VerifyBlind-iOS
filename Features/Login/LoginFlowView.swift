@@ -3,7 +3,13 @@ import SwiftUI
 /// Login (QR ile Doğrula) akış ekranı — QR tara → consent → işlem → başarı.
 struct LoginFlowView: View {
     let onFinish: () -> Void
-    @StateObject private var vm = LoginViewModel()
+    @StateObject private var vm: LoginViewModel
+
+    /// `initialPayload` = deep-link URL (varsa QR tarama atlanır, doğrudan o nonce ile başlar).
+    init(onFinish: @escaping () -> Void, initialPayload: String? = nil) {
+        self.onFinish = onFinish
+        _vm = StateObject(wrappedValue: LoginViewModel(initialPayload: initialPayload))
+    }
 
     var body: some View {
         ZStack {

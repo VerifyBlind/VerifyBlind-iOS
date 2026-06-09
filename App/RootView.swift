@@ -56,12 +56,18 @@ struct RootView: View {
             case .registerDemo:
                 RegisterFlowView(isDemo: true, onFinish: { activeFlow = nil })
             case .login:
-                LoginFlowView(onFinish: { activeFlow = nil })
+                // Deep-link varsa QR taramayı atlayıp doğrudan o URL ile başla.
+                LoginFlowView(onFinish: { activeFlow = nil; appState.pendingVerifyURL = nil },
+                              initialPayload: appState.pendingVerifyURL)
             }
         }
         .sheet(isPresented: $showDevMenu) { DevMenuView() }
         // Register/Login akışı açıkken otomatik kilidi bastır (NFC/kamera/Face ID mid-flow çakışmasın).
         .onChange(of: activeFlow) { flow in appState.suppressAutoLock = (flow != nil) }
+        // Universal Link geldi → başka akış yoksa login'i aç (initialPayload fullScreenCover'da okunur).
+        .onChange(of: appState.pendingVerifyURL) { url in
+            if url != nil, activeFlow == nil { activeFlow = .login }
+        }
     }
 
     private func popPath() {

@@ -10,8 +10,7 @@
 	<string>$(APP_ATTEST_ENVIRONMENT)</string>
 	<key>com.apple.developer.associated-domains</key>
 	<array>
-		<string>applinks:verifyblind.com</string>
-		<string>applinks:api.verifyblind.com</string>
+		<string>applinks:app.verifyblind.com</string>
 	</array>
 	<!-- iCloud KASITLI OLARAK YOK (Asama 5, ZKP): yedekleme yalniz Dropbox + Google Drive ile,
 	     uygulama kontrolunde. iCloud Drive/Keychain otomatik yedegi engellendi. iCloud entitlement EKLEME. -->

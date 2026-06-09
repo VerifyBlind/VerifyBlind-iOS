@@ -72,9 +72,10 @@ targets:
         com.apple.developer.nfc.readersession.formats:
           - TAG
         com.apple.developer.devicecheck.appattest-environment: $(APP_ATTEST_ENVIRONMENT)
+        # Deep-link / Universal Links: SDK widget'ı app.verifyblind.com/request?nonce=... üretir
+        # (cdn-static/sdk/v1/verifyblind.js + QRPayloadParser). AASA: app.verifyblind.com/.well-known/.
         com.apple.developer.associated-domains:
-          - applinks:verifyblind.com
-          - applinks:api.verifyblind.com
+          - applinks:app.verifyblind.com
         # iCloud KASITLI OLARAK YOK (Aşama 5 kararı, ZKP): yedekleme yalnız Dropbox + Google Drive
         # ile, uygulama kontrolünde. iCloud device backup + Keychain sync engellendi
         # ([[project_ios_backup_zkp_hardening]]). iCloud entitlement EKLEME.

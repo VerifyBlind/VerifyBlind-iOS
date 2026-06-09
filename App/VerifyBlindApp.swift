@@ -17,8 +17,20 @@ struct VerifyBlindApp: App {
                 .preferredColorScheme(.light) // Android light-mode paritesi
                 .onOpenURL { url in
                     // Bulut yedekleme OAuth redirect'leri (Dropbox db-<key>://, Google reversed-client-id).
-                    _ = BackupBootstrap.handleOpenURL(url)
+                    if BackupBootstrap.handleOpenURL(url) { return }
+                    handleVerifyURL(url)   // özel şema (nadir) → verify deep-link
+                }
+                // Universal Link (https://app.verifyblind.com/request?...) → verify akışı.
+                .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                    if let url = activity.webpageURL { handleVerifyURL(url) }
                 }
         }
+    }
+
+    /// `app.verifyblind.com` verify deep-link'ini AppState'e koyar; RootView login akışını başlatır.
+    private func handleVerifyURL(_ url: URL) {
+        guard url.host == "app.verifyblind.com" else { return }
+        Log.info("Verify deep-link alındı", category: .flow)
+        appState.pendingVerifyURL = url.absoluteString
     }
 }

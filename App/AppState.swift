@@ -13,6 +13,9 @@ final class AppState: ObservableObject {
     /// Register/Login tam-ekran akışı açıkken otomatik biyometrik kilidi bastır — NFC/kamera/Face ID
     /// sistem UI'sı akış ortasında .background tetikleyip sahte kilit/döngü yaratmasın.
     @Published var suppressAutoLock = false
+    /// Universal Link ile gelen doğrulama URL'i (`https://app.verifyblind.com/request?nonce=...`).
+    /// Set edilince RootView login akışını QR taramadan, bu URL ile başlatır. Akış bitince temizlenir.
+    @Published var pendingVerifyURL: String?
 
     init() {
         hasCard = TicketStore.hasTicket

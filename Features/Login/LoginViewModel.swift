@@ -21,6 +21,14 @@ final class LoginViewModel: ObservableObject {
     private var nonce: String = ""
     private var pkHash: String?
 
+    /// `initialPayload` (deep-link URL) verilirse QR taramayı atla, doğrudan o nonce ile başla.
+    init(initialPayload: String? = nil) {
+        if let initialPayload {
+            step = .loadingPartner   // kamera adımı gösterilmesin
+            onQr(initialPayload)
+        }
+    }
+
     // MARK: - QR
 
     func onQr(_ payload: String) {
