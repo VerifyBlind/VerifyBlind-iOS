@@ -72,7 +72,8 @@ struct ChatbotView: View {
                 }
                 .padding(.vertical, 12)
             }
-            .onChange(of: vm.messages.count) { _, _ in
+            // iOS 16 hedefi: tek-parametreli onChange (iki-parametreli form iOS 17+).
+            .onChange(of: vm.messages.count) { _ in
                 if let last = vm.messages.last {
                     withAnimation(.easeOut(duration: 0.15)) {
                         proxy.scrollTo(last.id, anchor: .bottom)
