@@ -35,7 +35,10 @@ enum Log {
 
     static func info(_ message: String, category: LogCategory = .app) {
         loggers[category]?.info("\(message, privacy: .public)")
-        SentryBridge.capture(level: .info, category: category, message: message)
+        // Sentry'e EVENT olarak GİTMEZ (kota tüketmez) — yalnızca breadcrumb bırakır. Bir crash/error
+        // olduğunda son adımların izi raporun "Breadcrumbs" bölümünde görünür. (Önceden her info bir
+        // event üretip ücretsiz plan error kotasını tüketiyordu — NFC tarama başına ~10 event.)
+        SentryBridge.breadcrumb(level: .info, category: category, message: message)
     }
 
     static func warning(_ message: String, category: LogCategory = .app) {
@@ -60,11 +63,9 @@ enum Log {
 
     /// Crash izi (breadcrumb). Event değil → kotaya yazılmaz; bir crash olduğunda son adımların
     /// listesi raporun "Breadcrumbs" bölümüne eklenir. Akış adımlarında çağır (NFC başladı, login gönderildi…).
+    /// `Log.info` ile aynı Sentry etkisi (event yok); fark sadece OSLog'a yazmaması.
     static func breadcrumb(_ message: String, category: LogCategory = .app) {
-        guard SentrySDK.isEnabled else { return }
-        let crumb = Breadcrumb(level: .info, category: category.rawValue)
-        crumb.message = message
-        SentrySDK.addBreadcrumb(crumb)
+        SentryBridge.breadcrumb(level: .info, category: category, message: message)
     }
 
     /// Bilinçli (deterministik) ölümcül hata. Önce Sentry'e mesajı SENKRON gönderip flush eder, SONRA
@@ -127,13 +128,20 @@ enum Log {
 }
 
 private enum SentryBridge {
-    static func capture(level: SentryLevel, category: LogCategory, message: String, error: Error? = nil) {
+    /// Yalnızca breadcrumb bırakır — EVENT yok, kota tüketmez. `Log.info`/`Log.breadcrumb` bunu kullanır.
+    static func breadcrumb(level: SentryLevel, category: LogCategory, message: String) {
         guard SentrySDK.isEnabled else { return }
-
-        // Her log aynı zamanda bir breadcrumb bırakır → crash raporu son adımların izini taşır.
         let crumb = Breadcrumb(level: level, category: category.rawValue)
         crumb.message = message
         SentrySDK.addBreadcrumb(crumb)
+    }
+
+    /// Breadcrumb + EVENT (kota tüketir). `Log.warning`/`Log.error` bunu kullanır — yalnızca warning ve üstü.
+    static func capture(level: SentryLevel, category: LogCategory, message: String, error: Error? = nil) {
+        guard SentrySDK.isEnabled else { return }
+
+        // Her event aynı zamanda bir breadcrumb bırakır → crash raporu son adımların izini taşır.
+        breadcrumb(level: level, category: category, message: message)
 
         if let error {
             SentrySDK.capture(error: error) { scope in
