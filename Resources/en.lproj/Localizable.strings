@@ -163,6 +163,10 @@
 "liveness_camera_start_failed" = "Camera could not be started.";
 "liveness_quality_dark" = "Too dark — move to a brighter spot";
 "liveness_quality_bright" = "Too much light / backlit — face the light source";
+"liveness_face_left" = "Turn Your Head LEFT ⬅️";
+"liveness_face_right" = "Turn Your Head RIGHT ➡️";
+"liveness_face_blink" = "Blink 😉";
+"liveness_face_smile" = "Smile 😊";
 "biometric_title" = "Authentication";
 "biometric_subtitle_decrypt" = "Verify your identity to approve the operation";
 "biometric_subtitle_auth" = "Scan your fingerprint to continue";

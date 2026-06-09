@@ -121,8 +121,9 @@ final class LoginViewModel: ObservableObject {
     }
 
     private func fail(title: String, message: String, error: Error?) {
-        if let error { Log.error("Login başarısız: \(title)", error: error, category: .flow) }
-        else { Log.error("Login başarısız: \(title) — \(message)", category: .flow) }
+        // Seviye hatanın türünden gelir (geçersiz QR/kart yok/ağ/biyometrik iptal = warning/info, gerçek arıza = error).
+        Log.failure(error != nil ? "Login başarısız: \(title)" : "Login başarısız: \(title) — \(message)",
+                    error: error, category: .flow)
         step = .failed(title: title, message: message)
     }
 }

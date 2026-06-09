@@ -346,11 +346,11 @@ final class LivenessViewModel: ObservableObject {
         checkmark = false
         wrongMove = false
         switch action {
-        case .faceLeft: instruction = "Başınızı sola çevirin"
-        case .faceRight: instruction = "Başınızı sağa çevirin"
-        case .blink: instruction = "Göz kırpın 😉"
-        case .smile: instruction = "Gülümseyin 😊"
-        case .none: instruction = "—"
+        case .faceLeft:  instruction = NSLocalizedString("liveness_face_left", comment: "")
+        case .faceRight: instruction = NSLocalizedString("liveness_face_right", comment: "")
+        case .blink:     instruction = NSLocalizedString("liveness_face_blink", comment: "")
+        case .smile:     instruction = NSLocalizedString("liveness_face_smile", comment: "")
+        case .none:      instruction = "—"
         }
         subInstruction = "Hareketi yapın"
     }

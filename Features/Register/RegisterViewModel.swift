@@ -271,8 +271,9 @@ final class RegisterViewModel: ObservableObject {
     }
 
     private func fail(title: String, message: String, error: Error?) {
-        if let error { Log.error("Register başarısız: \(title)", error: error, category: .flow) }
-        else { Log.error("Register başarısız: \(title) — \(message)", category: .flow) }
+        // Seviye hatanın türünden gelir (NFC/ağ/biyometrik iptal = warning/info, gerçek arıza = error).
+        Log.failure(error != nil ? "Register başarısız: \(title)" : "Register başarısız: \(title) — \(message)",
+                    error: error, category: .flow)
         step = .failed(title: title, message: message)
     }
 }

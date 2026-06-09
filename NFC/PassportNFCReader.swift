@@ -56,7 +56,9 @@ final class PassportNFCReader {
             Log.warning("NFC okuma başarısız: \(e)", category: .nfc)
             throw Self.map(e)
         } catch {
-            Log.error("NFC okuma beklenmeyen hata", error: error, category: .nfc)
+            // NFC çevresel/donanımsal flaky bir kanal — `NFCPassportReaderError` dışı bir hata bile
+            // genelde kullanıcı/ortam kaynaklı (kart kaydı, oturum sonlanması). Kod arızası değil → warning.
+            Log.warning("NFC okuma beklenmeyen hata: \(error.localizedDescription)", category: .nfc)
             throw NFCReadError.unknown("\(error)")
         }
 

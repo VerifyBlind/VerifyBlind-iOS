@@ -1,6 +1,7 @@
 import Foundation
 import OSLog
 import Sentry
+import LocalAuthentication
 
 /// Uygulama genelinde kategorili loglama.
 ///
@@ -81,6 +82,47 @@ enum Log {
             SentrySDK.flush(timeout: 3.0)   // çökmeden önce ağ teslimini bekle
         }
         fatalError(message, file: file, line: line)
+    }
+
+    /// Kullanıcıya hata ekranı gösteren akış yolları (`fail`) için. Hatanın TÜRÜNE göre uygun Sentry
+    /// seviyesinde raporlar: beklenen / geçici / kullanıcı kaynaklı hatalar (NFC okuma, ağ kopması,
+    /// rate-limit, biyometrik iptal, 4xx) Sentry'de ERROR olarak GÖRÜNMEZ → warning/info'ya iner.
+    /// Sadece gerçek kod/sistem arızaları (kripto, decode, anahtar üretimi, bilinmeyen) error gider.
+    /// `Log.error` yerine bir akış başarısızlığını raporluyorsan bunu kullan.
+    static func failure(_ message: String, error: Error? = nil, category: LogCategory = .app) {
+        switch sentryLevel(for: error) {
+        case .info:    info(message, category: category)
+        case .warning: warning(message, category: category)
+        default:       self.error(message, error: error, category: category)   // stacktrace/grup için error nesnesi iletilir
+        }
+    }
+
+    /// `failure` seviye politikası. Sınıflandırılamayan hata = gerçek arıza varsayımı → `.error`
+    /// (güvenli taraf: yeni/bilinmeyen bir hata sessizce yutulmaz, görünür kalır).
+    private static func sentryLevel(for error: Error?) -> SentryLevel {
+        // Hatasız (saf doğrulama / kullanıcı-durumu mesajı: geçersiz QR, kart yok…) → error değil.
+        guard let error else { return .warning }
+
+        switch error {
+        case let nfc as NFCReadError:
+            if case .cancelled = nfc { return .info }
+            return .warning                                    // okuma hataları beklenen/çevresel — bkz kullanıcı geri bildirimi
+        case let api as APIClientError:
+            switch api {
+            case .network:             return .warning         // geçici bağlanırlık (zaten retry'lı)
+            case .rateLimited:         return .info            // beklenen kısıtlama
+            case .http(let status, _): return (500...599).contains(status) ? .error : .warning  // 5xx=backend arızası, 4xx=istemci/kullanıcı
+            case .decoding:            return .error           // sözleşme/uygulama hatası
+            }
+        case let keychain as KeychainKeyStoreError:
+            if case .authFailed = keychain { return .warning } // biyometrik iptal/başarısız = kullanıcı (LAError string'e gömülü)
+            return .error                                       // anahtar üretim/erişim arızası = gerçek
+        case is BiometricGateError:    return .warning          // biyometrik onay reddi/iptal
+        case is LAError:               return .warning          // local-auth durumu, kod hatası değil
+        case is URLError:              return .warning          // geçici bağlanırlık
+        case is CancellationError:     return .info
+        default:                       return .error            // kripto, decode, RegistrationError, bilinmeyen → gerçek arıza
+        }
     }
 }
 

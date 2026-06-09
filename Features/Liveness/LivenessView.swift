@@ -65,22 +65,10 @@ struct LivenessView: View {
                 Ellipse()
                     .stroke(redColor, lineWidth: 3)
                     .frame(width: ovalW, height: ovalH)
-                VStack {
-                    dashedGuide(ovalW * 0.85)
-                    Spacer()
-                    dashedGuide(ovalW * 0.85)
-                }
-                .frame(width: ovalW, height: ovalH)
             }
             .position(x: geo.size.width / 2, y: geo.size.height / 2)
         }
         .ignoresSafeArea()
-    }
-
-    private func dashedGuide(_ width: CGFloat) -> some View {
-        HDashedLine()
-            .stroke(redColor, style: StrokeStyle(lineWidth: 2, dash: [10, 10]))
-            .frame(width: width, height: 2)
     }
 
     // MARK: - Metin + canlı durum katmanları
@@ -153,9 +141,6 @@ struct LivenessView: View {
                         .foregroundColor(scoreColor)
                     Spacer()
                 }
-                .padding(8)
-                .background(Color(white: 0.94))
-                .cornerRadius(8)
                 .padding([.horizontal, .bottom], 16)
             }
         }
@@ -266,15 +251,5 @@ struct LivenessView: View {
             }
             Text(label).font(.caption).foregroundStyle(.secondary)
         }
-    }
-}
-
-/// Yatay kesik kılavuz çizgisi (Android FaceOvalOverlayView üst/alt guide line karşılığı).
-private struct HDashedLine: Shape {
-    func path(in rect: CGRect) -> Path {
-        var p = Path()
-        p.move(to: CGPoint(x: 0, y: rect.midY))
-        p.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
-        return p
     }
 }

@@ -107,7 +107,8 @@ final class APIClient {
                     attempt += 1
                     continue
                 }
-                Log.error("APIClient: ağ hatası (\(endpoint.path))", error: urlError, category: .network)
+                // Geçici bağlanırlık (no internet/timeout) — retry'lar tükendi. Kod arızası değil → warning.
+                Log.warning("APIClient: ağ hatası (\(endpoint.path)) — \(urlError.code)", category: .network)
                 throw APIClientError.network("\(urlError.code)")
             }
         }
