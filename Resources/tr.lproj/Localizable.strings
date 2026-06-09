@@ -258,6 +258,9 @@
 "error_unknown" = "Bilinmeyen hata";
 "error_network_timeout" = "Ağ veya zaman aşımı hatası (%@)";
 "error_demo_server" = "Demo kayıt sırasında bir sunucu hatası oluştu.";
+"error_rate_limited_minutes" = "Çok fazla deneme yapıldı. Lütfen %d dakika sonra tekrar deneyin.";
+"error_rate_limited_seconds" = "Çok fazla deneme yapıldı. Lütfen %d saniye sonra tekrar deneyin.";
+"error_rate_limited_generic" = "Çok fazla deneme yapıldı. Lütfen biraz sonra tekrar deneyin.";
 "error_demo_key_not_ready" = "Kullanıcı anahtarı hazır değil.";
 "security_status_verified" = "✅ Donanım Tarafından Onaylı";
 "security_guard_active" = "DONANIM KORUMASI AKTİF";

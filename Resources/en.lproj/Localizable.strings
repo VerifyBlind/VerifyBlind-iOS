@@ -258,6 +258,9 @@
 "error_unknown" = "Unknown error";
 "error_network_timeout" = "Network or timeout error (%@)";
 "error_demo_server" = "A server error occurred during demo registration.";
+"error_rate_limited_minutes" = "Too many attempts. Please try again in %d minutes.";
+"error_rate_limited_seconds" = "Too many attempts. Please try again in %d seconds.";
+"error_rate_limited_generic" = "Too many attempts. Please try again shortly.";
 "error_demo_key_not_ready" = "User key not ready.";
 "security_status_verified" = "✅ Hardware Verified";
 "security_guard_active" = "HARDWARE PROTECTION ACTIVE";

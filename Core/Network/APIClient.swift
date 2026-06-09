@@ -89,6 +89,12 @@ final class APIClient {
                     continue
                 }
 
+                // 429 → rate limit: Retry-After header'ını taşı, mobil lokalize "X sonra dene" mesajı kursun.
+                if http.statusCode == 429 {
+                    let retryAfter = http.value(forHTTPHeaderField: "Retry-After").flatMap { Int($0) }
+                    throw APIClientError.rateLimited(retryAfterSeconds: retryAfter)
+                }
+
                 guard (200..<300).contains(http.statusCode) else {
                     throw apiError(status: http.statusCode, data: data)
                 }

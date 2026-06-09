@@ -21,6 +21,8 @@ struct Endpoint {
 enum APIClientError: Error, LocalizedError {
     case network(String)
     case http(Int, APIErrorBody?)
+    /// 429 — sunucu Retry-After header'ı gönderirse saniye cinsinden taşır (Android `rateLimitMessageOrNull`).
+    case rateLimited(retryAfterSeconds: Int?)
     case decoding
 
     var errorDescription: String? {
@@ -30,6 +32,11 @@ enum APIClientError: Error, LocalizedError {
         case .http(let status, let body):
             let detail = [body?.error, body?.details].compactMap { $0 }.joined(separator: " — ")
             return detail.isEmpty ? "Sunucu hatası (\(status))" : "Sunucu hatası (\(status)): \(detail)"
+        case .rateLimited(let secs):
+            guard let secs, secs > 0 else { return L.t("error_rate_limited_generic") }
+            return secs >= 60
+                ? L.t("error_rate_limited_minutes", (secs + 59) / 60)   // ceil → dakika
+                : L.t("error_rate_limited_seconds", secs)
         case .decoding:
             return "Yanıt çözümlenemedi."
         }

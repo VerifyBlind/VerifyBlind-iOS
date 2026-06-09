@@ -35,12 +35,14 @@ struct LivenessView: View {
             } else {
                 ovalCamera     // oval kamera penceresi (Android FaceOvalOverlayView)
                 overlays       // metinler + canlı durum
+                backButton     // sol-üst geri (iOS'ta sistem geri tuşu yok)
             }
 
             if case .failure(let timeout) = viewModel.phase {
                 failureDialog(timeout: timeout)
             }
         }
+        .statusBar(hidden: true)   // Android gibi tam ekran — durum çubuğu gizli
         .onAppear { viewModel.start() }
         .onDisappear { viewModel.stop() }
         .onChange(of: viewModel.phase) { phase in
@@ -180,6 +182,25 @@ struct LivenessView: View {
 
     private var scoreColor: Color {
         viewModel.liveScorePercent >= Int(LivenessViewModel.matchThreshold * 100) ? .green : redColor
+    }
+
+    // Sol-üst geri butonu — iOS'ta sistem geri tuşu yok; az dikkat çeken, yuvarlak.
+    private var backButton: some View {
+        VStack {
+            HStack {
+                Button(action: onCancel) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(grayColor)
+                        .frame(width: 38, height: 38)
+                        .background(Color(white: 0.93).opacity(0.85), in: Circle())
+                }
+                Spacer()
+            }
+            Spacer()
+        }
+        .padding(.leading, 12)
+        .padding(.top, 8)
     }
 
     private var permissionOverlay: some View {
