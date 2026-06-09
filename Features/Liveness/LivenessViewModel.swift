@@ -35,6 +35,7 @@ final class LivenessViewModel: ObservableObject {
     @Published var showScore = false   // chipEmbedding != nil
     @Published var checkmark = false
     @Published var wrongMove = false
+    @Published var qualityWarning: String?   // (b) ışık uyarısı — Android tvQualityWarning karşılığı
     @Published var debugEyeOpen = 0   // dev: canlı göz-açıklık % (blink kalibrasyonu)
     @Published var debugSmile = 0     // dev: canlı smile sinyali ×100 (smile kalibrasyonu)
     @Published private(set) var alignedSelfieJPEG: Data?
@@ -81,6 +82,7 @@ final class LivenessViewModel: ObservableObject {
         if let data = chipPhotoData, let ui = UIImage(data: data) { chipPreview = ui }
 
         camera.onFrame = { [weak self] buffer, orientation in
+            self?.updateQualityWarning(for: buffer)   // (b) ışık uyarısı — her kare (yüz olmasa da)
             self?.analyzer.process(buffer, orientation: orientation)
         }
         analyzer.onFace = { [weak self] frame in
@@ -346,8 +348,8 @@ final class LivenessViewModel: ObservableObject {
         switch action {
         case .faceLeft: instruction = "Başınızı sola çevirin"
         case .faceRight: instruction = "Başınızı sağa çevirin"
-        case .blink: instruction = "Göz kırpın"
-        case .smile: instruction = "Gülümseyin"
+        case .blink: instruction = "Göz kırpın 😉"
+        case .smile: instruction = "Gülümseyin 😊"
         case .none: instruction = "—"
         }
         subInstruction = "Hareketi yapın"
@@ -409,6 +411,54 @@ final class LivenessViewModel: ObservableObject {
     private func cgImage(from pixelBuffer: CVPixelBuffer) -> CGImage? {
         let ci = CIImage(cvPixelBuffer: pixelBuffer)
         return ciContext.createCGImage(ci, from: ci.extent)
+    }
+
+    // MARK: - (b) Ortam kalitesi (ışık) — Android LivenessAnalyzer.averageLuma karşılığı
+
+    /// Her karede ortalama parlaklığı ölçer ve karanlık/aşırı-parlak uyarısını (ana kuyrukta) günceller.
+    /// Video kuyruğunda çağrılır (Android onFrameLuma ile aynı disiplin).
+    private func updateQualityWarning(for pixelBuffer: CVPixelBuffer) {
+        let luma = Self.averageLuma(pixelBuffer)
+        let warning: String?
+        if luma < 55 {
+            warning = NSLocalizedString("liveness_quality_dark", comment: "")
+        } else if luma > 235 {
+            warning = NSLocalizedString("liveness_quality_bright", comment: "")
+        } else {
+            warning = nil
+        }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.qualityWarning != warning else { return }
+            self.qualityWarning = warning
+        }
+    }
+
+    /// BGRA pixel buffer'dan ~2048 örnekle ortalama parlaklık (0..255). Hatada 128 (nötr).
+    /// iOS kamerası kCVPixelFormatType_32BGRA verir → Y düzlemi yok, luma BGRA'dan türetilir.
+    static func averageLuma(_ pixelBuffer: CVPixelBuffer) -> Float {
+        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+        guard let base = CVPixelBufferGetBaseAddress(pixelBuffer) else { return 128 }
+        let width = CVPixelBufferGetWidth(pixelBuffer)
+        let height = CVPixelBufferGetHeight(pixelBuffer)
+        let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
+        guard width > 0, height > 0 else { return 128 }
+        let ptr = base.assumingMemoryBound(to: UInt8.self)
+        let total = width * height
+        let step = max(1, total / 2048)
+        var sum = 0
+        var count = 0
+        var i = 0
+        while i < total {
+            let x = i % width
+            let y = i / width
+            let off = y * bytesPerRow + x * 4   // BGRA
+            let b = Int(ptr[off]); let g = Int(ptr[off + 1]); let r = Int(ptr[off + 2])
+            sum += (r * 77 + g * 150 + b * 29) >> 8   // ~Rec.601 luma
+            count += 1
+            i += step
+        }
+        return count > 0 ? Float(sum) / Float(count) : 128
     }
 
     /// Tek-atış yüz/göz tespiti (chip fotoğrafı) — top-left piksel göz merkezleri.

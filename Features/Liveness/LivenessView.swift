@@ -1,16 +1,21 @@
 import SwiftUI
 
-/// Liveness ekranı — Android `LivenessActivity` UI portu (SwiftUI). Kamera önizlemesi + jest
-/// talimatları + timer + canlı % + başarısızlık özeti (chip vs selfie + skor, Retry/Cancel).
+/// Liveness ekranı — Android `LivenessActivity` UI'ının BİREBİR portu (SwiftUI).
+/// Beyaz zemin + ortada OVAL kamera penceresi (kırmızı kenarlık + kesik kılavuz çizgileri),
+/// üstte adım (siyah, ortada) + timer (kırmızı, sağ) + gri üst ipucu + talimat, altta gri
+/// alt ipucu + sol-altta çip küçük resmi ve canlı %. (b) ışık uyarısı: `viewModel.qualityWarning`.
 ///
-/// `onSuccess(alignedSelfieJPEG, matchScore)` başarıyla biter; `onCancel` iptalde. Aşama 4 gerçek
-/// Register akışında da bu View kullanılacak (şimdilik dev test ekranından sürülür).
+/// `onSuccess(alignedSelfieJPEG, matchScore)` başarıyla biter; `onCancel` iptalde.
 struct LivenessView: View {
     @StateObject private var viewModel: LivenessViewModel
     @ObservedObject private var camera: CameraController
 
     let onSuccess: (Data, Float) -> Void
     let onCancel: () -> Void
+
+    // Android renkleri (LivenessActivity / FaceOvalOverlayView)
+    private let redColor  = Color(red: 1.0,   green: 0.267, blue: 0.267) // #FF4444
+    private let grayColor = Color(red: 0.333, green: 0.333, blue: 0.333) // #555555
 
     init(viewModel: LivenessViewModel,
          onSuccess: @escaping (Data, Float) -> Void,
@@ -23,13 +28,13 @@ struct LivenessView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
-            CameraPreview(session: camera.session).ignoresSafeArea()
+            Color.white.ignoresSafeArea()   // Android: beyaz zemin
 
             if camera.permissionDenied || camera.configurationFailed {
                 permissionOverlay
             } else {
-                overlays
+                ovalCamera     // oval kamera penceresi (Android FaceOvalOverlayView)
+                overlays       // metinler + canlı durum
             }
 
             if case .failure(let timeout) = viewModel.phase {
@@ -45,97 +50,145 @@ struct LivenessView: View {
         }
     }
 
-    // MARK: - Overlays
+    // MARK: - Oval kamera penceresi (beyaz zemin üzerinde oval kesit, kırmızı kenarlık)
+
+    private var ovalCamera: some View {
+        GeometryReader { geo in
+            let ovalW = geo.size.width * 0.75
+            let ovalH = ovalW * 1.35
+            ZStack {
+                CameraPreview(session: camera.session)
+                    .frame(width: ovalW, height: ovalH)
+                    .clipShape(Ellipse())
+                Ellipse()
+                    .stroke(redColor, lineWidth: 3)
+                    .frame(width: ovalW, height: ovalH)
+                VStack {
+                    dashedGuide(ovalW * 0.85)
+                    Spacer()
+                    dashedGuide(ovalW * 0.85)
+                }
+                .frame(width: ovalW, height: ovalH)
+            }
+            .position(x: geo.size.width / 2, y: geo.size.height / 2)
+        }
+        .ignoresSafeArea()
+    }
+
+    private func dashedGuide(_ width: CGFloat) -> some View {
+        HDashedLine()
+            .stroke(redColor, style: StrokeStyle(lineWidth: 2, dash: [10, 10]))
+            .frame(width: width, height: 2)
+    }
+
+    // MARK: - Metin + canlı durum katmanları
 
     private var overlays: some View {
-        VStack {
-            // Üst bar: adım + timer
-            HStack {
-                Text(viewModel.stepText)
-                    .font(.headline)
-                    .padding(8)
-                    .background(.black.opacity(0.5), in: Capsule())
-                Spacer()
-                Text(viewModel.timerText)
-                    .font(.headline.monospacedDigit())
-                    .padding(8)
-                    .frame(minWidth: 44)
-                    .background(.black.opacity(0.5), in: Capsule())
-            }
-            .foregroundStyle(.white)
-            .padding()
-
-            Spacer()
-
-            // Talimat / ✅ / yanlış hareket
-            Group {
-                if viewModel.checkmark {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 64))
-                        .foregroundStyle(.green)
-                } else if viewModel.wrongMove {
-                    VStack(spacing: 8) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 56))
-                            .foregroundStyle(.red)
-                        Text("Yanlış hareket — baştan")
-                            .foregroundStyle(.white)
-                    }
-                } else {
-                    VStack(spacing: 6) {
-                        Text(viewModel.instruction)
-                            .font(.system(size: 26, weight: .bold))
-                        Text(viewModel.subInstruction)
-                            .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.8))
-                    }
-                    .foregroundStyle(.white)
+        VStack(spacing: 0) {
+            // Üst: adım (ortada, siyah) + timer (sağ, kırmızı)
+            ZStack {
+                Text(viewModel.stepText.isEmpty ? "1/5" : viewModel.stepText)
+                    .font(.system(size: 30, weight: .bold))
+                    .foregroundColor(.black)
+                HStack {
+                    Spacer()
+                    Text(viewModel.timerText)
+                        .font(.system(size: 30, weight: .bold).monospacedDigit())
+                        .foregroundColor(redColor)
                 }
             }
-            .padding(.horizontal)
-            .multilineTextAlignment(.center)
+            .padding(.horizontal, 24)
+            .padding(.top, 12)
+
+            // Üst ipucu (gri)
+            Text(LocalizedStringKey("liveness_top_hint"))
+                .font(.system(size: 14))
+                .foregroundColor(grayColor)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
+                .padding(.top, 8)
+
+            // Talimat (siyah, bold) / ✅ / yanlış hareket
+            instructionBlock
+                .padding(.top, 20)
+
+            // (b) Işık uyarısı — kötü koşulda kırmızı label (Android tvQualityWarning)
+            if let warning = viewModel.qualityWarning {
+                Text(warning)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+                    .padding(10)
+                    .background(Color(red: 0.93, green: 0.23, blue: 0.23).opacity(0.85))
+                    .cornerRadius(8)
+                    .padding(.horizontal, 32)
+                    .padding(.top, 12)
+            }
 
             Spacer()
 
-            // Dev kalibrasyon: canlı göz-açıklık % + smile sinyali (blink/smile ayarı için)
-            Text("göz: %\(viewModel.debugEyeOpen)   ·   gülümseme: \(viewModel.debugSmile)")
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.white.opacity(0.6))
-                .padding(.bottom, 4)
+            // Alt ipucu (gri) — eşik %'si ile
+            Text(String(format: NSLocalizedString("liveness_threshold_hint", comment: ""),
+                        Int(LivenessViewModel.matchThreshold * 100)))
+                .font(.system(size: 13))
+                .foregroundColor(grayColor)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 12)
 
-            // Alt: canlı % + chip küçük resim
+            // Sol-alt: çip küçük resim + canlı % (Android layoutLiveStatus)
             if viewModel.showScore {
                 HStack(spacing: 12) {
                     if let chip = viewModel.chipPreview {
                         Image(uiImage: chip)
                             .resizable()
                             .interpolation(.none)
-                            .frame(width: 48, height: 48)
+                            .frame(width: 60, height: 80)
                             .clipShape(RoundedRectangle(cornerRadius: 6))
-                            .overlay(RoundedRectangle(cornerRadius: 6).stroke(.white.opacity(0.4)))
                     }
-                    Text("%\(viewModel.liveScorePercent)")
-                        .font(.title3.weight(.bold).monospacedDigit())
-                        .foregroundStyle(scoreColor)
+                    Text("\(viewModel.liveScorePercent)%")
+                        .font(.system(size: 18, weight: .bold).monospacedDigit())
+                        .foregroundColor(scoreColor)
+                    Spacer()
                 }
-                .padding(10)
-                .background(.black.opacity(0.5), in: RoundedRectangle(cornerRadius: 12))
-                .padding(.bottom, 24)
+                .padding(8)
+                .background(Color(white: 0.94))
+                .cornerRadius(8)
+                .padding([.horizontal, .bottom], 16)
             }
         }
     }
 
+    private var instructionBlock: some View {
+        Group {
+            if viewModel.checkmark {
+                Text("✅").font(.system(size: 40))
+            } else if viewModel.wrongMove {
+                VStack(spacing: 6) {
+                    Text("⚠️").font(.system(size: 34))
+                    Text("Yanlış hareket — baştan").foregroundColor(redColor)
+                }
+            } else {
+                Text(viewModel.instruction)
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(.black)
+            }
+        }
+        .multilineTextAlignment(.center)
+        .padding(.horizontal, 32)
+    }
+
     private var scoreColor: Color {
-        viewModel.liveScorePercent >= Int(LivenessViewModel.matchThreshold * 100) ? .green : .red
+        viewModel.liveScorePercent >= Int(LivenessViewModel.matchThreshold * 100) ? .green : redColor
     }
 
     private var permissionOverlay: some View {
         VStack(spacing: 16) {
-            Image(systemName: "video.slash.fill").font(.system(size: 48)).foregroundStyle(.white)
+            Image(systemName: "video.slash.fill").font(.system(size: 48)).foregroundColor(grayColor)
             Text("Kamera erişimi gerekli")
-                .font(.headline).foregroundStyle(.white)
+                .font(.headline).foregroundColor(.black)
             Text("Ayarlar → VerifyBlind → Kamera'yı etkinleştirin.")
-                .font(.footnote).foregroundStyle(.white.opacity(0.8)).multilineTextAlignment(.center)
+                .font(.footnote).foregroundColor(grayColor).multilineTextAlignment(.center)
             Button("Kapat") { onCancel() }
                 .buttonStyle(.borderedProminent)
         }
@@ -150,7 +203,7 @@ struct LivenessView: View {
             VStack(spacing: 16) {
                 Image(systemName: timeout ? "clock.badge.exclamationmark" : "person.crop.circle.badge.xmark")
                     .font(.system(size: 44))
-                    .foregroundStyle(.orange)
+                    .foregroundColor(.orange)
                 Text(timeout ? "Süre doldu" : "Doğrulama tamamlanamadı")
                     .font(.headline)
 
@@ -159,9 +212,9 @@ struct LivenessView: View {
                         thumb(viewModel.chipPreview, label: "Çip")
                         thumb(viewModel.selfiePreview, label: "Selfie")
                     }
-                    Text("%\(Int(viewModel.finalMatchScore * 100))")
+                    Text("\(Int(viewModel.finalMatchScore * 100))%")
                         .font(.title3.weight(.bold).monospacedDigit())
-                        .foregroundStyle(viewModel.finalMatchScore >= LivenessViewModel.matchThreshold ? .green : .red)
+                        .foregroundColor(viewModel.finalMatchScore >= LivenessViewModel.matchThreshold ? .green : redColor)
                 }
 
                 HStack(spacing: 12) {
@@ -192,5 +245,15 @@ struct LivenessView: View {
             }
             Text(label).font(.caption).foregroundStyle(.secondary)
         }
+    }
+}
+
+/// Yatay kesik kılavuz çizgisi (Android FaceOvalOverlayView üst/alt guide line karşılığı).
+private struct HDashedLine: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: 0, y: rect.midY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+        return p
     }
 }
