@@ -17,6 +17,12 @@ enum KeychainKeyStore {
     private static let userKeyTag    = Data("app.verifyblind.ios.userkey.v1".utf8)
     private static let historyKeyTag = Data("app.verifyblind.ios.historykey.v1".utf8)
 
+    /// Public key cache (biyometriksiz generic-password item) servis adı. RSA anahtarı normal Keychain'de
+    /// `.userPresence` ile yaşadığı için `SecKeyCopyPublicKey` korumalı materyale dokunur ve Face ID promptu
+    /// çıkar — Android'de public key sertifikadan biyometriksiz okunduğu için bu prompt yok. Pariteyi sağlamak
+    /// için public key (gizli değil) burada ayrı, biyometriksiz cache'lenir.
+    private static let pubCacheService = "app.verifyblind.ios.pubkeycache.v1"
+
     // MARK: - User key (biyometrik)
 
     /// Yoksa üretir, SPKI base64 public key döner (Android `ensureKeyExists` → `publicKey.encoded`).
@@ -30,12 +36,19 @@ enum KeychainKeyStore {
         let context = LAContext()
         try await authenticate(context: context, reason: reason)
         let priv = try loadPrivateKey(tag: userKeyTag, context: context)
+        // Eski kurulum migrasyonu: public key henüz cache'lenmemişse, kimliği DOĞRULANMIŞ context ile
+        // türetip cache'le (ek prompt yok). Böylece bir sonraki kayıt MRZ öncesi prompt çıkarmaz.
+        if cachedPublicKey(tag: userKeyTag) == nil,
+           let pub = SecKeyCopyPublicKey(priv), let spki = RSAKey.spkiBase64(of: pub) {
+            cachePublicKey(spki, tag: userKeyTag)
+        }
         return try CryptoUtils.rsaDecrypt(cipherBase64, privateKey: priv, algorithm: .rsaEncryptionOAEPSHA1)
     }
 
     /// Android `deleteKey()` — kart silindiğinde user key kaldırılır.
     static func deleteUserKey() {
         delete(tag: userKeyTag)
+        deleteCachedPublicKey(tag: userKeyTag)
     }
 
     // MARK: - History key (biyometriksiz)
@@ -54,23 +67,75 @@ enum KeychainKeyStore {
     /// Reset/Verilerimi Sil — history key kaldırılır (Android `deleteHistoryKey`).
     static func deleteHistoryKey() {
         delete(tag: historyKeyTag)
+        deleteCachedPublicKey(tag: historyKeyTag)
     }
 
     // MARK: - Çekirdek
 
     private static func ensureKey(tag: Data, biometric: Bool) throws -> String {
-        // Mevcut private key varsa public'i türet (private key materyaline dokunmaz → prompt yok).
+        // 1) Cache'lenmiş public key varsa korumalı private key'e DOKUNMADAN dön (Android sertifika paritesi:
+        //    public key biyometriksiz okunur, prompt yok).
+        if let cached = cachedPublicKey(tag: tag) {
+            return cached
+        }
+        // 2) Anahtar var ama cache yok (bu fix'ten ÖNCE üretilmiş eski kurulum): public'i türetip cache'le.
+        //    Bu, biyometrik anahtarda TEK SEFERLİK prompt çıkarır; sonraki kayıtlar cache'ten döner. (Çoğu
+        //    eski kurulumda decryptWithUserKey zaten cache'i daha erken doldurur → bu yola düşülmez.)
         if let existing = try? loadPrivateKey(tag: tag, context: nil),
            let pub = SecKeyCopyPublicKey(existing),
            let spki = RSAKey.spkiBase64(of: pub) {
+            cachePublicKey(spki, tag: tag)
             return spki
         }
+        // 3) Anahtar yok → üret, public'i cache'le (üretim anında prompt yok).
         let priv = try generateKey(tag: tag, biometric: biometric)
         guard let pub = SecKeyCopyPublicKey(priv), let spki = RSAKey.spkiBase64(of: pub) else {
             throw KeychainKeyStoreError.publicKeyExtractionFailed
         }
+        cachePublicKey(spki, tag: tag)
         Log.info("KeychainKeyStore: \(biometric ? "user" : "history") key üretildi", category: .crypto)
         return spki
+    }
+
+    // MARK: - Public key cache (biyometriksiz generic-password)
+
+    private static func account(for tag: Data) -> String { String(decoding: tag, as: UTF8.self) }
+
+    private static func cachedPublicKey(tag: Data) -> String? {
+        let query: [String: Any] = [
+            kSecClass as String:       kSecClassGenericPassword,
+            kSecAttrService as String: pubCacheService,
+            kSecAttrAccount as String: account(for: tag),
+            kSecReturnData as String:  true,
+        ]
+        var item: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
+              let data = item as? Data else { return nil }
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    private static func cachePublicKey(_ spki: String, tag: Data) {
+        deleteCachedPublicKey(tag: tag) // idempotent (duplicate item hatası önle)
+        let attrs: [String: Any] = [
+            kSecClass as String:        kSecClassGenericPassword,
+            kSecAttrService as String:  pubCacheService,
+            kSecAttrAccount as String:  account(for: tag),
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+            kSecValueData as String:    Data(spki.utf8),
+        ]
+        let status = SecItemAdd(attrs as CFDictionary, nil)
+        if status != errSecSuccess {
+            Log.warning("KeychainKeyStore: public key cache yazılamadı (OSStatus \(status))", category: .crypto)
+        }
+    }
+
+    private static func deleteCachedPublicKey(tag: Data) {
+        let query: [String: Any] = [
+            kSecClass as String:       kSecClassGenericPassword,
+            kSecAttrService as String: pubCacheService,
+            kSecAttrAccount as String: account(for: tag),
+        ]
+        SecItemDelete(query as CFDictionary)
     }
 
     private static func generateKey(tag: Data, biometric: Bool) throws -> SecKey {
