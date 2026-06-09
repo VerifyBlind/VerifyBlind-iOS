@@ -2,6 +2,7 @@
    AYNI değişikliği yap (iki uygulama ayrı repo, otomatik senkron YOK). */
 
 "app_name" = "VerifyBlind";
+"splash_tagline" = "Kimliğini Kanıtla, Gizliliğini Koru";
 "common_ok" = "Tamam";
 "btn_cancel" = "İptal";
 "btn_close" = "Kapat";

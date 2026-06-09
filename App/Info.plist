@@ -31,10 +31,12 @@
 		<string>tr</string>
 		<string>en</string>
 	</array>
+	<!-- Statik launch screen — splash (bg_dark #0F172A) ile aynı koyu zemin, böylece animasyonlu
+	     SplashView'a renk sıçraması olmadan geçilir (Android koyu splash paritesi). -->
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>
-		<string>AccentColor</string>
+		<string>LaunchBackground</string>
 	</dict>
 	<!-- UIRequiredDeviceCapabilities kaldırıldı: 'nfc' Mac/Vision Pro uyumsuzluk maillerine (ITMS-90863/90984)
 	     sebep oluyordu, 'armv7' iOS16 (arm64-only) için geçersizdi. NFC varlığı uygulama içinde
