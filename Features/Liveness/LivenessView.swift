@@ -5,12 +5,12 @@ import SwiftUI
 /// üstte adım (siyah, ortada) + timer (kırmızı, sağ) + gri üst ipucu + talimat, altta gri
 /// alt ipucu + sol-altta çip küçük resmi ve canlı %. (b) ışık uyarısı: `viewModel.qualityWarning`.
 ///
-/// `onSuccess(alignedSelfieJPEG, matchScore)` başarıyla biter; `onCancel` iptalde.
+/// `onSuccess(alignedSelfieJPEG, antiSpoofCropJPEG, matchScore)` başarıyla biter; `onCancel` iptalde.
 struct LivenessView: View {
     @StateObject private var viewModel: LivenessViewModel
     @ObservedObject private var camera: CameraController
 
-    let onSuccess: (Data, Float) -> Void
+    let onSuccess: (Data, Data?, Float) -> Void
     let onCancel: () -> Void
 
     // Android renkleri (LivenessActivity / FaceOvalOverlayView)
@@ -18,7 +18,7 @@ struct LivenessView: View {
     private let grayColor = Color(red: 0.333, green: 0.333, blue: 0.333) // #555555
 
     init(viewModel: LivenessViewModel,
-         onSuccess: @escaping (Data, Float) -> Void,
+         onSuccess: @escaping (Data, Data?, Float) -> Void,
          onCancel: @escaping () -> Void) {
         _viewModel = StateObject(wrappedValue: viewModel)
         _camera = ObservedObject(wrappedValue: viewModel.camera)
@@ -47,7 +47,7 @@ struct LivenessView: View {
         .onDisappear { viewModel.stop() }
         .onChange(of: viewModel.phase) { phase in
             if phase == .success, let jpeg = viewModel.alignedSelfieJPEG {
-                onSuccess(jpeg, viewModel.finalMatchScore)
+                onSuccess(jpeg, viewModel.antiSpoofCropJPEG, viewModel.finalMatchScore)
             }
         }
     }

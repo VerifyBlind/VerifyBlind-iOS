@@ -39,6 +39,7 @@ final class LivenessViewModel: ObservableObject {
     @Published var debugEyeOpen = 0   // dev: canlı göz-açıklık % (blink kalibrasyonu)
     @Published var debugSmile = 0     // dev: canlı smile sinyali ×100 (smile kalibrasyonu)
     @Published private(set) var alignedSelfieJPEG: Data?
+    @Published private(set) var antiSpoofCropJPEG: Data?
     @Published private(set) var selfiePreview: UIImage?
     @Published private(set) var chipPreview: UIImage?
     private(set) var finalMatchScore: Float = 0
@@ -123,6 +124,8 @@ final class LivenessViewModel: ObservableObject {
 
     // MARK: - Video kuyruğu logic
 
+    private var antiSpoofCropJPEGLogic: Data?  // video kuyruğu; main'e finalizeSuccessAttempt'te taşınır
+
     private func resetLogicState() {
         var list = challengesInput
         while list.count < 5 { list.append(.randomGesture()) }
@@ -133,6 +136,7 @@ final class LivenessViewModel: ObservableObject {
         bestSavedQualityScore = -1
         isIdentityVerified = false
         selfieJPEG = nil
+        antiSpoofCropJPEGLogic = nil
         lastActionTime = 0
         lastCaptureTime = 0
     }
@@ -283,6 +287,7 @@ final class LivenessViewModel: ObservableObject {
 
         if shouldSave {
             selfieJPEG = UIImage(cgImage: aligned).jpegData(compressionQuality: 0.95)
+            antiSpoofCropJPEGLogic = makeAntiSpoofCrop(fullCG: fullCG, box: box)
             bestSavedMatchScore = currentMatch
             bestSavedQualityScore = quality
             if currentMatch > bestMatchScore { bestMatchScore = currentMatch }
@@ -307,6 +312,7 @@ final class LivenessViewModel: ObservableObject {
         let hasChip = chipEmbedding != nil
         let score = bestMatchScore
         let jpeg = selfieJPEG
+        let cropJPEG = antiSpoofCropJPEGLogic
 
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
@@ -322,6 +328,7 @@ final class LivenessViewModel: ObservableObject {
                 return
             }
             if let jpeg { self.alignedSelfieJPEG = jpeg }
+            self.antiSpoofCropJPEG = cropJPEG
             Log.info("Liveness başarı: score=\(Int(score * 100))% verified=\(verified)", category: .liveness)
             self.phase = .success
         }
@@ -411,6 +418,26 @@ final class LivenessViewModel: ObservableObject {
     private func cgImage(from pixelBuffer: CVPixelBuffer) -> CGImage? {
         let ci = CIImage(cvPixelBuffer: pixelBuffer)
         return ciContext.createCGImage(ci, from: ci.extent)
+    }
+
+    /// MiniFASNetV2 için 2.7x geniş 80x80 JPEG crop (Android LivenessActivity:666 port).
+    /// box: captureFrame'deki piksel-koordinatlı yüz kutusu (captureFrame'den doğrudan gelir).
+    private func makeAntiSpoofCrop(fullCG: CGImage, box: CGRect) -> Data? {
+        let cx = box.midX, cy = box.midY
+        let halfW = box.width * 2.7 / 2
+        let halfH = box.height * 2.7 / 2
+        let left   = max(0, cx - halfW)
+        let top    = max(0, cy - halfH)
+        let right  = min(CGFloat(fullCG.width),  cx + halfW)
+        let bottom = min(CGFloat(fullCG.height), cy + halfH)
+        let asRect = CGRect(x: left, y: top, width: right - left, height: bottom - top).integral
+        guard asRect.width > 0, asRect.height > 0,
+              let wideCrop = fullCG.cropping(to: asRect) else { return nil }
+        UIGraphicsBeginImageContextWithOptions(CGSize(width: 80, height: 80), true, 1)
+        UIImage(cgImage: wideCrop).draw(in: CGRect(x: 0, y: 0, width: 80, height: 80))
+        let scaled = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext()
+        return scaled?.jpegData(compressionQuality: 0.9)
     }
 
     // MARK: - (b) Ortam kalitesi (ışık) — Android LivenessAnalyzer.averageLuma karşılığı

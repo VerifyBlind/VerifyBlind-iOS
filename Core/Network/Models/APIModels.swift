@@ -74,6 +74,8 @@ struct SecurePayload: Codable {
     var zoomVideo: String = ""
     var userSelfie: String = ""
     var integrityToken: String = ""
+    /// 2.7x geniş yüz crop, 80x80 JPEG Base64 — enclave MiniFASNetV2 pasif liveness (Android `AntiSpoofCrop` paritesi).
+    var antiSpoofCrop: String = ""
 
     enum CodingKeys: String, CodingKey {
         case sod = "SOD"
@@ -90,6 +92,7 @@ struct SecurePayload: Codable {
         case zoomVideo = "ZoomVideo"
         case userSelfie = "UserSelfie"
         case integrityToken = "IntegrityToken"
+        case antiSpoofCrop = "AntiSpoofCrop"
     }
 }
 

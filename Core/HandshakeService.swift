@@ -32,11 +32,11 @@ actor HandshakeService {
     func performRegisterHandshake() async throws -> Session {
         Log.info("Register handshake başlatılıyor", category: .flow)
         let resp = try await VerifyAPI.shared.handshake()
-        guard let pub = resp.enclavePubKey, !pub.isEmpty else {
-            throw HandshakeError.missingEnclaveKey
-        }
+        let verifiedPub = try verifiedEnclaveKey(from: resp.attestationDocument,
+                                                  pcr0Signature: resp.pcr0Signature,
+                                                  fallbackKey: resp.enclavePubKey)
         let s = Session(
-            enclavePubKey: pub,
+            enclavePubKey: verifiedPub,
             nonce: resp.nonce,
             timestamp: resp.timestamp,
             nonceSignature: resp.nonceSignature,
@@ -55,14 +55,34 @@ actor HandshakeService {
         if isFresh, let s = session { return s.enclavePubKey }
         Log.info("Login handshake başlatılıyor", category: .flow)
         let resp = try await VerifyAPI.shared.loginHandshake()
-        guard let pub = resp.enclavePubKey, !pub.isEmpty else {
-            throw HandshakeError.missingEnclaveKey
-        }
-        session = Session(enclavePubKey: pub, nonce: "", timestamp: 0, nonceSignature: "",
+        let verifiedPub = try verifiedEnclaveKey(from: resp.attestationDocument,
+                                                  pcr0Signature: resp.pcr0Signature,
+                                                  fallbackKey: resp.enclavePubKey)
+        session = Session(enclavePubKey: verifiedPub, nonce: "", timestamp: 0, nonceSignature: "",
                           challenges: [], completedAt: Date())
         recordAttestationDiagnostics(attestationDocument: resp.attestationDocument)
         Log.info("Login handshake tamam", category: .flow)
-        return pub
+        return verifiedPub
+    }
+
+    /// Attestation belgesini doğrular; başarılıysa enclave public key'i döner.
+    /// Başarısızsa `HandshakeError.attestationFailed` fırlatır.
+    private func verifiedEnclaveKey(from attestationDoc: String?, pcr0Signature: String?, fallbackKey: String?) throws -> String {
+        let isDev = (Config.appAttestEnvironment == .development)
+        let result = AttestationVerifier.verify(
+            attestationBase64: attestationDoc ?? "",
+            pcr0Signature: pcr0Signature,
+            isDevelopment: isDev
+        )
+        if result.isValid, let pub = result.enclavePubKey, !pub.isEmpty {
+            return pub
+        }
+        // Dev modda attestation belgesi yoksa (sunucu henüz döndürmüyor) relay anahtarına geri dön
+        if isDev, let fallback = fallbackKey, !fallback.isEmpty {
+            Log.warning("Attestation belgesi yok/başarısız (dev-skip): \(result.failReason ?? "—")", category: .flow)
+            return fallback
+        }
+        throw HandshakeError.attestationFailed(result.failReason ?? "Attestation doğrulaması başarısız")
     }
 
     /// Güvenlik ekranı (Sistem Güvenliği) teşhislerini el sıkışma yanıtından yazar — Android
@@ -82,10 +102,12 @@ actor HandshakeService {
 
 enum HandshakeError: Error, LocalizedError {
     case missingEnclaveKey
+    case attestationFailed(String)
 
     var errorDescription: String? {
         switch self {
-        case .missingEnclaveKey: return L.t("error_enclave_key_missing")
+        case .missingEnclaveKey:         return L.t("error_enclave_key_missing")
+        case .attestationFailed(let r):  return "\(L.t("error_enclave_key_missing")): \(r)"
         }
     }
 }

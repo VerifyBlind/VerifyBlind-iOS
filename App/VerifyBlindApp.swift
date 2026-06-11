@@ -15,6 +15,7 @@ struct VerifyBlindApp: App {
             ContentView()
                 .environmentObject(appState)
                 .preferredColorScheme(.light) // Android light-mode paritesi
+                .task { await appState.loadConfig() }
                 .onOpenURL { url in
                     // Bulut yedekleme OAuth redirect'leri (Dropbox db-<key>://, Google reversed-client-id).
                     if BackupBootstrap.handleOpenURL(url) { return }

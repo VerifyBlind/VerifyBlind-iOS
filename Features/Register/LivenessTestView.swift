@@ -100,7 +100,7 @@ struct LivenessTestView: View {
         .fullScreenCover(item: $session) { cfg in
             LivenessView(
                 viewModel: LivenessViewModel(challenges: challenges, chipPhotoData: cfg.chip, isDemo: cfg.isDemo),
-                onSuccess: { jpeg, score in
+                onSuccess: { jpeg, _, score in
                     lastSelfie = UIImage(data: jpeg)
                     lastScore = score
                     statusText = "Liveness başarılı (skor %\(Int(score * 100)))."

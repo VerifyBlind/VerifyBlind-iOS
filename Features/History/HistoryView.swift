@@ -10,8 +10,30 @@ struct HistoryView: View {
     @StateObject private var vm = HistoryViewModel()
 
     @State private var pendingRevoke: HistoryRecord?
+    @State private var authPassed = false
 
     var body: some View {
+        ZStack {
+            if authPassed {
+                mainContent
+            } else {
+                Theme.background.ignoresSafeArea()
+            }
+        }
+        .task { await authenticateOnAppear() }
+    }
+
+    private func authenticateOnAppear() async {
+        do {
+            try await BiometricGate.authenticate(reason: L.t("biometric_subtitle_decrypt"))
+            authPassed = true
+        } catch {
+            Log.warning("İşlem geçmişi biyometrik kapısı reddedildi", category: .flow)
+            onBack()
+        }
+    }
+
+    private var mainContent: some View {
         VStack(spacing: 0) {
             NavTopBar(title: L.t("history_title"), titleColor: Theme.primary, onBack: onBack)
 

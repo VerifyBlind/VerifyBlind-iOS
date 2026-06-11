@@ -24,7 +24,7 @@ struct RegisterFlowView: View {
                         challenges: vm.isDemo ? [1, 2, 3] : vm.challenges,
                         chipPhotoData: vm.isDemo ? nil : vm.chipPhoto,
                         isDemo: vm.isDemo),
-                    onSuccess: { selfie, score in vm.onLiveness(selfie: selfie, score: score) },
+                    onSuccess: { selfie, crop, score in vm.onLiveness(selfie: selfie, antiSpoofCrop: crop, score: score) },
                     onCancel: { vm.onLivenessCancel() }
                 )
             case .processing:

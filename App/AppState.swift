@@ -17,6 +17,13 @@ final class AppState: ObservableObject {
     /// Set edilince RootView login akışını QR taramadan, bu URL ile başlatır. Akış bitince temizlenir.
     @Published var pendingVerifyURL: String?
 
+    /// Sunucudan gelen demo şifresi (Android `config.demoPassword` paritesi).
+    @Published var serverDemoPassword: String? = nil
+    /// Minimum iOS sürümü — zorunlu güncelleme kontrolü için (Android `minimumVersion`).
+    @Published var minimumIosVersion: String? = nil
+    /// App Store URL (force-update ekranında kullanılır).
+    @Published var storeUrl: String? = nil
+
     init() {
         hasCard = TicketStore.hasTicket
         expiryDate = AppPrefs.expiryDate
@@ -27,5 +34,35 @@ final class AppState: ObservableObject {
         hasCard = TicketStore.hasTicket
         expiryDate = AppPrefs.expiryDate
         currentCardId = SecureStore.getCardId()
+    }
+
+    /// Sunucu app-config'ini çeker; zorunlu güncelleme + demo şifresini günceller.
+    /// Android `MainViewModel.fetchAppConfig` paritesi.
+    func loadConfig() async {
+        do {
+            let cfg = try await VerifyAPI.shared.appConfig()
+            serverDemoPassword = cfg.demoPassword
+            minimumIosVersion = cfg.minimumIosVersion
+            storeUrl = cfg.storeUrl
+        } catch {
+            Log.warning("AppConfig yüklenemedi: \(error)", category: .app)
+        }
+    }
+
+    /// Mevcut sürüm sunucunun belirlediği minimumdan eskiyse true (Android `isVersionOlder`).
+    var needsForceUpdate: Bool {
+        guard let minVersion = minimumIosVersion, !minVersion.isEmpty,
+              let current = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String else {
+            return false
+        }
+        let cur = current.split(separator: ".").compactMap { Int($0) }
+        let min = minVersion.split(separator: ".").compactMap { Int($0) }
+        for i in 0..<Swift.max(cur.count, min.count) {
+            let c = i < cur.count ? cur[i] : 0
+            let m = i < min.count ? min[i] : 0
+            if c < m { return true }
+            if c > m { return false }
+        }
+        return false
     }
 }

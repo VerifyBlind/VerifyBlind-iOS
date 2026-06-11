@@ -31,6 +31,7 @@ final class RegisterViewModel: ObservableObject {
     private var mrz: MRZParser.Result?
     private(set) var scanned: ScannedPassport?
     private var selfieData: Data?
+    private var antiSpoofCropData: Data?
     private var registrationNonce: String?
 
     var challenges: [Int] { session?.challenges ?? [] }
@@ -145,8 +146,9 @@ final class RegisterViewModel: ObservableObject {
 
     // MARK: - Liveness
 
-    func onLiveness(selfie: Data, score: Float) {
+    func onLiveness(selfie: Data, antiSpoofCrop: Data?, score: Float) {
         selfieData = selfie
+        antiSpoofCropData = antiSpoofCrop
         step = .processing
         Task {
             if isDemo { await runDemo() } else { await finalizeReal() }
@@ -183,6 +185,7 @@ final class RegisterViewModel: ObservableObject {
                 nonceSignature: session.nonceSignature
             )
             if let selfieData { payload.userSelfie = selfieData.base64EncodedString() }
+            if let antiSpoofCropData { payload.antiSpoofCrop = antiSpoofCropData.base64EncodedString() }
             // iOS App Attest (Aşama 6) relay'de el sıkışmada doğrulanır; register enclave'e proxy'lenir
             // ve el sıkışma nonce'una bağlıdır → şifreli IntegrityToken iOS'ta BOŞ bırakılır (Android'de
             // bu alan Play Integrity taşır). Bkz. AppAttestService + sunucu ClientAttestationGate.
