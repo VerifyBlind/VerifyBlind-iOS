@@ -9,8 +9,14 @@ set -euo pipefail
 
 cp "$ATTESTATION_BUNDLE" release-assets/attestation.sigstore.json
 
-TAG="build-$BUILD_NUMBER"
-TITLE="VerifyBlind iOS v$VERSION_NAME (Build $BUILD_NUMBER)"
+# DEV_BUILD=true → "dev-build-N" (ios-dev.yml); boş/false → "build-N" (ios-prod.yml)
+if [ "${DEV_BUILD:-false}" = "true" ]; then
+  TAG="dev-build-$BUILD_NUMBER"
+  TITLE="VerifyBlind iOS v$VERSION_NAME (Dev Build $BUILD_NUMBER)"
+else
+  TAG="build-$BUILD_NUMBER"
+  TITLE="VerifyBlind iOS v$VERSION_NAME (Build $BUILD_NUMBER)"
+fi
 IPA_SHA256=$(shasum -a 256 release-assets/VerifyBlind.ipa | awk '{print $1}')
 SHORT_SHA="${GIT_COMMIT:0:7}"
 

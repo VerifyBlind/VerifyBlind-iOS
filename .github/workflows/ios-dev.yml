@@ -15,12 +15,16 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 60
     environment: development
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     env:
       BUNDLE_ID: app.verifyblind.ios
       APP_ATTEST_ENVIRONMENT: development
-      # Ayarlar sürüm satırında commit görünsün diye dev'de de gömülür; transparency release
-      # (attestation + build-N) yalnız prod'da üretilir.
       GIT_COMMIT: ${{ github.sha }}
+      # dev build'lerde release tag'i "dev-build-N" olur; prod'dan ayrı ve Settings'ten link açılmaz.
+      DEV_BUILD: "true"
     steps:
       - uses: actions/checkout@v4
 
@@ -55,6 +59,24 @@ jobs:
           GOOGLE_IOS_CLIENT_ID: ${{ secrets.GOOGLE_IOS_CLIENT_ID }}
           GOOGLE_IOS_REVERSED_CLIENT_ID: ${{ secrets.GOOGLE_IOS_REVERSED_CLIENT_ID }}
         run: bash scripts/ci/ios-build-upload.sh
+
+      # Transparency pipeline — prod ile aynı adımlar, yalnız tag "dev-build-N".
+      # Attestation ios-dev.yml workflow kimliğine bağlı (prod'da ios-prod.yml olur).
+      # Settings'teki sürüm satırı release sayfasına link AÇMAZ (AppAttest env=development).
+      - name: Prepare transparency assets (ipa-hashes.json)
+        run: bash scripts/ci/ios-release-prepare.sh
+
+      - name: Attest build provenance (Sigstore)
+        id: attest
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: release-assets/VerifyBlind.ipa
+
+      - name: Publish transparency release (dev-build-N)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ATTESTATION_BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: bash scripts/ci/ios-release-publish.sh
 
       - name: Upload IPA artifact
         if: always()
