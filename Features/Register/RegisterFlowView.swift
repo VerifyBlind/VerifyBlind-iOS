@@ -115,6 +115,9 @@ struct RegisterFlowView: View {
 private struct PreparationStepView: View {
     @ObservedObject var vm: RegisterViewModel
 
+    @State private var privacyDoc: PrivacyDoc? = nil
+    @State private var loadingPrivacy = false
+
     private let tips: [(String, String, String)] = [
         ("sun.max", "tip1_title", "tip1_desc"),
         ("lightbulb", "tip2_title", "tip2_desc"),
@@ -146,6 +149,22 @@ private struct PreparationStepView: View {
 
                 Spacer().frame(height: 8)
 
+                // Aydınlatma Metni link (Android tvPrivacyNoticeCardAdd paritesi)
+                Button {
+                    fetchPrivacy()
+                } label: {
+                    if loadingPrivacy {
+                        ProgressView().frame(height: 20)
+                    } else {
+                        Text(L.t("read_privacy_notice"))
+                            .font(.system(size: 13))
+                            .foregroundColor(Theme.themePrimary)
+                            .underline()
+                    }
+                }
+                .buttonStyle(.plain)
+                .padding(.bottom, 2)
+
                 // KVKK onay kutusu
                 Button { vm.kvkkAccepted.toggle() } label: {
                     HStack(alignment: .top, spacing: 10) {
@@ -165,6 +184,24 @@ private struct PreparationStepView: View {
                     .padding(.top, 8)
             }
             .padding(20)
+        }
+        .sheet(item: $privacyDoc) { doc in PrivacyNoticeView(text: doc.text) }
+    }
+
+    private func fetchPrivacy() {
+        guard !loadingPrivacy else { return }
+        loadingPrivacy = true
+        Task { @MainActor in
+            defer { loadingPrivacy = false }
+            var text = L.t("privacy_notice_load_failed")
+            do {
+                let resp = try await VerifyAPI.shared.privacyNotice()
+                let t = resp.text ?? ""
+                text = t.isEmpty ? L.t("privacy_notice_load_error") : t
+            } catch {
+                Log.warning("Aydınlatma metni yüklenemedi: \(error.localizedDescription)", category: .flow)
+            }
+            privacyDoc = PrivacyDoc(text: text)
         }
     }
 }
