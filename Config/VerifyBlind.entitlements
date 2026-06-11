@@ -12,6 +12,9 @@
 	<array>
 		<string>applinks:app.verifyblind.com</string>
 	</array>
+	<!-- Push Notifications: debug=development, release=production (Xcode otomatik yönetir) -->
+	<key>aps-environment</key>
+	<string>development</string>
 	<!-- iCloud KASITLI OLARAK YOK (Asama 5, ZKP): yedekleme yalniz Dropbox + Google Drive ile,
 	     uygulama kontrolunde. iCloud Drive/Keychain otomatik yedegi engellendi. iCloud entitlement EKLEME. -->
 </dict>

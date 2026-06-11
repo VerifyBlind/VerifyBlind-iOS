@@ -25,6 +25,8 @@ enum AppPrefs {
         static let appLanguage = "app_language"
         // App Attest (Aşama 6) — anahtar sunucuya kaydedildi mi (enroll). KeyId SecureStore'da.
         static let appAttestEnrolled = "appattest_enrolled"
+        // APNs push token (hex) — handshake'te sunucuya gönderilir, device_tokens tablosuna kaydedilir.
+        static let apnsToken = "apns_token"
     }
 
     /// Hibrit-şifreli ticket zarfı (HybridContent JSON string).
@@ -105,6 +107,13 @@ enum AppPrefs {
     static var appAttestEnrolled: Bool {
         get { d.bool(forKey: Key.appAttestEnrolled) }
         set { d.set(newValue, forKey: Key.appAttestEnrolled) }
+    }
+
+    /// APNs cihaz token'ı (hex string). AppDelegate'ten set edilir, handshake'te sunucuya gönderilir.
+    /// Kart sıfırlamada temizlenmez — token cihaza aittir, kartla ilişkili değil.
+    static var apnsToken: String? {
+        get { d.string(forKey: Key.apnsToken) }
+        set { d.set(newValue, forKey: Key.apnsToken) }
     }
 
     /// Verilerimi Sil / Sıfırla — TÜM UserDefaults anahtarlarını temizler (Android `prefs.clear()` paritesi).

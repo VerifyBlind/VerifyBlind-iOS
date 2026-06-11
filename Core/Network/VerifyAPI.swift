@@ -21,12 +21,16 @@ struct VerifyAPI {
 
     func handshake() async throws -> HandshakeResponse {
         let headers = await AppAttestService.shared.attestationHeaders()
-        return try await client.post("api/Verify/handshake", body: HandshakeRequest(), headers: headers)
+        var req = HandshakeRequest()
+        req.fcmToken = AppPrefs.apnsToken   // APNs hex token → device_tokens tablosuna upsert
+        return try await client.post("api/Verify/handshake", body: req, headers: headers)
     }
 
     func loginHandshake() async throws -> LoginHandshakeResponse {
         let headers = await AppAttestService.shared.attestationHeaders()
-        return try await client.post("api/Verify/login-handshake", body: HandshakeRequest(), headers: headers)
+        var req = HandshakeRequest()
+        req.fcmToken = AppPrefs.apnsToken
+        return try await client.post("api/Verify/login-handshake", body: req, headers: headers)
     }
 
     // MARK: - Register

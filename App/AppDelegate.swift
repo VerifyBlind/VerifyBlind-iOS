@@ -1,0 +1,38 @@
+import UIKit
+import UserNotifications
+
+/// SwiftUI `@UIApplicationDelegateAdaptor` için UIApplicationDelegate implementasyonu.
+/// APNs token kayıt callback'leri + foreground bildirim yönetimi.
+final class AppDelegate: NSObject, UIApplicationDelegate {
+
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        UNUserNotificationCenter.current().delegate = self
+        return true
+    }
+
+    /// APNs token alındığında hex string olarak sakla — handshake'te sunucuya gönderilir.
+    func application(_ application: UIApplication,
+                     didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        let hex = deviceToken.map { String(format: "%02x", $0) }.joined()
+        AppPrefs.apnsToken = hex
+        Log.info("APNs token kaydedildi (\(hex.prefix(8))…)", category: .app)
+    }
+
+    func application(_ application: UIApplication,
+                     didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        Log.warning("APNs token alınamadı: \(error.localizedDescription)", category: .app)
+    }
+}
+
+/// Uygulama ön plandayken bildirimleri banner + ses + rozet ile göster.
+extension AppDelegate: UNUserNotificationCenterDelegate {
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification
+    ) async -> UNNotificationPresentationOptions {
+        return [.banner, .sound, .badge]
+    }
+}
