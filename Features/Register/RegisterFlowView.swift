@@ -213,6 +213,7 @@ private struct MRZScanStepView: View {
     let onResult: (MRZParser.Result) -> Void
     @StateObject private var camera = CameraController(position: .back)
     @State private var scanner = MRZScanner()
+    @State private var scanLineProgress: CGFloat = 0
 
     var body: some View {
         ZStack {
@@ -222,28 +223,65 @@ private struct MRZScanStepView: View {
             if camera.permissionDenied || camera.configurationFailed {
                 cameraError
             } else {
-                VStack(spacing: 0) {
+                GeometryReader { geo in
+                    let frameW = geo.size.width * 0.85
+                    let frameH = frameW / 1.58  // credit card aspect ratio (Android 1.58:1)
+                    let frameX = (geo.size.width - frameW) / 2
+                    // Android vertical_bias=0.75 → frame center at ~55% of usable height
+                    let usable = geo.size.height - 120  // reserve bottom for text
+                    let frameY = usable * 0.5 - frameH / 2
+
+                    ZStack(alignment: .topLeading) {
+                        // Dark overlay outside scan frame
+                        Color.black.opacity(0.55)
+                            .mask(
+                                Rectangle().fill(.white)
+                                    .reverseMask(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .frame(width: frameW, height: frameH)
+                                            .position(x: frameX + frameW / 2, y: frameY + frameH / 2)
+                                    )
+                            )
+
+                        // Corner brackets
+                        MRZCornerBrackets(frameX: frameX, frameY: frameY, w: frameW, h: frameH)
+
+                        // Animated scan line
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(
+                                LinearGradient(
+                                    colors: [.clear, Color(red: 0.13, green: 0.39, blue: 0.94).opacity(0.8), .clear],
+                                    startPoint: .leading, endPoint: .trailing
+                                )
+                            )
+                            .frame(width: frameW - 8, height: 3)
+                            .position(x: frameX + frameW / 2,
+                                      y: frameY + 4 + (frameH - 8) * scanLineProgress)
+                            .animation(.linear(duration: 1.6).repeatForever(autoreverses: true), value: scanLineProgress)
+                    }
+                    .ignoresSafeArea(edges: .bottom)
+
+                    // Bottom instructions
                     VStack(spacing: 4) {
                         Text(L.t("scan_mrz_instruction"))
-                            .font(.system(size: 16, weight: .bold)).foregroundColor(.white)
+                            .font(.system(size: 16, weight: .semibold)).foregroundColor(.white)
                         Text(L.t("scan_mrz_subtitle"))
-                            .font(.system(size: 13)).foregroundColor(.white.opacity(0.9))
+                            .font(.system(size: 13)).foregroundColor(Color(white: 0.69))
                             .multilineTextAlignment(.center)
+                            .padding(.horizontal, 32)
                     }
-                    .padding(.horizontal, 18).padding(.vertical, 12)
-                    .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 16))
-                    .padding(.top, 24).padding(.horizontal, 24)
-
-                    Spacer()
-                    RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.9), lineWidth: 2)
-                        .frame(height: 130).padding(.horizontal, 24)
-                    Spacer().frame(height: 140) // çerçeve merkez-alt (Android bias)
+                    .frame(width: geo.size.width)
+                    .position(x: geo.size.width / 2, y: geo.size.height - 70)
+                }
+                .onAppear {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        scanLineProgress = 1
+                    }
                 }
             }
         }
         .onAppear {
             if isDemo {
-                // Android demo: kamera ~2s açık kalır, sonra sahte MRZ enjekte edilir.
                 camera.start()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                     camera.stop()
@@ -268,6 +306,47 @@ private struct MRZScanStepView: View {
             Image(systemName: "video.slash.fill").font(.system(size: 40)).foregroundStyle(.white)
             Text(L.t("camera_permission_required")).foregroundStyle(.white)
         }
+    }
+}
+
+/// Dört köşede L-şekilli braket çizer (Android ScanFrameView eşdeğeri).
+private struct MRZCornerBrackets: View {
+    let frameX: CGFloat
+    let frameY: CGFloat
+    let w: CGFloat
+    let h: CGFloat
+
+    private let len: CGFloat = 24
+    private let thick: CGFloat = 3
+    private let color = Color.white.opacity(0.95)
+
+    var body: some View {
+        Canvas { ctx, _ in
+            let corners: [(CGFloat, CGFloat, CGFloat, CGFloat)] = [
+                (frameX, frameY, 1, 1),
+                (frameX + w, frameY, -1, 1),
+                (frameX, frameY + h, 1, -1),
+                (frameX + w, frameY + h, -1, -1)
+            ]
+            for (cx, cy, dx, dy) in corners {
+                var hp = Path(); hp.move(to: CGPoint(x: cx, y: cy)); hp.addLine(to: CGPoint(x: cx + dx * len, y: cy))
+                var vp = Path(); vp.move(to: CGPoint(x: cx, y: cy)); vp.addLine(to: CGPoint(x: cx, y: cy + dy * len))
+                ctx.stroke(hp, with: .color(color), lineWidth: thick)
+                ctx.stroke(vp, with: .color(color), lineWidth: thick)
+            }
+        }
+    }
+}
+
+extension View {
+    func reverseMask<M: View>(_ mask: M) -> some View {
+        self.mask(
+            ZStack {
+                Rectangle().fill(.white)
+                mask.blendMode(.destinationOut)
+            }
+            .compositingGroup()
+        )
     }
 }
 
