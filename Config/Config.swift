@@ -41,6 +41,10 @@ enum Config {
     /// Google Sign-In OAuth client id (Aşama 5 yedekleme). Boşsa Google Drive devre dışı.
     static let googleClientID: String = string("GOOGLE_IOS_CLIENT_ID")
 
+    /// CI'da gömülen kaynak commit SHA'sı (boş = lokal build). Ayarlar'daki sürüm satırında gösterilir;
+    /// kod şeffaflığı zincirinin (GitHub Release build-N + Sigstore provenance) cihaz tarafı ucu.
+    static let gitCommit: String = string("GIT_COMMIT")
+
     static var isDebugBuild: Bool {
         #if DEBUG
         return true

@@ -50,6 +50,8 @@ xcconfig_body() {
   echo "GOOGLE_IOS_CLIENT_ID = ${GCID}"
   echo "GOOGLE_IOS_REVERSED_CLIENT_ID = ${GREV}"
   echo "BUILD_NUMBER = $BUILD_NUMBER"
+  # Kod şeffaflığı: kaynak commit SHA'sı Info.plist'e gömülür (Ayarlar sürüm satırı + provenance).
+  echo "GIT_COMMIT = ${GIT_COMMIT:-}"
 }
 
 if [ "$APP_ATTEST_ENVIRONMENT" = "development" ]; then

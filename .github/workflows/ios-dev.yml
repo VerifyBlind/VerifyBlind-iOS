@@ -18,6 +18,9 @@ jobs:
     env:
       BUNDLE_ID: app.verifyblind.ios
       APP_ATTEST_ENVIRONMENT: development
+      # Ayarlar sürüm satırında commit görünsün diye dev'de de gömülür; transparency release
+      # (attestation + build-N) yalnız prod'da üretilir.
+      GIT_COMMIT: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
 

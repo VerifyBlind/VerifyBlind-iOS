@@ -150,11 +150,24 @@ struct SettingsView: View {
     }
 
     private var versionRow: some View {
-        Text(appVersion)   // Android `tvVersion`: "1.0.0 (1)" düz metin, etiketsiz
-            .font(.system(size: 12))
-            .foregroundColor(Theme.onSurfaceVariant)
-            .frame(maxWidth: .infinity)
-            .padding(.top, 12)
+        // Android `tvVersion` paritesi + kod şeffaflığı: CI build'lerinde satıra kısa commit eklenir;
+        // production'da dokunmak bu build'in provenance kanıtını (GitHub Release build-N) açar.
+        Group {
+            if Config.gitCommit.isEmpty {
+                Text(appVersion)   // lokal build — düz metin, etiketsiz
+            } else if Config.appAttestEnvironment == .production {
+                Button(action: openBuildProvenance) {
+                    Text("\(appVersion) · \(Config.gitCommit.prefix(7))")
+                }
+                .buttonStyle(.plain)
+            } else {
+                Text("\(appVersion) · \(Config.gitCommit.prefix(7))")   // dev build — release yok, link yok
+            }
+        }
+        .font(.system(size: 12))
+        .foregroundColor(Theme.onSurfaceVariant)
+        .frame(maxWidth: .infinity)
+        .padding(.top, 12)
     }
 
     /// Tıklanabilir kart satırı (ikon + başlık + açıklama + chevron).
@@ -207,6 +220,14 @@ struct SettingsView: View {
     private func openPrivacyPolicy() {
         let lang = (Locale.current.language.languageCode?.identifier == "tr") ? "tr" : "en"
         if let url = URL(string: "https://verifyblind.com/\(lang)/gizlilik") {
+            UIApplication.shared.open(url)
+        }
+    }
+
+    /// Sürüm satırı → bu build'in şeffaflık release'i (IPA + ipa-hashes.json + Sigstore attestation).
+    private func openBuildProvenance() {
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
+        if let url = URL(string: "https://github.com/VerifyBlind/VerifyBlind-iOS/releases/tag/build-\(build)") {
             UIApplication.shared.open(url)
         }
     }

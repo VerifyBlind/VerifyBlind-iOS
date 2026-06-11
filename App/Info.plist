@@ -120,5 +120,7 @@
 	<string>$(GOOGLE_IOS_CLIENT_ID)</string>
 	<key>GOOGLE_IOS_REVERSED_CLIENT_ID</key>
 	<string>$(GOOGLE_IOS_REVERSED_CLIENT_ID)</string>
+	<key>GIT_COMMIT</key>
+	<string>$(GIT_COMMIT)</string>
 </dict>
 </plist>
