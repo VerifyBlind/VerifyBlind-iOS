@@ -31,10 +31,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         AppPrefs.apnsToken = hex
         Log.info("APNs token kaydedildi (\(hex.prefix(8))…)", category: .app)
 
-        // Kayıtlı kullanıcılar için token'ı hemen sunucuya upsert et —
-        // handshake'i bekleme (bir sonraki QR/kart akışını beklemek zorunda kalma).
+        // Kayıtlı kullanıcılar için token'ı sunucuya upsert et.
+        // 8 saniyelik gecikme: eş zamanlı register/login flow'unun rate-limit penceresinin
+        // dışına çıkmak için (limit: 10/dk). try? intentional — hata kritik değil.
         if AppPrefs.ticket != nil {
             Task {
+                try? await Task.sleep(for: .seconds(8))
                 _ = try? await VerifyAPI().handshake()
                 Log.info("APNs token sunucuya gönderildi (arka plan).", category: .app)
             }
