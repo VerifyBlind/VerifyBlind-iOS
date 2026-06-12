@@ -72,8 +72,9 @@ targets:
         com.apple.developer.nfc.readersession.formats:
           - TAG
         com.apple.developer.devicecheck.appattest-environment: $(APP_ATTEST_ENVIRONMENT)
-        # APNs push notifications — APP_ATTEST_ENVIRONMENT ile aynı ortam (dev→development, prod→production)
-        aps-environment: $(APP_ATTEST_ENVIRONMENT)
+        # APNs push notifications — distribution build (TestFlight + App Store) daima production.
+        # App Attest environment'dan bağımsız: dev CI de TestFlight'a yüklediği için production gerekir.
+        aps-environment: production
         # Deep-link / Universal Links: SDK widget'ı app.verifyblind.com/request?nonce=... üretir
         # (cdn-static/sdk/v1/verifyblind.js + QRPayloadParser). AASA: app.verifyblind.com/.well-known/.
         com.apple.developer.associated-domains:
