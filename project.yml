@@ -21,7 +21,7 @@ configs:
   Debug: debug
   Release: release
 
-# Sürüm aralıkları `from:` (Stage 0'da kanıtlanmış config). Gerçek kilit = Package.resolved
+# Sürüm aralıkları  `from:` (Stage 0'da kanıtlanmış config). Gerçek kilit = Package.resolved
 # (idiomatic Swift yaklaşımı: manifest'te aralık + resolved'da kilit). exactVersion DENENMEDİ:
 # Xcode 26 SwiftPM, Sentry 8.36.0'ı (trait bildirmiyor) exact pinleyince "disabled default traits
 # on package that declares no traits" hatası veriyor; `from:` daha yeni trait-aware Sentry'ye çözülüp
