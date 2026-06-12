@@ -24,12 +24,21 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         return true
     }
 
-    /// APNs token alındığında hex string olarak sakla — handshake'te sunucuya gönderilir.
+    /// APNs token alındığında hex string olarak sakla ve kayıtlı kullanıcı için hemen sunucuya gönder.
     func application(_ application: UIApplication,
                      didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         let hex = deviceToken.map { String(format: "%02x", $0) }.joined()
         AppPrefs.apnsToken = hex
         Log.info("APNs token kaydedildi (\(hex.prefix(8))…)", category: .app)
+
+        // Kayıtlı kullanıcılar için token'ı hemen sunucuya upsert et —
+        // handshake'i bekleme (bir sonraki QR/kart akışını beklemek zorunda kalma).
+        if AppPrefs.ticket != nil {
+            Task {
+                _ = try? await VerifyAPI().handshake()
+                Log.info("APNs token sunucuya gönderildi (arka plan).", category: .app)
+            }
+        }
     }
 
     func application(_ application: UIApplication,
