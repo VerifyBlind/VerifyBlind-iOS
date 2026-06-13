@@ -49,6 +49,13 @@
 "splash_tagline" = "Kimliğini Kanıtla, Gizliliğini Koru";
 "empty_state_title" = "Henüz telefonunda kayıtlı bir kimliğin yok";
 "empty_state_desc" = "Kimlik kartını telefonuna kaydet\nve güvenli doğrulamaya hazır ol.";
+
+// Bildirim izni soft-ask (priming) banner'ı
+"notif_softask_title" = "Doğrulama bildirimleri";
+"notif_softask_desc" = "Hesabınla bir doğrulama yapıldığında anında haberdar ol.";
+"notif_softask_allow" = "İzin Ver";
+"notif_softask_later" = "Daha Sonra";
+
 "link_how_it_works" = "Nasıl Çalışır?";
 "wallet_active_title" = "Cüzdan Aktif";
 "demo_mode_title" = "Demo Modu";

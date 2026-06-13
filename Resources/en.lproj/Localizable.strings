@@ -49,6 +49,13 @@
 "splash_tagline" = "Prove Your Identity, Protect Your Privacy";
 "empty_state_title" = "You don't have any registered identity on your phone yet";
 "empty_state_desc" = "Save your ID card to your phone\nand be ready for secure verification.";
+
+// Notification permission soft-ask (priming) banner
+"notif_softask_title" = "Verification alerts";
+"notif_softask_desc" = "Get notified the moment a verification is completed with your account.";
+"notif_softask_allow" = "Allow";
+"notif_softask_later" = "Later";
+
 "link_how_it_works" = "How It Works?";
 "wallet_active_title" = "Wallet Active";
 "demo_mode_title" = "Demo Mode";

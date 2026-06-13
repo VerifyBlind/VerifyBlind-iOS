@@ -27,6 +27,8 @@ enum AppPrefs {
         static let appAttestEnrolled = "appattest_enrolled"
         // APNs push token (hex) — handshake'te sunucuya gönderilir, device_tokens tablosuna kaydedilir.
         static let apnsToken = "apns_token"
+        // Bildirim izni soft-ask: "Daha Sonra" denince banner'ın tekrar gösterileceği epoch saniye.
+        static let notifSoftAskNextShow = "notif_softask_next_show"
     }
 
     /// Hibrit-şifreli ticket zarfı (HybridContent JSON string).
@@ -114,6 +116,13 @@ enum AppPrefs {
     static var apnsToken: String? {
         get { d.string(forKey: Key.apnsToken) }
         set { d.set(newValue, forKey: Key.apnsToken) }
+    }
+
+    /// Soft-ask banner'ının tekrar gösterileceği epoch saniye (0 = hemen gösterilebilir).
+    /// "Daha Sonra" denince ileri bir tarihe atılır; sistem izni bir kez sorulunca banner zaten kaybolur.
+    static var notifSoftAskNextShow: Double {
+        get { d.double(forKey: Key.notifSoftAskNextShow) }
+        set { d.set(newValue, forKey: Key.notifSoftAskNextShow) }
     }
 
     /// Verilerimi Sil / Sıfırla — TÜM UserDefaults anahtarlarını temizler (Android `prefs.clear()` paritesi).

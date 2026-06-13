@@ -10,16 +10,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
-            if let error {
-                Log.warning("Push izni hatası: \(error.localizedDescription)", category: .app)
-                return
+        // İzin BURADA istenmez — soft-ask banner (WalletView) tetikler. Ama izin daha önce
+        // verilmişse her açılışta yeniden kaydol: APNs token'ı değişebilir, taze tutulmalı.
+        Task {
+            if await NotificationPermission.status() == .authorized {
+                await MainActor.run { application.registerForRemoteNotifications() }
             }
-            guard granted else {
-                Log.info("Push bildirimi izni reddedildi.", category: .app)
-                return
-            }
-            DispatchQueue.main.async { application.registerForRemoteNotifications() }
         }
         return true
     }

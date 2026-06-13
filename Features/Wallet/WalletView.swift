@@ -17,12 +17,31 @@ struct WalletView: View {
     @State private var removing = false
     @State private var removeError: String?
     @State private var showHowItWorks = false
+    @State private var showNotifSoftAsk = false
 
     var body: some View {
         VStack(spacing: 0) {
             TopAppBar(onSettings: onSettings)
                 // Dev menü: logoya uzun bas (yalnız development).
                 .onLongPressGesture(minimumDuration: 0.8) { onDevMenu?() }
+
+            if showNotifSoftAsk {
+                NotificationSoftAskBanner(
+                    onAllow: {
+                        Task {
+                            await NotificationPermission.requestAndRegister()
+                            withAnimation { showNotifSoftAsk = false }
+                        }
+                    },
+                    onLater: {
+                        NotificationPermission.snooze()
+                        withAnimation { showNotifSoftAsk = false }
+                    }
+                )
+                .padding(.horizontal, 16)
+                .padding(.top, 10)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
 
             if appState.hasCard {
                 registeredState
@@ -32,6 +51,11 @@ struct WalletView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.background.ignoresSafeArea())
+        .task {
+            // Soft-ask: yalnız sistem hiç sormamışken + snooze dolmuşken göster.
+            let show = await NotificationPermission.shouldShowSoftAsk()
+            withAnimation { showNotifSoftAsk = show }
+        }
         .confirmationDialog(L.t("delete_confirm_title"), isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button(L.t("btn_delete_confirm"), role: .destructive) { Task { await removeIdentity() } }
             Button(L.t("btn_cancel_upper"), role: .cancel) {}
@@ -167,6 +191,56 @@ struct WalletView: View {
         )
         Log.info("Kimlik kaldırıldı", category: .flow)
         appState.refresh()
+    }
+}
+
+/// Bildirim izni soft-ask (priming) banner'ı — wallet üstünde, TopAppBar altında.
+/// Sistem prompt'unu DOĞRUDAN açmaz; "İzin Ver"e basınca tetikler (kaza tap yok, bağlam var).
+struct NotificationSoftAskBanner: View {
+    let onAllow: () -> Void
+    let onLater: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "bell.badge.fill")
+                    .font(.system(size: 22))
+                    .foregroundColor(Theme.themePrimary)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(L.t("notif_softask_title"))
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(Theme.onSurface)
+                    Text(L.t("notif_softask_desc"))
+                        .font(.system(size: 13))
+                        .foregroundColor(Theme.onSurfaceVariant)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            HStack(spacing: 10) {
+                Button(action: onLater) {
+                    Text(L.t("notif_softask_later"))
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(Theme.onSurfaceVariant)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 40)
+                }
+                Button(action: onAllow) {
+                    Text(L.t("notif_softask_allow"))
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 40)
+                        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.themePrimary))
+                }
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.radiusCard)
+                .fill(Theme.surface)
+                .overlay(RoundedRectangle(cornerRadius: Theme.radiusCard).stroke(Theme.outlineVariant, lineWidth: 1))
+        )
     }
 }
 
