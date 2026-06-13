@@ -7,8 +7,6 @@ struct RootView: View {
     @State private var path: [Route] = []
     @State private var activeFlow: Flow?
     @State private var showDevMenu = false
-    @State private var showDemoPasswordAlert = false
-    @State private var demoPasswordInput = ""
 
     enum Route: Hashable { case settings, history, backup, help, security }
     enum Flow: Int, Identifiable { case register, registerDemo, login; var id: Int { rawValue } }
@@ -70,20 +68,6 @@ struct RootView: View {
         .onChange(of: appState.pendingVerifyURL) { url in
             if url != nil, activeFlow == nil { activeFlow = .login }
         }
-        // Demo şifresi giriş dialogu (Android showDemoPasswordDialog paritesi).
-        .alert(L.t("demo_mode_title"), isPresented: $showDemoPasswordAlert) {
-            SecureField(L.t("demo_hint"), text: $demoPasswordInput)
-            Button(L.t("common_ok")) {
-                let entered = demoPasswordInput
-                demoPasswordInput = ""
-                if entered == (appState.serverDemoPassword ?? "") {
-                    activeFlow = .registerDemo
-                }
-            }
-            Button(L.t("btn_cancel"), role: .cancel) { demoPasswordInput = "" }
-        } message: {
-            Text(L.t("demo_mode_enter_code"))
-        }
         // Zorunlu güncelleme: engelleyici tam-ekran overlay (Android ForceUpdate event paritesi).
         .overlay {
             if appState.needsForceUpdate {
@@ -128,12 +112,9 @@ struct RootView: View {
     }
 
     private func triggerDemo() {
-        let serverPwd = appState.serverDemoPassword ?? ""
-        if serverPwd.isEmpty {
-            activeFlow = .registerDemo
-        } else {
-            showDemoPasswordAlert = true
-        }
+        // Şifre yok: buton yalnızca cihaz sürümü admin tanımlı demo sürümüyle eşleşince (demoEnabled)
+        // görünür, dolayısıyla görünürlüğü zaten yetkilendirmedir.
+        activeFlow = .registerDemo
     }
 
     private func popPath() {

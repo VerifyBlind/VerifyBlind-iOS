@@ -7,9 +7,9 @@ final class AppState: ObservableObject {
     @Published var hasCard: Bool
     @Published var expiryDate: String?
     @Published var currentCardId: String?
-    /// Demo modu (kartsız cihaz testi). Dev VE TestFlight'ta açık (reviewer + harici testçiler kartsız
-    /// denesin diye); gerçek App Store production build'inde gizli. (Android `isDemoEnabled`.)
-    @Published var demoEnabled: Bool = (Config.appAttestEnvironment == .development) || Config.isTestFlight
+    /// Demo modu (kartsız cihaz testi). Cihaz sürümü, admin panelden tanımlanan iOS demo sürümüyle
+    /// birebir eşleşirse açılır (`loadConfig`'te belirlenir). Android `demoEnabled` paritesi.
+    @Published var demoEnabled: Bool = false
     /// Register/Login tam-ekran akışı açıkken otomatik biyometrik kilidi bastır — NFC/kamera/Face ID
     /// sistem UI'sı akış ortasında .background tetikleyip sahte kilit/döngü yaratmasın.
     @Published var suppressAutoLock = false
@@ -17,8 +17,6 @@ final class AppState: ObservableObject {
     /// Set edilince RootView login akışını QR taramadan, bu URL ile başlatır. Akış bitince temizlenir.
     @Published var pendingVerifyURL: String?
 
-    /// Sunucudan gelen demo şifresi (Android `config.demoPassword` paritesi).
-    @Published var serverDemoPassword: String? = nil
     /// Minimum iOS sürümü — zorunlu güncelleme kontrolü için (Android `minimumVersion`).
     @Published var minimumIosVersion: String? = nil
     /// App Store URL (force-update ekranında kullanılır).
@@ -36,18 +34,17 @@ final class AppState: ObservableObject {
         currentCardId = SecureStore.getCardId()
     }
 
-    /// Sunucu app-config'ini çeker; zorunlu güncelleme + demo şifresini günceller.
+    /// Sunucu app-config'ini çeker; zorunlu güncelleme + demo butonu görünürlüğünü günceller.
     /// Android `MainViewModel.fetchAppConfig` paritesi.
     func loadConfig() async {
         do {
             let cfg = try await VerifyAPI.shared.appConfig()
-            serverDemoPassword = cfg.demoPassword
             minimumIosVersion = cfg.minimumIosVersion
             storeUrl = cfg.storeUrl
-            // Sunucu boş döndürüyorsa (prod ortamı) demo kapatılır — Android paritesi.
-            if cfg.demoPassword?.isEmpty ?? true {
-                demoEnabled = false
-            }
+            // Demo butonu: cihaz sürümü admin tanımlı iOS demo sürümüyle birebir eşleşirse görünür.
+            let demoVersion = cfg.demoVersionIos ?? ""
+            let current = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+            demoEnabled = !demoVersion.isEmpty && demoVersion == current
         } catch {
             Log.warning("AppConfig yüklenemedi: \(error)", category: .app)
         }

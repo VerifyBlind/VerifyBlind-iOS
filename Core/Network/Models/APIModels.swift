@@ -317,14 +317,15 @@ struct AppConfigResponse: Codable {
     let minimumIosVersion: String?
     let storeUrl: String?
     let environment: String?
-    let demoPassword: String?
+    /// Admin panelden tanımlanır; cihaz sürümü buna eşitse demo butonu görünür (şifre yok).
+    let demoVersionIos: String?
 
     enum CodingKeys: String, CodingKey {
         case minimumAndroidVersion = "minimum_android_version"
         case minimumIosVersion = "minimum_ios_version"
         case storeUrl = "store_url"
         case environment
-        case demoPassword = "demo_password"
+        case demoVersionIos = "demo_version_ios"
     }
 }
 
