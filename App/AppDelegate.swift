@@ -24,22 +24,21 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         return true
     }
 
-    /// APNs token alındığında hex string olarak sakla ve kayıtlı kullanıcı için hemen sunucuya gönder.
+    /// APNs token alındığında hex string olarak sakla ve sunucuya upsert et.
+    /// Ticket koşulu YOK — uygulamanın kurulu olduğu her cihaz device_tokens'a yazılır,
+    /// böylece kayıt olmamış kullanıcılar da broadcast bildirimlerine dahil olur.
     func application(_ application: UIApplication,
                      didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         let hex = deviceToken.map { String(format: "%02x", $0) }.joined()
         AppPrefs.apnsToken = hex
         Log.info("APNs token kaydedildi (\(hex.prefix(8))…)", category: .app)
 
-        // Kayıtlı kullanıcılar için token'ı sunucuya upsert et.
-        // 8 saniyelik gecikme: eş zamanlı register/login flow'unun rate-limit penceresinin
-        // dışına çıkmak için (limit: 10/dk). try? intentional — hata kritik değil.
-        if AppPrefs.ticket != nil {
-            Task {
-                try? await Task.sleep(for: .seconds(8))
-                _ = try? await VerifyAPI().handshake()
-                Log.info("APNs token sunucuya gönderildi (arka plan).", category: .app)
-            }
+        // Token'ı sunucuya upsert et. 8 saniyelik gecikme: eş zamanlı register/login
+        // flow'unun rate-limit penceresinin (10/dk) dışına çıkmak için. try? intentional.
+        Task {
+            try? await Task.sleep(for: .seconds(8))
+            _ = try? await VerifyAPI().handshake()
+            Log.info("APNs token sunucuya gönderildi (arka plan).", category: .app)
         }
     }
 
