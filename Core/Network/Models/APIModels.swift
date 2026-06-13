@@ -111,10 +111,13 @@ struct RegistrationRequest: Codable {
 struct DemoRegisterRequest: Codable {
     var userPubKey: String
     var appVersion: String = ""
+    /// Relay sürüm kontrolünü App Store'a yönlendirir (Play Store değil).
+    var platform: String = "ios"
 
     enum CodingKeys: String, CodingKey {
         case userPubKey = "user_pub_key"
         case appVersion = "app_version"
+        case platform
     }
 }
 

@@ -44,6 +44,10 @@ final class AppState: ObservableObject {
             serverDemoPassword = cfg.demoPassword
             minimumIosVersion = cfg.minimumIosVersion
             storeUrl = cfg.storeUrl
+            // Sunucu boş döndürüyorsa (prod ortamı) demo kapatılır — Android paritesi.
+            if cfg.demoPassword?.isEmpty ?? true {
+                demoEnabled = false
+            }
         } catch {
             Log.warning("AppConfig yüklenemedi: \(error)", category: .app)
         }
