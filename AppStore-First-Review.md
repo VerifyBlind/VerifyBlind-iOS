@@ -29,7 +29,8 @@ App Store prod makbuzu `receipt` olur. Yani:
 - [ ] App Store Connect'te uygulama kaydı var (Bundle ID: `app.verifyblind.ios`).
 - [ ] Prod GitHub Actions secret'ları dolu: `APP_STORE_APP_ID`, `APP_STORE_CONNECT_ISSUER_ID`,
       `APP_STORE_CONNECT_KEY_IDENTIFIER`, `APP_STORE_CONNECT_PRIVATE_KEY`, `CERTIFICATE_PRIVATE_KEY`,
-      `APPLE_TEAM_ID` (+ CERT_PIN, ENCLAVE_DEVELOPER_PUBLIC_KEY, opsiyonel Sentry/Dropbox/Google).
+      `APPLE_TEAM_ID` (+ ENCLAVE_DEVELOPER_PUBLIC_KEY, opsiyonel Sentry/Dropbox/Google).
+      Cert pin'leri artık koda gömülü (secret değil) — `CertificatePinningDelegate.pinnedPublicKeys`.
 - [ ] **Backend canlı:** Demo, `api.verifyblind.com/api/verify/demo-register`'a istek atar. Review
       penceresi boyunca prod API + Enclave ayakta olmalı, yoksa reviewer demo'da hata görür → red.
 

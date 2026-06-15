@@ -39,8 +39,6 @@ echo "🔎 Secret uzunlukları (0 = build'e ULAŞMADI) — DROPBOX:${#DBX_DIAG} 
 
 xcconfig_body() {
   echo "API_BASE_URL = https:/\$()/api.verifyblind.com/api/verify/"
-  echo "CERT_PIN_1 = ${CERT_PIN_1:-}"
-  echo "CERT_PIN_2 = ${CERT_PIN_2:-}"
   echo "ENCLAVE_DEVELOPER_PUBLIC_KEY = ${ENCLAVE_DEVELOPER_PUBLIC_KEY:-}"
   echo "APPLE_TEAM_ID = ${APPLE_TEAM_ID}"
   echo "IOS_BUNDLE_ID = ${BUNDLE_ID}"

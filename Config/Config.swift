@@ -20,9 +20,8 @@ enum Config {
         return url
     }()
 
-    static let certPins: [String] = {
-        [string("CERT_PIN_1"), string("CERT_PIN_2")].filter { !$0.isEmpty }
-    }()
+    // Cert pinning pin'leri artık koda gömülü tek kaynak (CertificatePinningDelegate.pinnedPublicKeys);
+    // CERT_PIN_* secret/xcconfig yolu kaldırıldı (pin gizli değil, değişiklik zaten rebuild gerektirir).
 
     /// Enclave PCR0 imzalarını doğrulamak için kullanılan RSA public key (base64 SPKI).
     static let enclaveDeveloperPublicKey: String = string("ENCLAVE_DEVELOPER_PUBLIC_KEY")

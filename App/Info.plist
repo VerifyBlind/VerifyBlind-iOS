@@ -104,10 +104,6 @@
 	<!-- xcconfig'ten Info.plist'e enjekte edilen build-time config — Config.swift bunları okur -->
 	<key>API_BASE_URL</key>
 	<string>$(API_BASE_URL)</string>
-	<key>CERT_PIN_1</key>
-	<string>$(CERT_PIN_1)</string>
-	<key>CERT_PIN_2</key>
-	<string>$(CERT_PIN_2)</string>
 	<key>ENCLAVE_DEVELOPER_PUBLIC_KEY</key>
 	<string>$(ENCLAVE_DEVELOPER_PUBLIC_KEY)</string>
 	<key>APP_ATTEST_ENVIRONMENT</key>

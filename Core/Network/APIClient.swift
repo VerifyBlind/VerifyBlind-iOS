@@ -17,7 +17,7 @@ final class APIClient {
     private let maxRetries = 2
     private let initialBackoffNanos: UInt64 = 500_000_000 // 500 ms
 
-    init(baseURL: URL = Config.apiBaseURL, pins: [String] = Config.certPins) {
+    init(baseURL: URL = Config.apiBaseURL) {
         self.origin = APIClient.origin(of: baseURL)
 
         let cfg = URLSessionConfiguration.default
@@ -25,7 +25,7 @@ final class APIClient {
         cfg.timeoutIntervalForResource = 300        // Android read/write = ∞; pratik üst sınır
         cfg.waitsForConnectivity = false
 
-        let delegate = CertificatePinningDelegate(pins: pins, host: baseURL.host)
+        let delegate = CertificatePinningDelegate(host: baseURL.host)
         self.session = URLSession(configuration: cfg, delegate: delegate, delegateQueue: nil)
 
         self.encoder = JSONEncoder()

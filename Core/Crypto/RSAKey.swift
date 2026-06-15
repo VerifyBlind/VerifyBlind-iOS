@@ -19,6 +19,22 @@ enum RSAKey {
         0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00
     ]
 
+    // EC public key AlgorithmIdentifier'ları: SEQUENCE { id-ecPublicKey(1.2.840.10045.2.1), namedCurve }.
+    // Cert pinning EC sertifikalar için (Let's Encrypt ECDSA → E8/X2 P-384). SPKI hash'i RSA OID'siyle
+    // sarılırsa EC anahtarı için YANLIŞ çıkar; doğru eğri OID'si şart.
+    private static let ecAlgIdentifierP256: [UInt8] = [   // prime256v1 (1.2.840.10045.3.1.7)
+        0x30, 0x13, 0x06, 0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01,
+        0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07
+    ]
+    private static let ecAlgIdentifierP384: [UInt8] = [   // secp384r1 (1.3.132.0.34)
+        0x30, 0x10, 0x06, 0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01,
+        0x06, 0x05, 0x2b, 0x81, 0x04, 0x00, 0x22
+    ]
+    private static let ecAlgIdentifierP521: [UInt8] = [   // secp521r1 (1.3.132.0.35)
+        0x30, 0x10, 0x06, 0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01,
+        0x06, 0x05, 0x2b, 0x81, 0x04, 0x00, 0x23
+    ]
+
     // MARK: - SPKI → SecKey
 
     /// base64 SPKI → RSA public `SecKey`. Hata olursa nil döner (loglar).
@@ -59,19 +75,40 @@ enum RSAKey {
             Log.error("RSAKey.spkiBase64: SecKeyCopyExternalRepresentation başarısız: \(Self.cfErr(error))", category: .crypto)
             return nil
         }
-        return spkiDER(fromPKCS1: pkcs1).base64EncodedString()
+        return spkiDER(keyBytes: [UInt8](pkcs1), algId: rsaAlgIdentifier).base64EncodedString()
     }
 
-    /// RSA public `SecKey` → SPKI DER'in SHA-256'sı. Cert pinning pin'iyle karşılaştırmak için.
+    /// Public `SecKey` (RSA veya EC) → SPKI DER'in SHA-256'sı. Cert pinning pin'iyle karşılaştırmak için.
+    /// EC anahtarlar için doğru eğri AlgorithmIdentifier'ı kullanılır (aksi halde hash yanlış çıkar).
     static func spkiSHA256(of key: SecKey) -> Data? {
         var error: Unmanaged<CFError>?
-        // RSA public key için external representation = PKCS#1 RSAPublicKey DER.
-        guard let pkcs1 = SecKeyCopyExternalRepresentation(key, &error) as Data? else {
+        // External representation: RSA → PKCS#1 RSAPublicKey DER; EC → ANSI X9.63 nokta (04‖X‖Y).
+        guard let keyBytes = SecKeyCopyExternalRepresentation(key, &error) as Data? else {
             Log.error("RSAKey: SecKeyCopyExternalRepresentation başarısız: \(Self.cfErr(error))", category: .crypto)
             return nil
         }
-        let spki = spkiDER(fromPKCS1: pkcs1)
+        guard let algId = algorithmIdentifier(for: key) else {
+            Log.error("RSAKey.spkiSHA256: desteklenmeyen anahtar tipi/eğri", category: .crypto)
+            return nil
+        }
+        let spki = spkiDER(keyBytes: [UInt8](keyBytes), algId: algId)
         return Data(SHA256.hash(data: spki))
+    }
+
+    /// Anahtar tipi/eğrisine göre SPKI AlgorithmIdentifier DER'i (RSA / EC P-256/384/521).
+    private static func algorithmIdentifier(for key: SecKey) -> [UInt8]? {
+        guard let attrs = SecKeyCopyAttributes(key) as? [CFString: Any],
+              let type = attrs[kSecAttrKeyType] as? String else { return nil }
+        if type == (kSecAttrKeyTypeRSA as String) { return rsaAlgIdentifier }
+        if type == (kSecAttrKeyTypeECSECPrimeRandom as String) {
+            switch (attrs[kSecAttrKeySizeInBits] as? Int) ?? 0 {
+            case 256: return ecAlgIdentifierP256
+            case 384: return ecAlgIdentifierP384
+            case 521: return ecAlgIdentifierP521
+            default:  return nil
+            }
+        }
+        return nil
     }
 
     // MARK: - DER ayrıştırma
@@ -116,10 +153,10 @@ enum RSAKey {
         return (idx, length)
     }
 
-    /// PKCS#1 RSAPublicKey DER → tam SPKI DER (algoritma başlığı + BIT STRING ile sar).
-    private static func spkiDER(fromPKCS1 pkcs1: Data) -> Data {
-        let bitString = derTLV(tag: 0x03, value: [0x00] + [UInt8](pkcs1))
-        let body = rsaAlgIdentifier + bitString
+    /// Ham public key byte'ları (RSA PKCS#1 / EC X9.63 nokta) + AlgorithmIdentifier → tam SPKI DER.
+    private static func spkiDER(keyBytes: [UInt8], algId: [UInt8]) -> Data {
+        let bitString = derTLV(tag: 0x03, value: [0x00] + keyBytes)
+        let body = algId + bitString
         return Data(derTLV(tag: 0x30, value: body))
     }
 

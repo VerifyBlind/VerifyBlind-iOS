@@ -48,8 +48,6 @@ jobs:
           APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
           CERTIFICATE_PRIVATE_KEY: ${{ secrets.CERTIFICATE_PRIVATE_KEY }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          CERT_PIN_1: ${{ secrets.CERT_PIN_1 }}
-          CERT_PIN_2: ${{ secrets.CERT_PIN_2 }}
           ENCLAVE_DEVELOPER_PUBLIC_KEY: ${{ secrets.ENCLAVE_DEVELOPER_PUBLIC_KEY }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}

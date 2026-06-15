@@ -1,8 +1,6 @@
-// Release.xcconfig — CodeMagic prod build'inde env vars'tan üzerine yazılır.
+// Release.xcconfig — placeholder; GitHub Actions (ios-build-upload.sh) env'den üretir.
 
 API_BASE_URL = https:/$()/api.verifyblind.com/api/verify/
-CERT_PIN_1 =
-CERT_PIN_2 =
 ENCLAVE_DEVELOPER_PUBLIC_KEY =
 APPLE_TEAM_ID =
 IOS_BUNDLE_ID = app.verifyblind.ios
