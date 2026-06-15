@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 import Security
 import CryptoKit
@@ -223,3 +224,4 @@ enum Stage5SelfTest {
         }
     }
 }
+#endif

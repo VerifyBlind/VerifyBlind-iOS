@@ -67,7 +67,24 @@ IwLz3/Y=
               case let .map(payloadMap) = payloadCbor else {
             return .fail("Geçersiz COSE_Sign1 yapısı")
         }
-        return verifyPayload(payloadMap: payloadMap, pcr0Signature: pcr0Signature, isDevelopment: isDevelopment)
+
+        let result = verifyPayload(payloadMap: payloadMap, pcr0Signature: pcr0Signature, isDevelopment: isDevelopment)
+        guard result.isValid else { return result }
+
+        // K-1: COSE_Sign1 imza doğrulaması (payload ↔ donanım bağı). Mevcut 3 kontrol (zincir/PCR0/
+        // pubkey), saldırganın gerçek bir belgenin user_data'sını kendi anahtarıyla değiştirmesini
+        // ENGELLEMEZ; bu imza payload'ın (user_data dahil) leaf'in private key'iyle imzalandığını
+        // kanıtlar. Dev/mock belge (PCR0 sıfır) gerçek donanım imzası taşımaz → atlanır.
+        if result.isMockDocument { return result }
+        guard case let .byteString(protectedBytes) = arr[0],
+              case let .byteString(signatureBytes) = arr[3] else {
+            return .fail("COSE protected header / signature okunamadı")
+        }
+        let (coseOK, coseErr) = verifyCoseSignature(protectedHeader: protectedBytes, payload: payloadBytes,
+                                                    signature: signatureBytes, payloadMap: payloadMap)
+        guard coseOK else { return .fail("COSE imza doğrulaması BAŞARISIZ: \(coseErr)") }
+        Log.info("[Tasdik] ✅ COSE_Sign1 imzası leaf sertifikayla doğrulandı", category: .flow)
+        return result
     }
 
     // MARK: - Ana doğrulama
@@ -232,6 +249,59 @@ IwLz3/Y=
         }
         let body = asn1Int(modulus) + asn1Int(exponent)
         return Data([0x30] + encLen(body.count) + body)
+    }
+
+    // MARK: - Kontrol 1b: COSE_Sign1 imzası (ES384, leaf sertifika)
+
+    /// COSE_Sign1 imzasını leaf sertifikanın public key'iyle doğrular (AWS Nitro = ES384).
+    /// Sig_structure = ["Signature1", protected(bstr), external_aad(boş bstr), payload(bstr)].
+    private static func verifyCoseSignature(protectedHeader: [UInt8], payload: [UInt8],
+                                            signature: [UInt8], payloadMap: [CBOR: CBOR]) -> (Bool, String) {
+        guard case let .byteString(leafBytes)? = payloadMap[.utf8String("certificate")],
+              let leafCert = SecCertificateCreateWithData(nil, Data(leafBytes) as CFData),
+              let pubKey = SecCertificateCopyKey(leafCert) else {
+            return (false, "Leaf public key alınamadı")
+        }
+
+        // RFC 8152 §4.4 Sig_structure — sıra/tipler birebir COSE_Sign1 imzasıyla eşleşmeli.
+        let sigStructure = CBOR.array([
+            .utf8String("Signature1"),
+            .byteString(protectedHeader),
+            .byteString([]),
+            .byteString(payload)
+        ])
+        let toBeSigned = Data(sigStructure.encode())
+
+        // COSE imzası ham r‖s (P-384 → 96 bayt); SecKeyVerifySignature X9.62 DER bekler → çevir.
+        guard let derSig = Self.ecRawToDer(signature) else {
+            return (false, "İmza DER'e çevrilemedi")
+        }
+        let algo = SecKeyAlgorithm.ecdsaSignatureMessageX962SHA384
+        guard SecKeyIsAlgorithmSupported(pubKey, .verify, algo) else {
+            return (false, "ECDSA P-384/SHA-384 desteklenmiyor")
+        }
+        var err: Unmanaged<CFError>?
+        if SecKeyVerifySignature(pubKey, algo, toBeSigned as CFData, derSig as CFData, &err) {
+            return (true, "OK")
+        }
+        return (false, err?.takeRetainedValue().localizedDescription ?? "İmza uyuşmazlığı")
+    }
+
+    /// Ham ECDSA imzası (r‖s, sabit boy) → ASN.1 DER SEQUENCE{INTEGER r, INTEGER s}.
+    private static func ecRawToDer(_ raw: [UInt8]) -> Data? {
+        guard raw.count >= 2, raw.count % 2 == 0 else { return nil }
+        let half = raw.count / 2
+        func asn1Int(_ bytes: ArraySlice<UInt8>) -> [UInt8] {
+            var v = Array(bytes)
+            while v.count > 1, v.first == 0x00 { v.removeFirst() }     // baştaki sıfırları at
+            if (v.first ?? 0) & 0x80 != 0 { v.insert(0x00, at: 0) }    // pozitif işaret koruması
+            return [0x02, UInt8(v.count)] + v                          // P-384 → tek-bayt uzunluk yeterli
+        }
+        let body = asn1Int(raw[0..<half]) + asn1Int(raw[half..<raw.count])
+        if body.count < 0x80 {
+            return Data([0x30, UInt8(body.count)] + body)
+        }
+        return Data([0x30, 0x81, UInt8(body.count)] + body)
     }
 
     // MARK: - PCR0 + enclave pub key çıkarımı

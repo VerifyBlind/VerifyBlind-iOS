@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 /// Aşama 2 (NFC) deterministik doğrulaması.
@@ -86,3 +87,4 @@ enum Stage2SelfTest {
         }
     }
 }
+#endif

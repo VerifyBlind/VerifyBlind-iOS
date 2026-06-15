@@ -6,7 +6,9 @@ struct RootView: View {
     @EnvironmentObject var appState: AppState
     @State private var path: [Route] = []
     @State private var activeFlow: Flow?
+    #if DEBUG
     @State private var showDevMenu = false
+    #endif
 
     enum Route: Hashable { case settings, history, backup, help, security }
     enum Flow: Int, Identifiable { case register, registerDemo, login; var id: Int { rawValue } }
@@ -19,7 +21,7 @@ struct RootView: View {
                 onVerifyQr: { activeFlow = .login },
                 onSettings: { path.append(.settings) },
                 onHistory: { path.append(.history) },
-                onDevMenu: (Config.appAttestEnvironment == .development) ? { showDevMenu = true } : nil
+                onDevMenu: devMenuTrigger
             )
             .navigationBarHidden(true)
             .navigationDestination(for: Route.self) { route in
@@ -61,7 +63,9 @@ struct RootView: View {
                               initialPayload: appState.pendingVerifyURL)
             }
         }
+        #if DEBUG
         .sheet(isPresented: $showDevMenu) { DevMenuView() }
+        #endif
         // Register/Login akışı açıkken otomatik kilidi bastır (NFC/kamera/Face ID mid-flow çakışmasın).
         .onChange(of: activeFlow) { flow in appState.suppressAutoLock = (flow != nil) }
         // Universal Link geldi → başka akış yoksa login'i aç (initialPayload fullScreenCover'da okunur).
@@ -115,6 +119,15 @@ struct RootView: View {
         // Şifre yok: buton yalnızca cihaz sürümü admin tanımlı demo sürümüyle eşleşince (demoEnabled)
         // görünür, dolayısıyla görünürlüğü zaten yetkilendirmedir.
         activeFlow = .registerDemo
+    }
+
+    /// Dev menü tetikleyici — yalnızca DEBUG + development env'de görünür; release binary'de hiç yok (Y-13).
+    private var devMenuTrigger: (() -> Void)? {
+        #if DEBUG
+        return (Config.appAttestEnvironment == .development) ? { showDevMenu = true } : nil
+        #else
+        return nil
+        #endif
     }
 
     private func popPath() {

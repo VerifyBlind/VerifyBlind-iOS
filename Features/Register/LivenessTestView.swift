@@ -1,3 +1,4 @@
+#if DEBUG
 import SwiftUI
 
 /// Aşama 3 dev test ekranı — liveness. Üç mod:
@@ -7,10 +8,10 @@ import SwiftUI
 ///
 /// Çip okuma Aşama 2 `PassportNFCReader`'ı yeniden kullanır (prefilled dev kart MRZ'si).
 struct LivenessTestView: View {
-    // Dev test kartı (NFCTestView ile aynı).
-    @State private var docNo = "A36S661356"
-    @State private var dob = "10.06.1981"
-    @State private var doe = "04.07.2032"
+    // Dev test kartı — default'lar BOŞ (gerçek kart verisi release binary'de/public repo'da olmasın, Y-13).
+    @State private var docNo = ""
+    @State private var dob = ""
+    @State private var doe = ""
 
     @State private var session: LivenessSession?
     @State private var lastSelfie: UIImage?
@@ -148,3 +149,4 @@ struct LivenessTestView: View {
         }
     }
 }
+#endif

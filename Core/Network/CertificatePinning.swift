@@ -6,18 +6,32 @@ import Security
 /// Pin formatı `sha256/<base64(SPKI-SHA256)>` (OkHttp/HPKP standardı). Sunucu zincirindeki
 /// herhangi bir sertifikanın SubjectPublicKeyInfo SHA-256'sı `Config.certPins` ile eşleşmeli.
 ///
-/// **`pins` boşsa pinning atlanır** (yalnızca standart TLS doğrulaması) — Android'in
-/// `USE_LOCAL_API` modunda pinning'i kapatmasının karşılığı (lokal/dev placeholder pin'leri boş).
+/// **`pins` boşsa**: prod'da (`Config.appAttestEnvironment == .production`) bağlantı fail-closed
+/// reddedilir — sessiz default-TLS'e DÜŞMEZ (Y-8a); dev/local'de standart TLS'e düşer (Android
+/// `USE_LOCAL_API` karşılığı). Koda gömülü `backupPins`, xcconfig CERT_PIN_* boş kalsa bile prod
+/// pinning'ini ayakta tutar.
 ///
 /// Not: SPKI hash'i şu an RSA anahtarlar için hesaplanır (`RSAKey.spkiSHA256`). VerifyBlind
 /// sunucu sertifikası RSA'dır (Let's Encrypt/ISRG). EC anahtar gerekirse `RSAKey` genişletilmeli.
 final class CertificatePinningDelegate: NSObject, URLSessionDelegate {
 
+    /// Koda gömülü YEDEK pin(ler) — xcconfig CERT_PIN_* boş kalsa bile prod'da pinning'in sessizce
+    /// kapanmasını engeller (Y-8a). DEĞER: sunucu zincirindeki sabit bir sertifikanın (Let's Encrypt/
+    /// ISRG ara veya kök CA) SPKI-SHA256 pin'i, format `sha256/<base64>`; CERT_PIN_1/2 ile aynı pin(ler).
+    /// ⚠️ Prod'a çıkmadan GERÇEK pin ile doldurulmalı — boş kalırsa prod fail-closed olur (aşağıya bak).
+    private static let backupPins: Set<String> = [
+        // "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    ]
+
     private let pins: Set<String>
+    private let isProduction: Bool
     private let host: String?
 
-    init(pins: [String], host: String?) {
-        self.pins = Set(pins)
+    init(pins: [String], host: String?,
+         isProduction: Bool = (Config.appAttestEnvironment == .production)) {
+        // Yapılandırılmış pin'ler + koda gömülü yedek pin'ler (HPKP backup-pin pratiği; cert rotasyonu).
+        self.pins = Set(pins).union(CertificatePinningDelegate.backupPins)
+        self.isProduction = isProduction
         self.host = host
     }
 
@@ -31,9 +45,15 @@ final class CertificatePinningDelegate: NSObject, URLSessionDelegate {
             return
         }
 
-        // Pin yok → varsayılan TLS doğrulaması (lokal/dev).
+        // Pin yok → prod'da fail-closed (sessiz default-TLS'e DÜŞME); dev/local'de varsayılan TLS.
         guard !pins.isEmpty else {
-            completionHandler(.performDefaultHandling, nil)
+            if isProduction {
+                Log.error("Cert pinning: prod'da pin yok — bağlantı reddedildi (fail-closed). " +
+                          "backupPins / CERT_PIN_* doldurulmalı (host: \(host ?? "?"))", category: .network)
+                completionHandler(.cancelAuthenticationChallenge, nil)
+            } else {
+                completionHandler(.performDefaultHandling, nil)
+            }
             return
         }
 

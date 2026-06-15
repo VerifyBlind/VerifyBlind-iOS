@@ -1,3 +1,4 @@
+#if DEBUG
 import SwiftUI
 
 /// Aşama 2 cihaz doğrulama ekranı — fiziksel kart + gerçek iPhone ile çip okumayı test eder.
@@ -10,9 +11,10 @@ import SwiftUI
 struct NFCTestView: View {
     // Geliştirici test kartı için ön-doldurulmuş MRZ (yalnızca bu dev test ekranı; gerçek
     // Register akışı Aşama 4'te kullanıcı girişiyle çalışacak).
-    @State private var docNo = "A36S661356"
-    @State private var dob = "10.06.1981"
-    @State private var doe = "04.07.2032"
+    // Default'lar BOŞ — gerçek kart verisi release binary'de/public repo'da olmasın (Y-13).
+    @State private var docNo = ""
+    @State private var dob = ""
+    @State private var doe = ""
     @State private var scanning = false
     @State private var summary: [String] = []
     @State private var errorText: String?
@@ -133,3 +135,4 @@ struct NFCTestView: View {
 #Preview {
     NavigationStack { NFCTestView() }
 }
+#endif

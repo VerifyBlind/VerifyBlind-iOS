@@ -1,3 +1,4 @@
+#if DEBUG
 import SwiftUI
 import Sentry
 
@@ -230,3 +231,4 @@ struct DevMenuView: View {
         }
     }
 }
+#endif

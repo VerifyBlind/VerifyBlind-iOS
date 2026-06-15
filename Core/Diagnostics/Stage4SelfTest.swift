@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 import GRDB
 
@@ -162,3 +163,4 @@ enum Stage4SelfTest {
         }
     }
 }
+#endif

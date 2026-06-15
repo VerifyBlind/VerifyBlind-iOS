@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 /// Tek bir self-test adımının sonucu.
@@ -167,3 +168,4 @@ enum Stage1SelfTest {
         Log.debug("SelfTest[\(group)]: \(passed)/\(results.count) passed", category: .flow)
     }
 }
+#endif

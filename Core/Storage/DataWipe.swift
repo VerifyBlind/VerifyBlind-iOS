@@ -10,20 +10,23 @@ enum DataWipe {
     /// UserDefaults, bulut yedek bağlantısı (+ buluttaki dosya). Hatalar yutulur (kısmî bozulmada
     /// olabildiğince çok şey temizlenmeli).
     static func wipeAll() async {
-        // A. GRDB işlem geçmişi
+        // A. ÖNCE bulut: sağlayıcı bağlantısını kes + buluttaki yedek dosyasını sil.
+        // disconnectAndDelete() sağlayıcıyı `AppPrefs.cloudProvider`'dan okur; bu yüzden AppPrefs
+        // temizliğinden (B) ÖNCE çalışmalı. Aksi halde provider nil olur → bulut yedeği SİLİNMEZ ve
+        // OAuth oturumu açık kalır (Y-12).
+        await CloudBackupManager.disconnectAndDelete()
+
+        // B. GRDB işlem geçmişi
         HistoryRepository.shared.deleteAll()
 
-        // B. Ticket + UserDefaults (ticket/pubkey/expiry/kvkk/biometric/last_*/cloud)
+        // C. Ticket + UserDefaults (ticket/pubkey/expiry/kvkk/biometric/last_*/cloud)
         TicketStore.clear()
         AppPrefs.clearAll()
 
-        // C. Hassas tanımlayıcılar (Keychain) + RSA anahtarları
+        // D. Hassas tanımlayıcılar (Keychain) + RSA anahtarları
         SecureStore.clear()
         KeychainKeyStore.deleteUserKey()
         KeychainKeyStore.deleteHistoryKey()
-
-        // D. Bulut sağlayıcı bağlantısını kes + buluttaki yedek dosyasını sil
-        await CloudBackupManager.disconnectAndDelete()
 
         Log.info("DataWipe.wipeAll tamamlandı", category: .flow)
     }

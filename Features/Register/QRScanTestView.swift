@@ -1,3 +1,4 @@
+#if DEBUG
 import SwiftUI
 
 /// Aşama 3 dev test ekranı — QR/DataMatrix kamera taraması. Partner login nonce QR'ı (Aşama 4)
@@ -71,3 +72,4 @@ struct QRScanTestView: View {
         .onDisappear { camera.stop() }
     }
 }
+#endif
