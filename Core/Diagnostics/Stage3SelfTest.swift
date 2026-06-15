@@ -1,4 +1,3 @@
-#if DEBUG
 import CoreGraphics
 
 /// Aşama 3 (Camera/OCR/Liveness) deterministik doğrulaması.
@@ -184,4 +183,3 @@ enum Stage3SelfTest {
         }
     }
 }
-#endif

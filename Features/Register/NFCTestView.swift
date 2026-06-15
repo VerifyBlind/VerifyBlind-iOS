@@ -1,4 +1,3 @@
-#if DEBUG
 import SwiftUI
 
 /// Aşama 2 cihaz doğrulama ekranı — fiziksel kart + gerçek iPhone ile çip okumayı test eder.
@@ -135,4 +134,3 @@ struct NFCTestView: View {
 #Preview {
     NavigationStack { NFCTestView() }
 }
-#endif

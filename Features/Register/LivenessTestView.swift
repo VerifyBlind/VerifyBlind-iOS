@@ -1,4 +1,3 @@
-#if DEBUG
 import SwiftUI
 
 /// Aşama 3 dev test ekranı — liveness. Üç mod:
@@ -149,4 +148,3 @@ struct LivenessTestView: View {
         }
     }
 }
-#endif

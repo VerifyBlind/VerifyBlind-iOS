@@ -1,4 +1,3 @@
-#if DEBUG
 import Foundation
 import CryptoKit
 import DeviceCheck
@@ -84,4 +83,3 @@ enum Stage6SelfTest {
         }
     }
 }
-#endif

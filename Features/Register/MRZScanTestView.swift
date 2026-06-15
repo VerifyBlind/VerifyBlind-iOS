@@ -1,4 +1,3 @@
-#if DEBUG
 import SwiftUI
 
 /// Aşama 3 dev test ekranı — MRZ kamera taraması. Gerçek kimlik/pasaport arka yüzünden
@@ -85,4 +84,3 @@ struct MRZScanTestView: View {
         }
     }
 }
-#endif
