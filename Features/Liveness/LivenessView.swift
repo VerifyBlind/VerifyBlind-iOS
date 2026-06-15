@@ -13,6 +13,11 @@ struct LivenessView: View {
     let onSuccess: (Data, Data?, Float) -> Void
     let onCancel: () -> Void
 
+    // Liveness boyunca ekran parlaklığını sonuna kadar açıp çıkışta eski değere döndürmek için
+    // saklanan orijinal parlaklık (Android `originalBrightness` paritesi). iOS'ta yalnız değer
+    // yedeklenip geri yüklenir (oto-parlaklık aç/kapa durumunu sorgulayan public API yok).
+    @State private var savedBrightness: CGFloat?
+
     // Android renkleri (LivenessActivity / FaceOvalOverlayView)
     private let redColor  = Color(red: 1.0,   green: 0.267, blue: 0.267) // #FF4444
     private let grayColor = Color(red: 0.333, green: 0.333, blue: 0.333) // #555555
@@ -43,8 +48,19 @@ struct LivenessView: View {
             }
         }
         .statusBar(hidden: true)   // Android gibi tam ekran — durum çubuğu gizli
-        .onAppear { viewModel.start() }
-        .onDisappear { viewModel.stop() }
+        .onAppear {
+            // Ekran ışığını yedekle → sonuna kadar aç (ön kamera yüz aydınlatması). Ekran uykusunu
+            // engelle (30sn liveness boyunca otomatik kısılma/uyku olmasın). Android paritesi.
+            savedBrightness = UIScreen.main.brightness
+            UIScreen.main.brightness = 1.0
+            UIApplication.shared.isIdleTimerDisabled = true
+            viewModel.start()
+        }
+        .onDisappear {
+            viewModel.stop()
+            UIApplication.shared.isIdleTimerDisabled = false
+            if let b = savedBrightness { UIScreen.main.brightness = b }
+        }
         .onChange(of: viewModel.phase) { phase in
             if phase == .success, let jpeg = viewModel.alignedSelfieJPEG {
                 onSuccess(jpeg, viewModel.antiSpoofCropJPEG, viewModel.finalMatchScore)

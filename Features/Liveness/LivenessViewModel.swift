@@ -64,6 +64,8 @@ final class LivenessViewModel: ObservableObject {
     private var lastActionTime: TimeInterval = 0
     private var lastCaptureTime: TimeInterval = 0
     private var selfieJPEG: Data?
+    private var lumaWarning: String?   // ışık uyarısı (her kare — video kuyruğu)
+    private var blurWarning: String?   // netlik uyarısı (best-frame yakalamada — video kuyruğu)
     private let blinkDetector = BlinkDetector()
     private let smileDetector = SmileDetector()
 
@@ -267,6 +269,16 @@ final class LivenessViewModel: ObservableObject {
         let rightEyeInCrop = frame.signals.rightEye.map { CGPoint(x: $0.x - left, y: $0.y - top) }
         guard let aligned = FaceAligner.alignedImage(from: crop, leftEye: leftEyeInCrop, rightEye: rightEyeInCrop) else { return }
 
+        // Netlik (112×112 aligned) → anlık "net değil" uyarısı + best-frame için kalite bonusu.
+        // Bulanık/kirli lens veya hareket bulanıklığında düşük çıkar (Android computeSharpness paritesi).
+        let sharpness = Self.sharpness(of: aligned)
+        blurWarning = (sharpness >= 0 && sharpness <= Self.blurWarnThreshold)
+            ? NSLocalizedString("liveness_quality_blur", comment: "") : nil
+        publishWarning()
+        let sharpBonus: Float = sharpness >= 0 ? min(max(sharpness / Self.sharpQualityRef, 0), 1) * 15 : 0
+        // Eşit benzerlikte best-frame seçimini en NET kareye kaydır (poz + netlik birleşik).
+        let effQuality = min(quality + sharpBonus, 115)
+
         var currentMatch: Float = 0
         if let chipEmbedding, let selfieEmb = embedder.embedding(from: aligned) {
             currentMatch = FaceEmbedder.cosineSimilarity(chipEmbedding, selfieEmb)
@@ -276,20 +288,22 @@ final class LivenessViewModel: ObservableObject {
         if chipEmbedding != nil {
             if currentMatch > bestSavedMatchScore + 0.005 {
                 shouldSave = true
-            } else if abs(currentMatch - bestSavedMatchScore) < 0.005, quality > bestSavedQualityScore + 5 {
+            } else if abs(currentMatch - bestSavedMatchScore) < 0.005, effQuality > bestSavedQualityScore + 5 {
                 shouldSave = true
             } else if selfieJPEG == nil {
                 shouldSave = true
             }
-        } else if quality > bestSavedQualityScore + 5 || selfieJPEG == nil {
+        } else if effQuality > bestSavedQualityScore + 5 || selfieJPEG == nil {
             shouldSave = true
         }
 
         if shouldSave {
-            selfieJPEG = UIImage(cgImage: aligned).jpegData(compressionQuality: 0.95)
+            // PNG (lossless): R50 girişi tam bu 112×112 pikseller; bu boyutta JPEG blok artefaktı
+            // embedding'i bozabilir, dosya zaten ~20-40 KB. (Değişken adı geçmişten "JPEG" kaldı.)
+            selfieJPEG = UIImage(cgImage: aligned).pngData()
             antiSpoofCropJPEGLogic = makeAntiSpoofCrop(fullCG: fullCG, box: box)
             bestSavedMatchScore = currentMatch
-            bestSavedQualityScore = quality
+            bestSavedQualityScore = effQuality
             if currentMatch > bestMatchScore { bestMatchScore = currentMatch }
             if currentMatch > Self.matchThreshold { isIdentityVerified = true }
         }
@@ -446,18 +460,60 @@ final class LivenessViewModel: ObservableObject {
     /// Video kuyruğunda çağrılır (Android onFrameLuma ile aynı disiplin).
     private func updateQualityWarning(for pixelBuffer: CVPixelBuffer) {
         let luma = Self.averageLuma(pixelBuffer)
-        let warning: String?
         if luma < 55 {
-            warning = NSLocalizedString("liveness_quality_dark", comment: "")
+            lumaWarning = NSLocalizedString("liveness_quality_dark", comment: "")
         } else if luma > 235 {
-            warning = NSLocalizedString("liveness_quality_bright", comment: "")
+            lumaWarning = NSLocalizedString("liveness_quality_bright", comment: "")
         } else {
-            warning = nil
+            lumaWarning = nil
         }
+        publishWarning()
+    }
+
+    /// Işık (öncelikli) + netlik uyarısını tek label'da birleştirir (Android `publishQualityWarning`).
+    /// Video kuyruğunda çağrılır; `@Published` güncellemesi ana kuyruğa marshalled edilir.
+    private func publishWarning() {
+        let w = lumaWarning ?? blurWarning
         DispatchQueue.main.async { [weak self] in
-            guard let self, self.qualityWarning != warning else { return }
-            self.qualityWarning = warning
+            guard let self, self.qualityWarning != w else { return }
+            self.qualityWarning = w
         }
+    }
+
+    // MARK: - Netlik (blur) ölçümü — Android computeSharpness karşılığı
+
+    /// 112×112 yüz CGImage'ında ileri-fark gradyan enerjisi (Brenner benzeri). Yüksek = net.
+    /// Eşikler `blurWarnThreshold` / `sharpQualityRef` ile aynı; sabit 112 boyut → eşik anlamlı
+    /// (yine de cihazda ince ayar gerekebilir).
+    static let blurWarnThreshold: Float = 45
+    static let sharpQualityRef: Float = 250   // bu enerjide tam +15 kalite bonusu
+
+    static func sharpness(of cg: CGImage) -> Float {
+        let w = cg.width, h = cg.height
+        guard w >= 4, h >= 4 else { return -1 }
+        var gray = [UInt8](repeating: 0, count: w * h)
+        let cs = CGColorSpaceCreateDeviceGray()
+        guard let ctx = CGContext(data: &gray, width: w, height: h, bitsPerComponent: 8,
+                                  bytesPerRow: w, space: cs,
+                                  bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return -1 }
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        var sum: Double = 0
+        var count = 0
+        var y = 1
+        while y < h - 1 {
+            let row = y * w
+            var x = 1
+            while x < w - 1 {
+                let c = Int(gray[row + x])
+                let gx = Int(gray[row + x + 1]) - c
+                let gy = Int(gray[row + w + x]) - c
+                sum += Double(gx * gx + gy * gy)
+                count += 1
+                x += 2
+            }
+            y += 2
+        }
+        return count > 0 ? Float(sum / Double(count)) : -1
     }
 
     /// BGRA pixel buffer'dan ~2048 örnekle ortalama parlaklık (0..255). Hatada 128 (nötr).

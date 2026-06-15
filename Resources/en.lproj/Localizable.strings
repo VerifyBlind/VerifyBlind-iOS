@@ -170,6 +170,7 @@
 "liveness_camera_start_failed" = "Camera could not be started.";
 "liveness_quality_dark" = "Too dark — move to a brighter spot";
 "liveness_quality_bright" = "Too much light / backlit — face the light source";
+"liveness_quality_blur" = "Camera is not sharp — wipe the lens and hold still";
 "liveness_face_left" = "Turn Your Head LEFT ⬅️";
 "liveness_face_right" = "Turn Your Head RIGHT ➡️";
 "liveness_face_blink" = "Blink 😉";

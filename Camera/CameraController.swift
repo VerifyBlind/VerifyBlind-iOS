@@ -83,7 +83,13 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
 
     private func configure() {
         session.beginConfiguration()
-        session.sessionPreset = .high
+        // En yüksek analiz çözünürlüğü (Android 1920×1080 paritesi; landmark/embedding hassasiyeti).
+        // Cihaz desteklemiyorsa .high'a düş.
+        if session.canSetSessionPreset(.hd1920x1080) {
+            session.sessionPreset = .hd1920x1080
+        } else {
+            session.sessionPreset = .high
+        }
 
         guard let device = AVCaptureDevice.DiscoverySession(
             deviceTypes: [.builtInWideAngleCamera],
@@ -98,6 +104,7 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
             return
         }
         session.addInput(input)
+        configureDevice(device)
 
         output.setSampleBufferDelegate(self, queue: videoQueue)
         output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
@@ -116,10 +123,40 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
                 conn.automaticallyAdjustsVideoMirroring = false
                 conn.isVideoMirrored = true
             }
+            // Video stabilizasyonunu kapat — EIS yüzü "warp" edip embedding'i bozabilir (filtre off).
+            if conn.isVideoStabilizationSupported {
+                conn.preferredVideoStabilizationMode = .off
+            }
         }
 
         session.commitConfiguration()
         configured = true
+    }
+
+    /// AE/AF metering + post-process kapatma (Android Camera2Interop + FocusMeteringAction paritesi).
+    /// Yüzün geleceği MERKEZE odak/pozlama metering → sahnede gezinmeyi durdurur, pozlama "av peşinde"
+    /// gidip kareleri yakıp karartmaz. Video-HDR ton eşlemesi kapatılır (smoothing/clamp önler).
+    /// Sert `.locked` yerine merkeze-sabitli `.continuousAuto*`: kullanıcı kayarsa pozlama bozulmaz.
+    private func configureDevice(_ device: AVCaptureDevice) {
+        do {
+            try device.lockForConfiguration()
+            let center = CGPoint(x: 0.5, y: 0.5)
+            if device.isFocusPointOfInterestSupported { device.focusPointOfInterest = center }
+            if device.isFocusModeSupported(.continuousAutoFocus) { device.focusMode = .continuousAutoFocus }
+            if device.isExposurePointOfInterestSupported { device.exposurePointOfInterest = center }
+            if device.isExposureModeSupported(.continuousAutoExposure) { device.exposureMode = .continuousAutoExposure }
+            if device.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance) {
+                device.whiteBalanceMode = .continuousAutoWhiteBalance
+            }
+            // Video-HDR (ton eşleme/clamp) kapat — biyometri için en sadık ham görüntü.
+            if device.activeFormat.isVideoHDRSupported {
+                device.automaticallyAdjustsVideoHDREnabled = false
+                device.isVideoHDREnabled = false
+            }
+            device.unlockForConfiguration()
+        } catch {
+            Log.error("CameraController: cihaz yapılandırılamadı: \(error.localizedDescription)", category: .liveness)
+        }
     }
 
     // MARK: - AVCaptureVideoDataOutputSampleBufferDelegate

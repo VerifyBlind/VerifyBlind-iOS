@@ -170,6 +170,7 @@
 "liveness_camera_start_failed" = "Kamera başlatılamadı.";
 "liveness_quality_dark" = "Ortam çok karanlık — daha aydınlık bir yere geçin";
 "liveness_quality_bright" = "Çok fazla ışık / arkadan ışık var — yüzünüzü ışığa dönün";
+"liveness_quality_blur" = "Kamera net değil — lensi silip sabit tutun";
 "liveness_face_left" = "Başını SOLA Çevir ⬅️";
 "liveness_face_right" = "Başını SAĞA Çevir ➡️";
 "liveness_face_blink" = "Gözlerini Kırp 😉";

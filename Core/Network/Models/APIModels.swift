@@ -259,11 +259,16 @@ struct LoginRequest: Codable {
     var encrSignedTicket: String
     var nonce: String
     var integrityToken: String = ""
+    // Holder-of-key (Y-4): "VBLOK1|{nonce}|{pk_hash}|{user_sig_ts}" mesajının user key (RSA-PSS/SHA-256) imzası
+    var userSignature: String = ""
+    var userSigTs: Int64 = 0
 
     enum CodingKeys: String, CodingKey {
         case encrSignedTicket = "encr_signed_ticket"
         case nonce
         case integrityToken = "integrity_token"
+        case userSignature = "user_signature"
+        case userSigTs = "user_sig_ts"
     }
 }
 

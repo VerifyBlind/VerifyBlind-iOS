@@ -79,8 +79,13 @@ final class LoginViewModel: ObservableObject {
     private func completeLogin() async {
         do {
             let enclavePubKey = try await HandshakeService.shared.ensureLoginHandshake()
-            // Biyometrik decrypt → saklı SignedTicket RAW JSON.
-            let signedTicketJson = try await TicketStore.decryptSignedTicket(reason: L.t("biometric_subtitle_decrypt"))
+            // Holder-of-key (Y-4): bu login'e özgü mesaj — enclave UserPubKey ile doğrular.
+            // Kanonik form Android/enclave ile BYTE-BYTE aynı olmalı: "VBLOK1|{nonce}|{pk_hash}|{ts}".
+            let sigTs = Int64(Date().timeIntervalSince1970)
+            let hokMessage = "VBLOK1|\(nonce)|\(pkHash ?? "")|\(sigTs)"
+            // TEK biyometrik promptla decrypt + imza.
+            let (signedTicketJson, userSig) = try await TicketStore.decryptSignedTicketAndSign(
+                message: hokMessage, reason: L.t("biometric_subtitle_decrypt"))
             let wrapper = try LoginWrapperBuilder.build(signedTicketJson: signedTicketJson, nonce: nonce, pkHash: pkHash)
 
             let (aesBlob, aesKey) = try CryptoUtils.aesEncrypt(wrapper)
@@ -88,7 +93,7 @@ final class LoginViewModel: ObservableObject {
             let hybrid = HybridContent(encKey: encKey, blob: aesBlob)
             let hybridJson = String(decoding: try JSONEncoder().encode(hybrid), as: UTF8.self)
 
-            let req = LoginRequest(encrSignedTicket: hybridJson, nonce: nonce)
+            let req = LoginRequest(encrSignedTicket: hybridJson, nonce: nonce, userSignature: userSig, userSigTs: sigTs)
             try await VerifyAPI.shared.login(req)
 
             recordHistory()

@@ -45,6 +45,24 @@ enum KeychainKeyStore {
         return try CryptoUtils.rsaDecrypt(cipherBase64, privateKey: priv, algorithm: .rsaEncryptionOAEPSHA1)
     }
 
+    /// Holder-of-key (Y-4): TEK Face ID/passcode promptuyla hem ticket'in AES anahtarını çözer hem de
+    /// `message`'i user key ile RSA-PSS/SHA-256 imzalar. LAContext bir kez doğrulanır; her iki
+    /// private-key işlemi aynı doğrulanmış context'le yapılır (ek prompt yok). Android'de user key
+    /// auth-per-use olduğundan iki prompt gerekir; iOS'ta LAContext yeniden kullanımı tek prompta indirir.
+    static func decryptAndSign(_ cipherBase64: String, message: String, reason: String) async throws -> (aesKey: String, signatureBase64: String) {
+        let context = LAContext()
+        try await authenticate(context: context, reason: reason)
+        let priv = try loadPrivateKey(tag: userKeyTag, context: context)
+        // Eski kurulum migrasyonu: public key cache yoksa, DOĞRULANMIŞ context ile türetip cache'le (ek prompt yok).
+        if cachedPublicKey(tag: userKeyTag) == nil,
+           let pub = SecKeyCopyPublicKey(priv), let spki = RSAKey.spkiBase64(of: pub) {
+            cachePublicKey(spki, tag: userKeyTag)
+        }
+        let aesKey = try CryptoUtils.rsaDecrypt(cipherBase64, privateKey: priv, algorithm: .rsaEncryptionOAEPSHA1)
+        let signature = try CryptoUtils.rsaSignPSS(message, privateKey: priv)
+        return (aesKey, signature)
+    }
+
     /// Android `deleteKey()` — kart silindiğinde user key kaldırılır.
     static func deleteUserKey() {
         delete(tag: userKeyTag)
