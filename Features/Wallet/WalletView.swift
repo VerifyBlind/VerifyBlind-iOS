@@ -175,7 +175,8 @@ struct WalletView: View {
             // Biyometrik onay (Android BiometricHelper.authenticate).
             try await BiometricGate.authenticate(reason: L.t("biometric_subtitle_decrypt"))
         } catch {
-            Log.warning("Kimlik kaldırma biyometrik iptal", category: .flow)
+            // Biyometrik iptal/ret = beklenen kullanıcı davranışı → event değil, breadcrumb (ContentView deseni).
+            Log.info("Kimlik kaldırma biyometrik iptal", category: .flow)
             return
         }
         let cardId = SecureStore.getCardId()

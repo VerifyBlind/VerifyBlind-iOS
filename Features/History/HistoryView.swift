@@ -28,7 +28,9 @@ struct HistoryView: View {
             try await BiometricGate.authenticate(reason: L.t("biometric_subtitle_decrypt"))
             authPassed = true
         } catch {
-            Log.warning("İşlem geçmişi biyometrik kapısı reddedildi", category: .flow)
+            // Biyometrik iptal/ret = beklenen kullanıcı davranışı, geliştirici aksiyonu yok.
+            // Sentry'e event GİTMEZ (yalnızca breadcrumb) — ContentView app-lock kapısıyla aynı desen.
+            Log.info("İşlem geçmişi biyometrik kapısı reddedildi (geri dönülür)", category: .flow)
             onBack()
         }
     }
