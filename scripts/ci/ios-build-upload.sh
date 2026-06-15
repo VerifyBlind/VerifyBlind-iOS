@@ -32,11 +32,6 @@ if [ -z "$GREV" ] && [ -n "$GCID" ]; then
   GREV="com.googleusercontent.apps.${GCID%.apps.googleusercontent.com}"
 fi
 
-# Teşhis: secret'ların build'e ULAŞIP ulaşmadığını uzunlukla göster (değerleri GitHub maskeler; uzunluk güvenli).
-# 0 = secret bu job'a gelmemiş (yanlış kapsam/isim ya da build secret'tan önce koştu).
-DBX_DIAG="${DROPBOX_IOS_APP_KEY:-}"
-echo "🔎 Secret uzunlukları (0 = build'e ULAŞMADI) — DROPBOX:${#DBX_DIAG} GOOGLE_CLIENT:${#GCID} GOOGLE_REV:${#GREV}"
-
 xcconfig_body() {
   echo "API_BASE_URL = https:/\$()/api.verifyblind.com/api/verify/"
   echo "ENCLAVE_DEVELOPER_PUBLIC_KEY = ${ENCLAVE_DEVELOPER_PUBLIC_KEY:-}"
