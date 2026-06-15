@@ -16,11 +16,12 @@ import Security
 final class CertificatePinningDelegate: NSObject, URLSessionDelegate {
 
     /// Koda gömülü YEDEK pin(ler) — xcconfig CERT_PIN_* boş kalsa bile prod'da pinning'in sessizce
-    /// kapanmasını engeller (Y-8a). DEĞER: sunucu zincirindeki sabit bir sertifikanın (Let's Encrypt/
-    /// ISRG ara veya kök CA) SPKI-SHA256 pin'i, format `sha256/<base64>`; CERT_PIN_1/2 ile aynı pin(ler).
-    /// ⚠️ Prod'a çıkmadan GERÇEK pin ile doldurulmalı — boş kalırsa prod fail-closed olur (aşağıya bak).
+    /// kapanmasını engeller (Y-8a). Sunucu zincirindeki SABİT sertifikaların SPKI-SHA256 pin'i.
+    /// api.verifyblind.com artık Let's Encrypt ECDSA: leaf → E8 (ara) → ISRG Root X2 (kök).
+    /// Leaf pinlenmez (~60-90 günde döner); E8 + X2 yıllarca sabit. 2026-06-15 canlı sertifikadan çıkarıldı.
     private static let backupPins: Set<String> = [
-        // "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+        "sha256/iFvwVyJSxnQdyaUvUERIf+8qk7gRze3612JMwoO3zdU=",  // Let's Encrypt E8 (ECDSA ara)
+        "sha256/diGVwiVYbubAI3RW4hB9xU8e/CH2GnkuvVFZE8zmgzI="   // ISRG Root X2 (ECDSA kök)
     ]
 
     private let pins: Set<String>
