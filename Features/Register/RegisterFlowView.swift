@@ -180,7 +180,9 @@ private struct PreparationStepView: View {
                 }
                 .buttonStyle(.plain)
 
-                PrimaryGradientButton(title: L.t("btn_start"), enabled: vm.kvkkAccepted) { vm.begin() }
+                PrimaryGradientButton(title: L.t("btn_start"),
+                                      enabled: vm.kvkkAccepted && !vm.isStarting,
+                                      loading: vm.isStarting) { vm.begin() }
                     .padding(.top, 8)
             }
             .padding(20)

@@ -62,6 +62,9 @@ struct LoginHandshakeResponse: Codable {
 struct SecurePayload: Codable {
     var sod: String
     var dg1: String
+    /// RAW DG2 EF bytes (Base64) — SOD hash binding for the face data group (dg2Photo is re-encoded
+    /// and won't match the SOD hash). Enclave `VerifyDGHashes` requires this. (Security review Y-3.)
+    var dg2: String = ""
     var dg15: String = ""
     var activeSig: String
     var aaChallenge: String = ""
@@ -80,6 +83,7 @@ struct SecurePayload: Codable {
     enum CodingKeys: String, CodingKey {
         case sod = "SOD"
         case dg1 = "DG1"
+        case dg2 = "DG2"
         case dg15 = "DG15"
         case activeSig = "ActiveSig"
         case aaChallenge = "AAChallenge"

@@ -18,6 +18,9 @@ final class RegisterViewModel: ObservableObject {
 
     @Published var step: Step = .preparation
     @Published var kvkkAccepted = false
+    /// "Başla" basıldıktan sonra handshake biter ekran değişene kadar true — çift basmayı + ikinci
+    /// handshake'i engeller, butonu spinner durumuna geçirir.
+    @Published var isStarting = false
     @Published var nfcStatus: String = L.t("nfc_searching")
     /// Kart kaydı/bağlantı koparsa: akışı kırmadan NFC adımında "tekrar dene" mesajı (Android UX).
     @Published var nfcRetryMessage: String? = nil
@@ -45,9 +48,12 @@ final class RegisterViewModel: ObservableObject {
 
     /// "Başla" → user key + (gerçekte) handshake; demo'da doğrudan işleme.
     func begin() {
-        guard kvkkAccepted else { return }
+        guard kvkkAccepted, !isStarting else { return }
+        isStarting = true
         AppPrefs.kvkkConsentAccepted = true
         Task {
+            // Hangi yoldan çıkarsak çıkalım (başarı/hata/erken return) butonu serbest bırak.
+            defer { isStarting = false }
             do {
                 userPubKey = try KeychainKeyStore.ensureUserKey()
             } catch {

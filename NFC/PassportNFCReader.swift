@@ -69,11 +69,15 @@ final class PassportNFCReader {
             throw NFCReadError.missingData("DG1")
         }
         let dg15Bytes = model.getDataGroup(.DG15)?.data
+        // RAW DG2 EF bytes for SOD hash verification (the extracted faceImage is re-encoded and
+        // won't match the SOD hash). (Security review Y-3.)
+        let dg2RawBytes = model.getDataGroup(.DG2)?.data
         let faceBytes = (model.getDataGroup(.DG2) as? DataGroup2)?.imageData
 
         let scanned = ScannedPassport(
             sod: Data(sodBytes),
             dg1: Data(dg1Bytes),
+            dg2Raw: (dg2RawBytes?.isEmpty == false) ? Data(dg2RawBytes!) : nil,
             dg15: (dg15Bytes?.isEmpty == false) ? Data(dg15Bytes!) : nil,
             faceImage: (faceBytes?.isEmpty == false) ? Data(faceBytes!) : nil,
             activeAuthSignature: Data(model.activeAuthenticationSignature),

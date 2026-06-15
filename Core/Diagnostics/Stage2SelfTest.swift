@@ -47,7 +47,7 @@ enum Stage2SelfTest {
 
         r.append(check("ScannedPassport → SecurePayload (base64 + PascalCase)") {
             let sp = ScannedPassport(
-                sod: Data([1, 2, 3]), dg1: Data([4, 5, 6]), dg15: Data([7]),
+                sod: Data([1, 2, 3]), dg1: Data([4, 5, 6]), dg2Raw: Data([0xD2]), dg15: Data([7]),
                 faceImage: Data([8, 9]), activeAuthSignature: Data([10]),
                 aaChallenge: Data([0xAA, 0xBB]), activeAuthPassed: true, activeAuthSupported: true,
                 documentNumber: "X", nationality: "TUR", issuingState: "TUR", documentType: "ID"
@@ -56,9 +56,11 @@ enum Stage2SelfTest {
             let json = String(decoding: try JSONEncoder().encode(payload), as: UTF8.self)
             let ok = CryptoUtils.decodeBase64(payload.sod) == Data([1, 2, 3])
                 && CryptoUtils.decodeBase64(payload.dg2Photo) == Data([8, 9])
+                && CryptoUtils.decodeBase64(payload.dg2) == Data([0xD2])
                 && payload.aaChallenge == Data([0xAA, 0xBB]).base64EncodedString()
                 && payload.userPubKey == "PUB"
                 && json.contains("\"SOD\"") && json.contains("\"DG1\"")
+                && json.contains("\"DG2\"")
                 && json.contains("\"DG15\"") && json.contains("\"ActiveSig\"")
                 && json.contains("\"AAChallenge\"") && json.contains("\"DG2_Photo\"")
                 && json.contains("\"UserPubKey\"")

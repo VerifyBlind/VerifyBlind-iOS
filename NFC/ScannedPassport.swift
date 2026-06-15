@@ -8,6 +8,9 @@ import Foundation
 struct ScannedPassport {
     let sod: Data
     let dg1: Data
+    /// RAW DG2 EF baytları — SOD hash doğrulaması için gerekli (`faceImage` re-encode edildiğinden
+    /// SOD hash'iyle eşleşmez). Android `PassportData.dg2Raw` karşılığı. (Güvenlik incelemesi Y-3.)
+    let dg2Raw: Data?
     let dg15: Data?
     let faceImage: Data?
     let activeAuthSignature: Data
@@ -28,6 +31,7 @@ struct ScannedPassport {
         SecurePayload(
             sod: sod.base64EncodedString(),
             dg1: dg1.base64EncodedString(),
+            dg2: dg2Raw?.base64EncodedString() ?? "",
             dg15: dg15?.base64EncodedString() ?? "",
             activeSig: activeAuthSignature.base64EncodedString(),
             aaChallenge: aaChallenge.base64EncodedString(),
