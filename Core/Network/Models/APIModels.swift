@@ -390,10 +390,17 @@ struct AppAttestToken: Codable {
 // MARK: - Error body
 
 /// Sunucu hata gövdesi (`{error, code, details}`) — Android `ApiError`/`parseApiError` eşdeğeri.
+/// `errorCode`: login akışında enclave'in döndürdüğü top-level `error_code` (ör. ERR_TICKET_REVOKED).
 struct APIErrorBody: Codable {
     let error: String?
     let code: String?
     let details: String?
+    let errorCode: String?
+
+    enum CodingKeys: String, CodingKey {
+        case error, code, details
+        case errorCode = "error_code"
+    }
 }
 
 // MARK: - JSONValue (keyfi JSON taşıyıcı — örn. PartnerInfoResponse.validations)

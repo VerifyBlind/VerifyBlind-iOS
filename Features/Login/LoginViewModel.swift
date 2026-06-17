@@ -99,6 +99,15 @@ final class LoginViewModel: ObservableObject {
             recordHistory()
             step = .success
         } catch {
+            if case let APIClientError.http(_, body) = error, body?.errorCode == "ERR_TICKET_REVOKED" {
+                // Ticket sunucu tarafında iptal edildi → yerel kaydı sil. Akış kapanınca RootView'in
+                // onDismiss'i AppState.refresh() çağırır → kayıtsız (kimlik ekleme) durumuna dönülür.
+                TicketStore.clear()
+                fail(title: L.t("ticket_revoked_title"),
+                     message: body?.error ?? L.t("ticket_revoked_message"),
+                     error: nil)
+                return
+            }
             fail(title: L.t("login_failed_title"),
                  message: (error as? LocalizedError)?.errorDescription ?? error.localizedDescription,
                  error: error)

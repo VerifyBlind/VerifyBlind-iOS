@@ -97,6 +97,8 @@
 "card_data_cleared" = "Kayıtlı kart silindi.";
 "card_deleted_toast" = "Kart Silindi";
 "login_failed_title" = "Giriş Başarısız";
+"ticket_revoked_title" = "Kimlik Kaydı İptal Edildi";
+"ticket_revoked_message" = "Bu kimlik kaydı iptal edildi. Lütfen kimliğinizi yeniden ekleyin.";
 "invalid_request" = "Geçersiz İstek";
 "nfc_connecting" = "Bağlanıyor...";
 "nfc_reconnecting" = "Yeniden Bağlanıyor...";

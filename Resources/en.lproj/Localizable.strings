@@ -97,6 +97,8 @@
 "card_data_cleared" = "Registered card deleted.";
 "card_deleted_toast" = "Card Deleted";
 "login_failed_title" = "Login Failed";
+"ticket_revoked_title" = "Identity Registration Revoked";
+"ticket_revoked_message" = "This identity registration has been revoked. Please re-add your ID.";
 "invalid_request" = "Invalid Request";
 "nfc_connecting" = "Connecting...";
 "nfc_reconnecting" = "Reconnecting...";
