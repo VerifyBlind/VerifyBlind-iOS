@@ -7,7 +7,7 @@ enum ChatbotServiceError: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .network:           return "Bağlantı hatası."
+        case .network:           return L.t("chatbot_network_error")   // Android chatbot_network_error ile aynı metin
         case .http(let s, let m): return "Sunucu hatası (\(s)): \(m ?? "")"
         case .decoding:          return "Yanıt çözümlenemedi."
         }

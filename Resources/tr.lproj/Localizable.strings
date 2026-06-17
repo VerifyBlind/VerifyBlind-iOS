@@ -269,10 +269,19 @@
 "error_data_prefix" = "Hata Detayı: ";
 "error_unknown" = "Bilinmeyen hata";
 "error_network_timeout" = "Ağ veya zaman aşımı hatası (%@)";
+// Kanonik "bağlantı yok" mesajı (transport hatası, HTTP cevabı yok). Android error_connection_generic
+// metniyle AYNI olmalı. 5xx'ten (error_server_temporary) ayrı: bu gerçekten kullanıcı tarafı.
+"error_connection_generic" = "İnternet bağlantısına ulaşılamadı. Lütfen bağlantınızı kontrol edip tekrar deneyin.";
+// Chatbot'un kısa, sohbet tonundaki bağlantı mesajı — Android chatbot_network_error ile aynı olmalı.
+"chatbot_network_error" = "Bağlantı sorunu. Lütfen tekrar deneyin.";
 "error_demo_server" = "Demo kayıt sırasında bir sunucu hatası oluştu.";
 "error_rate_limited_minutes" = "Çok fazla deneme yapıldı. Lütfen %d dakika sonra tekrar deneyin.";
 "error_rate_limited_seconds" = "Çok fazla deneme yapıldı. Lütfen %d saniye sonra tekrar deneyin.";
 "error_rate_limited_generic" = "Çok fazla deneme yapıldı. Lütfen biraz sonra tekrar deneyin.";
+// Sunucu (5xx) hataları. Bunlar sunucumuz/altyapımız kaynaklıdır, kullanıcının kendi bağlantısından
+// gelmez (bağlantı sorunu .network hatası olarak ayrı yakalanır).
+"error_server_temporary" = "Tarafımızda geçici bir sorun oluştu. Lütfen birkaç dakika sonra tekrar deneyin.";
+"error_service_unavailable" = "Hizmetimiz şu anda geçici olarak kullanılamıyor — bakım veya yoğunluk nedeniyle olabilir. Lütfen birkaç dakika sonra tekrar deneyin.";
 "error_demo_key_not_ready" = "Kullanıcı anahtarı hazır değil.";
 "security_status_verified" = "✅ Donanım Tarafından Onaylı";
 "security_guard_active" = "DONANIM KORUMASI AKTİF";

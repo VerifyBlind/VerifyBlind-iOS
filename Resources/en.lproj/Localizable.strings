@@ -269,10 +269,19 @@
 "error_data_prefix" = "Error Details: ";
 "error_unknown" = "Unknown error";
 "error_network_timeout" = "Network or timeout error (%@)";
+// Canonical "no connection" message (transport failure, no HTTP response). Must match the Android
+// error_connection_generic text. Distinct from 5xx (error_server_temporary): this IS the user's side.
+"error_connection_generic" = "Couldn't reach the internet. Please check your connection and try again.";
+// Chatbot's shorter, conversational connection message — must match Android chatbot_network_error.
+"chatbot_network_error" = "Network issue. Please try again.";
 "error_demo_server" = "A server error occurred during demo registration.";
 "error_rate_limited_minutes" = "Too many attempts. Please try again in %d minutes.";
 "error_rate_limited_seconds" = "Too many attempts. Please try again in %d seconds.";
 "error_rate_limited_generic" = "Too many attempts. Please try again shortly.";
+// Server-side (5xx) errors. These come from our server/infrastructure, never from the user's own
+// connection (a connectivity problem surfaces as a .network error, handled separately).
+"error_server_temporary" = "We're having a temporary problem on our side. Please try again in a few minutes.";
+"error_service_unavailable" = "Our service is temporarily unavailable — this may be due to maintenance or high load. Please try again in a few minutes.";
 "error_demo_key_not_ready" = "User key not ready.";
 "security_status_verified" = "✅ Hardware Verified";
 "security_guard_active" = "HARDWARE PROTECTION ACTIVE";
