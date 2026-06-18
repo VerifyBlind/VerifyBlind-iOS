@@ -152,7 +152,7 @@ final class APIClient {
         if let text = String(data: data, encoding: .utf8),
            text.count < 500,
            !text.lowercased().contains("<html") {
-            return .http(status, APIErrorBody(error: text.trimmingCharacters(in: .whitespacesAndNewlines), code: nil, details: nil))
+            return .http(status, APIErrorBody(error: text.trimmingCharacters(in: .whitespacesAndNewlines), code: nil, details: nil, errorCode: nil))
         }
         return .http(status, nil)
     }
