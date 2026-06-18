@@ -193,7 +193,7 @@
 "scope_user_id" = "A permanent recognition code unique to you";
 "scope_user_id_whatis" = "What is this?";
 "scope_user_id_detail_title" = "What is this code?";
-"scope_user_id_detail_body" = "VerifyBlind creates a permanent recognition code that is unique to this organization.\n\n•  Your ID number is NEVER shared.\n•  This organization can recognize you on future logins; other organizations cannot.\n•  It stays the same even if you renew your ID card.\n\nThis way you can keep proving you are the same person — and the organization can keep recognizing you — without ever revealing your identity number.";
+"scope_user_id_detail_body" = "VerifyBlind creates a permanent recognition code unique to this organization. It is actually made of a few codes that work together, so the organization can reliably recognize you again:\n\n•  one from your ID number (if your ID has one),\n•  one from your name and birth details — unchanged even if you renew your card,\n•  one from your ID document — the same document means the same person.\n\nGuarantees:\n•  Your ID number and identity details are NEVER shared — only irreversible codes are.\n•  The codes are unique to this organization; others cannot link you with them.\n•  Even if a country later adds or removes its ID number, or you renew your card, you can keep proving you are the same person.";
 "scope_age" = "Age verification (%1$@)";
 "delete_confirm_title" = "Are you sure you want\nto remove your identity?";
 "delete_confirm_desc" = "\nThis action cannot be undone.\n\nYou will need to add your identity again to perform verification.\n\nDo you confirm removing your identity from your device?";

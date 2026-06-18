@@ -40,15 +40,12 @@ struct ConsentBottomSheet: View {
 
             // Doğrulanacak bilgiler — Android: madde işareti "•", validations'tan türetilir.
             VStack(alignment: .leading, spacing: 8) {
-                ForEach(scopeItems, id: \.self) { scope in
-                    Text("•  \(scope)")
+                // user_id maddesi + "Bu nedir?" — link HEMEN onun bitişinde (en altta değil).
+                if hasUserId {
+                    Text("•  \(L.t("scope_user_id"))")
                         .font(.system(size: 14))
                         .foregroundColor(Theme.onSurfaceVariant)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                // "Bu nedir?" — user_id istendiğinde kalıcı tanıma kodunun ne olduğunu (TC No
-                // paylaşılmaz, partner'a özel, kart yenilense de sabit) sade dille açıklar.
-                if hasUserId {
                     Button {
                         privacyDoc = PrivacyDoc(text: L.t("scope_user_id_detail_body"),
                                                 title: L.t("scope_user_id_detail_title"))
@@ -58,7 +55,14 @@ struct ConsentBottomSheet: View {
                             .foregroundColor(Theme.themePrimary)
                             .underline()
                     }
-                    .padding(.top, 2)
+                    .padding(.leading, 18)  // "•  " genişliği kadar — madde metniyle hizalı
+                }
+                // Diğer maddeler (age vb.) — user_id zaten yukarıda ayrı render edildi.
+                ForEach(otherScopeItems, id: \.self) { scope in
+                    Text("•  \(scope)")
+                        .font(.system(size: 14))
+                        .foregroundColor(Theme.onSurfaceVariant)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 // Aydınlatma Metnini Oku (altı çizili mavi link → /api/kvkk/privacy-notice)
                 Button { fetchPrivacy() } label: {
@@ -161,6 +165,11 @@ struct ConsentBottomSheet: View {
     private var hasUserId: Bool {
         if case .object(let obj)? = info.validations { return obj["user_id"] != nil }
         return false
+    }
+
+    /// user_id dışındaki maddeler (user_id ayrı render edilir; link onun bitişinde gösterilir).
+    private var otherScopeItems: [String] {
+        scopeItems.filter { $0 != L.t("scope_user_id") }
     }
 
     private func jsonString(_ v: JSONValue) -> String {
