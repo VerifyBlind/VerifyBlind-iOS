@@ -69,6 +69,7 @@ private struct QRScanStepView: View {
 
     @StateObject private var camera = CameraController(position: .back)
     @State private var scanner = QRScanner()
+    @State private var zoom: CGFloat = 1.0
 
     var body: some View {
         ZStack {
@@ -101,6 +102,16 @@ private struct QRScanStepView: View {
                         .frame(width: 240, height: 240)
                     Spacer()
                 }
+
+                // Zoom butonları — sağ alt köşe (Android paritesi)
+                VStack(spacing: 8) {
+                    zoomButton(1.5)
+                    zoomButton(2.0)
+                    zoomButton(3.0)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                .padding(.trailing, 16)
+                .padding(.bottom, 40)
             }
         }
         .onAppear {
@@ -113,5 +124,29 @@ private struct QRScanStepView: View {
             camera.start()
         }
         .onDisappear { camera.stop() }
+    }
+
+    /// Sabit zoom seviyesi butonu (1.5x/2x/3x). Aynı orana tekrar basınca 1x'e döner.
+    private func zoomButton(_ factor: CGFloat) -> some View {
+        let label = factor == 1.5 ? "1.5x" : "\(Int(factor))x"
+        let active = abs(zoom - factor) < 0.01
+        return Button {
+            let target: CGFloat = active ? 1.0 : factor
+            zoom = target
+            camera.setZoom(target)
+        } label: {
+            Text(label)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(width: 52, height: 40)
+                .background(
+                    active ? Theme.themePrimary : Color.black.opacity(0.5),
+                    in: RoundedRectangle(cornerRadius: 20)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(.white.opacity(active ? 0.9 : 0.3), lineWidth: active ? 1.5 : 1)
+                )
+        }
     }
 }

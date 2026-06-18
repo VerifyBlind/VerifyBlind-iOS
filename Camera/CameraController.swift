@@ -21,6 +21,7 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
     private let videoQueue = DispatchQueue(label: "com.verifyblind.camera.video")
     private let output = AVCaptureVideoDataOutput()
     private var configured = false
+    private var videoDevice: AVCaptureDevice?
 
     /// Her kare için çağrılır (video kuyruğunda): (pixelBuffer, Vision orientation).
     var onFrame: ((CVPixelBuffer, CGImagePropertyOrientation) -> Void)?
@@ -60,6 +61,22 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
             guard let self, self.session.isRunning else { return }
             self.session.stopRunning()
             DispatchQueue.main.async { self.isRunning = false }
+        }
+    }
+
+    /// Dijital zoom oranını ayarlar (QR tarama 1.5x/2x/3x butonları — Android `CameraManager.setZoom` paritesi).
+    /// 1.0 = tam geniş açı. Cihazın min/max sınırlarına ve makul bir tavana (5x) kırpılır.
+    func setZoom(_ factor: CGFloat) {
+        sessionQueue.async { [weak self] in
+            guard let self, let device = self.videoDevice else { return }
+            do {
+                try device.lockForConfiguration()
+                let maxZoom = min(device.maxAvailableVideoZoomFactor, 5.0)
+                device.videoZoomFactor = max(device.minAvailableVideoZoomFactor, min(factor, maxZoom))
+                device.unlockForConfiguration()
+            } catch {
+                Log.error("CameraController: zoom ayarlanamadı: \(error.localizedDescription)", category: .liveness)
+            }
         }
     }
 
@@ -104,6 +121,7 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
             return
         }
         session.addInput(input)
+        videoDevice = device
         configureDevice(device)
 
         output.setSampleBufferDelegate(self, queue: videoQueue)
