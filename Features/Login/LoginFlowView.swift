@@ -67,9 +67,10 @@ private struct QRScanStepView: View {
     let onResult: (String) -> Void
     let onCancel: () -> Void
 
-    @StateObject private var camera = CameraController(position: .back)
+    @StateObject private var camera = CameraController(position: .back, highestResolution: true)
     @State private var scanner = QRScanner()
     @State private var zoom: CGFloat = 1.0
+    @State private var scanLineDown = false
 
     var body: some View {
         ZStack {
@@ -98,20 +99,38 @@ private struct QRScanStepView: View {
                         .padding(10).background(.black.opacity(0.5), in: Capsule())
 
                     Spacer()
-                    RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.9), lineWidth: 3)
-                        .frame(width: 240, height: 240)
+
+                    // Mavi köşe çerçevesi + tarama çizgisi animasyonu (Android paritesi)
+                    ZStack {
+                        ScanCornersShape()
+                            .stroke(Color(hex: "#2979FF"),
+                                    style: StrokeStyle(lineWidth: 4, lineCap: .square))
+                            .frame(width: 240, height: 240)
+
+                        Rectangle()
+                            .fill(LinearGradient(
+                                colors: [.clear, Color(hex: "#2979FF"), .clear],
+                                startPoint: .leading, endPoint: .trailing))
+                            .frame(width: 232, height: 3)
+                            .offset(y: scanLineDown ? 116 : -116)
+                    }
+                    .frame(width: 240, height: 240)
+
                     Spacer()
+
+                    // Marka görseli — alt orta, ekran genişliğinin 1/4'ü (Android paritesi)
+                    Image("logo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: UIScreen.main.bounds.width / 4)
+                        .padding(.bottom, 28)
                 }
 
-                // Zoom butonları — sağ alt köşe (Android paritesi)
-                VStack(spacing: 8) {
-                    zoomButton(1.5)
-                    zoomButton(2.0)
-                    zoomButton(3.0)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                .padding(.trailing, 16)
-                .padding(.bottom, 40)
+                // Zoom butonu — sağ alt köşe (Android paritesi)
+                zoomButton(2.0)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .padding(.trailing, 16)
+                    .padding(.bottom, 40)
             }
         }
         .onAppear {
@@ -122,13 +141,16 @@ private struct QRScanStepView: View {
             }
             camera.onFrame = { buf, o in scanner.process(buf, orientation: o) }
             camera.start()
+            withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
+                scanLineDown = true
+            }
         }
         .onDisappear { camera.stop() }
     }
 
-    /// Sabit zoom seviyesi butonu (1.5x/2x/3x). Aynı orana tekrar basınca 1x'e döner.
+    /// Sabit zoom seviyesi butonu (2x). Aynı orana tekrar basınca 1x'e döner.
     private func zoomButton(_ factor: CGFloat) -> some View {
-        let label = factor == 1.5 ? "1.5x" : "\(Int(factor))x"
+        let label = "\(Int(factor))x"
         let active = abs(zoom - factor) < 0.01
         return Button {
             let target: CGFloat = active ? 1.0 : factor
@@ -148,5 +170,38 @@ private struct QRScanStepView: View {
                         .stroke(.white.opacity(active ? 0.9 : 0.3), lineWidth: active ? 1.5 : 1)
                 )
         }
+    }
+}
+
+/// QR tarama çerçevesi köşe braketleri — Android `view/ScanFrameView` eşdeğeri.
+/// Tam dikdörtgen yerine 4 köşeyi (her biri L şeklinde) çizer.
+private struct ScanCornersShape: Shape {
+    var cornerLength: CGFloat = 28
+
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let cl = cornerLength
+
+        // Üst-sol
+        p.move(to: CGPoint(x: rect.minX, y: rect.minY + cl))
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.minX + cl, y: rect.minY))
+
+        // Üst-sağ
+        p.move(to: CGPoint(x: rect.maxX - cl, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + cl))
+
+        // Alt-sağ
+        p.move(to: CGPoint(x: rect.maxX, y: rect.maxY - cl))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.maxX - cl, y: rect.maxY))
+
+        // Alt-sol
+        p.move(to: CGPoint(x: rect.minX + cl, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - cl))
+
+        return p
     }
 }

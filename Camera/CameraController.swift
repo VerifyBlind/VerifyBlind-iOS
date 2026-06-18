@@ -12,6 +12,9 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
 
     let session = AVCaptureSession()
     let position: AVCaptureDevice.Position
+    /// QR tarama gibi senaryolarda mümkün olan en yüksek çözünürlüğü ister (uzak/küçük QR).
+    /// Liveness (ön kamera) embedding paritesi için varsayılan 1080p korunur.
+    private let highestResolution: Bool
 
     @Published var permissionDenied = false
     @Published var configurationFailed = false
@@ -26,8 +29,9 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
     /// Her kare için çağrılır (video kuyruğunda): (pixelBuffer, Vision orientation).
     var onFrame: ((CVPixelBuffer, CGImagePropertyOrientation) -> Void)?
 
-    init(position: AVCaptureDevice.Position) {
+    init(position: AVCaptureDevice.Position, highestResolution: Bool = false) {
         self.position = position
+        self.highestResolution = highestResolution
         super.init()
     }
 
@@ -100,9 +104,11 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
 
     private func configure() {
         session.beginConfiguration()
-        // En yüksek analiz çözünürlüğü (Android 1920×1080 paritesi; landmark/embedding hassasiyeti).
-        // Cihaz desteklemiyorsa .high'a düş.
-        if session.canSetSessionPreset(.hd1920x1080) {
+        // QR taramada mümkün olan en yüksek çözünürlük (uzak/küçük QR); desteklenmezse 1080p'ye düş.
+        // Liveness (ön kamera) için 1920×1080 (Android paritesi; landmark/embedding hassasiyeti).
+        if highestResolution, session.canSetSessionPreset(.hd4K3840x2160) {
+            session.sessionPreset = .hd4K3840x2160
+        } else if session.canSetSessionPreset(.hd1920x1080) {
             session.sessionPreset = .hd1920x1080
         } else {
             session.sessionPreset = .high
