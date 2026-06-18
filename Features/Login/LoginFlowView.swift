@@ -67,12 +67,11 @@ private struct QRScanStepView: View {
     let onResult: (String) -> Void
     let onCancel: () -> Void
 
-    @StateObject private var camera = CameraController(position: .back, highestResolution: true)
+    // QR kamerası varsayılan 2x açılır (CameraController defaultZoom). `zoom` butonun seçili durumu için.
+    @StateObject private var camera = CameraController(position: .back, highestResolution: true, defaultZoom: 2.0)
     @State private var scanner = QRScanner()
-    @State private var zoom: CGFloat = 1.0
+    @State private var zoom: CGFloat = 2.0
     @State private var scanLineDown = false
-    @State private var autoZoom = true
-    @State private var lastAutoZoomAt = Date.distantPast
 
     var body: some View {
         ZStack {
@@ -125,22 +124,14 @@ private struct QRScanStepView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: UIScreen.main.bounds.width / 5)
-                        .padding(.bottom, 28)
+                        .padding(.bottom, 64)
                 }
 
-                // Zoom kontrolleri — sağ alt köşe. AZ = otomatik zoom (varsayılan açık).
-                VStack(spacing: 8) {
-                    zoomPill("2x", active: abs(zoom - 2.0) < 0.01 && !autoZoom) {
-                        let target: CGFloat = abs(zoom - 2.0) < 0.01 ? 1.0 : 2.0
-                        zoom = target
-                        autoZoom = false   // manuel zoom → AZ kapanır
-                        camera.setZoom(target)
-                    }
-                    zoomPill("AZ", active: autoZoom) {
-                        autoZoom.toggle()  // tıkla → kapat (manuel 1x) / tekrar tıkla → aç
-                        zoom = 1.0
-                        camera.setZoom(1.0)
-                    }
+                // Zoom butonu — sağ alt köşe (2x, varsayılan seçili). Tekrar basınca 1x.
+                zoomPill("2x", active: abs(zoom - 2.0) < 0.01) {
+                    let target: CGFloat = abs(zoom - 2.0) < 0.01 ? 1.0 : 2.0
+                    zoom = target
+                    camera.setZoom(target)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                 .padding(.trailing, 16)
@@ -153,7 +144,6 @@ private struct QRScanStepView: View {
                 Log.info("QR okundu (login)", category: .flow)
                 onResult(payload)
             }
-            scanner.onUndecodedBarcode = { fraction in handleAutoZoom(fraction) }
             camera.onFrame = { buf, o in scanner.process(buf, orientation: o) }
             camera.start()
             withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
@@ -163,22 +153,7 @@ private struct QRScanStepView: View {
         .onDisappear { camera.stop() }
     }
 
-    /// Otomatik zoom: çözülemeyen bir QR çerçevenin %50'sinden küçükse kademeli yakınlaşır
-    /// (Android ML Kit ZoomSuggestion paritesi). Saniyede ~2 kez uygulanır, sadece içeri zoom yapar.
-    private func handleAutoZoom(_ fraction: CGFloat) {
-        guard autoZoom, fraction > 0.02, fraction < 0.5 else { return }
-        let now = Date()
-        guard now.timeIntervalSince(lastAutoZoomAt) > 0.4 else { return }
-        lastAutoZoomAt = now
-        // QR'ı çerçevenin ~%60'ına getirecek hedef faktör.
-        let target = camera.currentZoomFactor * (0.6 / fraction)
-        let clamped = min(max(target, 1.0), camera.maxZoomFactor)
-        if clamped > camera.currentZoomFactor + 0.05 {
-            camera.setZoom(clamped)
-        }
-    }
-
-    /// Sağ alt köşe zoom pill butonu (2x / AZ).
+    /// Sağ alt köşe zoom pill butonu (2x).
     private func zoomPill(_ label: String, active: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)

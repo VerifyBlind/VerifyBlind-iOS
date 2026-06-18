@@ -15,6 +15,8 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
     /// QR tarama gibi senaryolarda mümkün olan en yüksek çözünürlüğü ister (uzak/küçük QR).
     /// Liveness (ön kamera) embedding paritesi için varsayılan 1080p korunur.
     private let highestResolution: Bool
+    /// Kamera yapılandırılınca uygulanan başlangıç zoom faktörü (QR ekranı 2x açılır).
+    private let defaultZoom: CGFloat
 
     @Published var permissionDenied = false
     @Published var configurationFailed = false
@@ -26,18 +28,13 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
     private var configured = false
     private var videoDevice: AVCaptureDevice?
 
-    /// Uygulanan en son zoom faktörü (auto-zoom hesaplaması için).
-    private(set) var currentZoomFactor: CGFloat = 1.0
-
-    /// Cihazın izin verdiği üst zoom sınırı (makul 8x tavanıyla; auto-zoom buraya kadar çıkar).
-    var maxZoomFactor: CGFloat { min(videoDevice?.maxAvailableVideoZoomFactor ?? 5.0, 8.0) }
-
     /// Her kare için çağrılır (video kuyruğunda): (pixelBuffer, Vision orientation).
     var onFrame: ((CVPixelBuffer, CGImagePropertyOrientation) -> Void)?
 
-    init(position: AVCaptureDevice.Position, highestResolution: Bool = false) {
+    init(position: AVCaptureDevice.Position, highestResolution: Bool = false, defaultZoom: CGFloat = 1.0) {
         self.position = position
         self.highestResolution = highestResolution
+        self.defaultZoom = defaultZoom
         super.init()
     }
 
@@ -82,10 +79,8 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
             do {
                 try device.lockForConfiguration()
                 let maxZoom = min(device.maxAvailableVideoZoomFactor, 8.0)
-                let applied = max(device.minAvailableVideoZoomFactor, min(factor, maxZoom))
-                device.videoZoomFactor = applied
+                device.videoZoomFactor = max(device.minAvailableVideoZoomFactor, min(factor, maxZoom))
                 device.unlockForConfiguration()
-                DispatchQueue.main.async { self.currentZoomFactor = applied }
             } catch {
                 Log.error("CameraController: zoom ayarlanamadı: \(error.localizedDescription)", category: .liveness)
             }
@@ -184,6 +179,11 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
             if device.activeFormat.isVideoHDRSupported {
                 device.automaticallyAdjustsVideoHDREnabled = false
                 device.isVideoHDREnabled = false
+            }
+            // Başlangıç zoom'u (QR ekranı 2x açılır) — cihaz sınırlarına kırp.
+            if defaultZoom > 1.0 {
+                let maxZoom = min(device.maxAvailableVideoZoomFactor, 8.0)
+                device.videoZoomFactor = max(device.minAvailableVideoZoomFactor, min(defaultZoom, maxZoom))
             }
             device.unlockForConfiguration()
         } catch {
