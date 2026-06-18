@@ -190,7 +190,10 @@
 "consent_section_shared" = "DOĞRULANACAK BİLGİLER";
 "consent_kvkk_text" = "Aydınlatma metnini okudum, kişisel verilerimin işlenmesini onaylıyorum.";
 "consent_default_scope" = "Kimlik Doğrulama Özeti";
-"scope_user_id" = "Size özel oluşturulmuş kod";
+"scope_user_id" = "Size özel kalıcı tanıma kodu";
+"scope_user_id_whatis" = "Bu nedir?";
+"scope_user_id_detail_title" = "Bu kod nedir?";
+"scope_user_id_detail_body" = "VerifyBlind, yalnızca bu kuruma özel, size ait kalıcı bir tanıma kodu üretir.\n\n•  TC Kimlik Numaranız ASLA paylaşılmaz.\n•  Bu kurum sizi sonraki girişlerinizde tanıyabilir; başka kurumlar tanıyamaz.\n•  Kimlik kartınızı yenileseniz de aynı kalır.\n\nBöylece kimlik numaranız hiç paylaşılmadan, siz aynı kişi olduğunuzu kanıtlamaya, kurum da sizi tanımaya devam edebilir.";
 "scope_age" = "Yaş doğrulaması (%1$@)";
 "delete_confirm_title" = "Kimliği silmek\nistediğine emin misin?";
 "delete_confirm_desc" = "\nBu işlem geri alınamaz.\n\nDoğrulama yapabilmek için kimliğini tekrar eklemen gerekecektir.\n\nKimliğinin cihazından silinmesini onaylıyor musun?";

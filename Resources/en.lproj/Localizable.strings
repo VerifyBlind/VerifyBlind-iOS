@@ -190,7 +190,10 @@
 "consent_section_shared" = "INFORMATION TO BE VERIFIED";
 "consent_kvkk_text" = "I have read the disclosure text, I approve the processing of my personal data.";
 "consent_default_scope" = "Identity Verification Summary";
-"scope_user_id" = "Unique code created for you";
+"scope_user_id" = "A permanent recognition code unique to you";
+"scope_user_id_whatis" = "What is this?";
+"scope_user_id_detail_title" = "What is this code?";
+"scope_user_id_detail_body" = "VerifyBlind creates a permanent recognition code that is unique to this organization.\n\n•  Your ID number is NEVER shared.\n•  This organization can recognize you on future logins; other organizations cannot.\n•  It stays the same even if you renew your ID card.\n\nThis way you can keep proving you are the same person — and the organization can keep recognizing you — without ever revealing your identity number.";
 "scope_age" = "Age verification (%1$@)";
 "delete_confirm_title" = "Are you sure you want\nto remove your identity?";
 "delete_confirm_desc" = "\nThis action cannot be undone.\n\nYou will need to add your identity again to perform verification.\n\nDo you confirm removing your identity from your device?";

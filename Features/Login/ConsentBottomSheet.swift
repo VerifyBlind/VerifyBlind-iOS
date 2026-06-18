@@ -46,6 +46,20 @@ struct ConsentBottomSheet: View {
                         .foregroundColor(Theme.onSurfaceVariant)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                // "Bu nedir?" — user_id istendiğinde kalıcı tanıma kodunun ne olduğunu (TC No
+                // paylaşılmaz, partner'a özel, kart yenilense de sabit) sade dille açıklar.
+                if hasUserId {
+                    Button {
+                        privacyDoc = PrivacyDoc(text: L.t("scope_user_id_detail_body"),
+                                                title: L.t("scope_user_id_detail_title"))
+                    } label: {
+                        Text(L.t("scope_user_id_whatis"))
+                            .font(.system(size: 13))
+                            .foregroundColor(Theme.themePrimary)
+                            .underline()
+                    }
+                    .padding(.top, 2)
+                }
                 // Aydınlatma Metnini Oku (altı çizili mavi link → /api/kvkk/privacy-notice)
                 Button { fetchPrivacy() } label: {
                     Text(L.t("read_privacy_notice"))
@@ -102,7 +116,7 @@ struct ConsentBottomSheet: View {
         .clipShape(RoundedCorners(radius: 24, corners: [.topLeft, .topRight]))
         // .sheet(item:) — metni item içinde taşır; isPresented'in async set'te bayat snapshot
         // yakalama yarışını (boş içerik) engeller.
-        .sheet(item: $privacyDoc) { doc in PrivacyNoticeView(text: doc.text) }
+        .sheet(item: $privacyDoc) { doc in PrivacyNoticeView(text: doc.text, title: doc.title) }
     }
 
     // Logo VARSA: şeffaf zemin (sadece görsel). YOKSA: #1287BE + baş harfler (Android paritesi).
@@ -141,6 +155,12 @@ struct ConsentBottomSheet: View {
         }
         if items.isEmpty { items.append(L.t("consent_default_scope")) }
         return items
+    }
+
+    /// user_id istendi mi — "Bu nedir?" detay linkini göstermek için.
+    private var hasUserId: Bool {
+        if case .object(let obj)? = info.validations { return obj["user_id"] != nil }
+        return false
     }
 
     private func jsonString(_ v: JSONValue) -> String {
@@ -182,14 +202,17 @@ struct ConsentBottomSheet: View {
 }
 
 /// .sheet(item:) için metni taşıyan Identifiable sarmalayıcı (bayat-snapshot yarışını önler).
+/// Aydınlatma metni VEYA "Bu kod nedir?" detayı için ortak; başlık opsiyonel (varsayılan aydınlatma metni).
 struct PrivacyDoc: Identifiable {
     let id = UUID()
     let text: String
+    var title: String? = nil
 }
 
-/// Aydınlatma metni görüntüleyici (Android AlertDialog eşdeğeri).
+/// Aydınlatma metni / bilgi görüntüleyici (Android AlertDialog eşdeğeri).
 struct PrivacyNoticeView: View {
     let text: String
+    var title: String? = nil
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -201,7 +224,7 @@ struct PrivacyNoticeView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(16)
             }
-            .navigationTitle(L.t("privacy_notice_title"))
+            .navigationTitle(title ?? L.t("privacy_notice_title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button(L.t("btn_close")) { dismiss() } } }
         }
