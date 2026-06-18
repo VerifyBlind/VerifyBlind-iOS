@@ -1,5 +1,6 @@
 import AVFoundation
 import CoreVideo
+import CoreMedia
 import Combine
 import ImageIO
 
@@ -12,9 +13,9 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
 
     let session = AVCaptureSession()
     let position: AVCaptureDevice.Position
-    /// QR tarama gibi senaryolarda mümkün olan en yüksek çözünürlüğü ister (uzak/küçük QR).
-    /// Liveness (ön kamera) embedding paritesi için varsayılan 1080p korunur.
-    private let highestResolution: Bool
+    /// QR ekranı için: çözünürlüğü 1080p'ye sabitle + bu çözünürlükte mümkün olan en yüksek fps.
+    /// Liveness (ön kamera) embedding paritesi için 1080p@30 preset korunur (false).
+    private let highFrameRate: Bool
     /// Kamera yapılandırılınca uygulanan başlangıç zoom faktörü (QR ekranı 2x açılır).
     private let defaultZoom: CGFloat
 
@@ -31,9 +32,9 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
     /// Her kare için çağrılır (video kuyruğunda): (pixelBuffer, Vision orientation).
     var onFrame: ((CVPixelBuffer, CGImagePropertyOrientation) -> Void)?
 
-    init(position: AVCaptureDevice.Position, highestResolution: Bool = false, defaultZoom: CGFloat = 1.0) {
+    init(position: AVCaptureDevice.Position, highFrameRate: Bool = false, defaultZoom: CGFloat = 1.0) {
         self.position = position
-        self.highestResolution = highestResolution
+        self.highFrameRate = highFrameRate
         self.defaultZoom = defaultZoom
         super.init()
     }
@@ -107,15 +108,6 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
 
     private func configure() {
         session.beginConfiguration()
-        // QR taramada mümkün olan en yüksek çözünürlük (uzak/küçük QR); desteklenmezse 1080p'ye düş.
-        // Liveness (ön kamera) için 1920×1080 (Android paritesi; landmark/embedding hassasiyeti).
-        if highestResolution, session.canSetSessionPreset(.hd4K3840x2160) {
-            session.sessionPreset = .hd4K3840x2160
-        } else if session.canSetSessionPreset(.hd1920x1080) {
-            session.sessionPreset = .hd1920x1080
-        } else {
-            session.sessionPreset = .high
-        }
 
         guard let device = AVCaptureDevice.DiscoverySession(
             deviceTypes: [.builtInWideAngleCamera],
@@ -131,6 +123,18 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
         }
         session.addInput(input)
         videoDevice = device
+
+        // Çözünürlük: 1080p. QR'da bu çözünürlükte max fps için manuel format (preset .inputPriority);
+        // uygun format yoksa veya liveness'ta preset tabanlı 1080p@30 korunur.
+        if highFrameRate, let format = best1080pHighFpsFormat(device) {
+            session.sessionPreset = .inputPriority
+            configureHighFrameRate(device, format: format)
+        } else if session.canSetSessionPreset(.hd1920x1080) {
+            session.sessionPreset = .hd1920x1080
+        } else {
+            session.sessionPreset = .high
+        }
+
         configureDevice(device)
 
         output.setSampleBufferDelegate(self, queue: videoQueue)
@@ -188,6 +192,38 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
             device.unlockForConfiguration()
         } catch {
             Log.error("CameraController: cihaz yapılandırılamadı: \(error.localizedDescription)", category: .liveness)
+        }
+    }
+
+    /// 1080p (1920×1080) formatları arasında 60 fps'i destekleyen, 60'a en yakın olanı seçer
+    /// (120/240 slo-mo formatlarından kaçınır — çok kısa pozlama taramaya zarar verir). Yoksa nil.
+    private func best1080pHighFpsFormat(_ device: AVCaptureDevice) -> AVCaptureDevice.Format? {
+        var best: AVCaptureDevice.Format?
+        var bestScore = Double.greatestFiniteMagnitude
+        for format in device.formats {
+            let dims = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+            guard dims.width == 1920, dims.height == 1080 else { continue }
+            let maxFps = format.videoSupportedFrameRateRanges.map { $0.maxFrameRate }.max() ?? 0
+            guard maxFps >= 30 else { continue }
+            // 60'a yakınlık skoru (küçük = iyi): >=60 ise fazlalık, <60 ise büyük ceza.
+            let score = maxFps >= 60 ? (maxFps - 60) : (1000 - maxFps)
+            if score < bestScore { bestScore = score; best = format }
+        }
+        return best
+    }
+
+    /// Seçili 1080p formatını uygular ve fps'i (≤60) en yükseğe çıkarır. Alt sınır 15'e kadar
+    /// adaptif bırakılır → iyi ışıkta max fps, düşük ışıkta pozlamayı uzatabilir.
+    private func configureHighFrameRate(_ device: AVCaptureDevice, format: AVCaptureDevice.Format) {
+        do {
+            try device.lockForConfiguration()
+            device.activeFormat = format
+            let maxFps = min(format.videoSupportedFrameRateRanges.map { $0.maxFrameRate }.max() ?? 30, 60)
+            device.activeVideoMinFrameDuration = CMTime(value: 1, timescale: Int32(maxFps))
+            device.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: 15)
+            device.unlockForConfiguration()
+        } catch {
+            Log.error("CameraController: yüksek fps ayarlanamadı: \(error.localizedDescription)", category: .liveness)
         }
     }
 

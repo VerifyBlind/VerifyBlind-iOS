@@ -67,8 +67,8 @@ private struct QRScanStepView: View {
     let onResult: (String) -> Void
     let onCancel: () -> Void
 
-    // QR kamerası varsayılan 2x açılır (CameraController defaultZoom). `zoom` butonun seçili durumu için.
-    @StateObject private var camera = CameraController(position: .back, highestResolution: true, defaultZoom: 2.0)
+    // QR kamerası 1080p + max fps, varsayılan 2x açılır. `zoom` butonun seçili durumu için.
+    @StateObject private var camera = CameraController(position: .back, highFrameRate: true, defaultZoom: 2.0)
     @State private var scanner = QRScanner()
     @State private var zoom: CGFloat = 2.0
     @State private var scanLineDown = false
