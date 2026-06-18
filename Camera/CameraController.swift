@@ -26,6 +26,12 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
     private var configured = false
     private var videoDevice: AVCaptureDevice?
 
+    /// Uygulanan en son zoom faktörü (auto-zoom hesaplaması için).
+    private(set) var currentZoomFactor: CGFloat = 1.0
+
+    /// Cihazın izin verdiği üst zoom sınırı (makul 8x tavanıyla; auto-zoom buraya kadar çıkar).
+    var maxZoomFactor: CGFloat { min(videoDevice?.maxAvailableVideoZoomFactor ?? 5.0, 8.0) }
+
     /// Her kare için çağrılır (video kuyruğunda): (pixelBuffer, Vision orientation).
     var onFrame: ((CVPixelBuffer, CGImagePropertyOrientation) -> Void)?
 
@@ -75,9 +81,11 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
             guard let self, let device = self.videoDevice else { return }
             do {
                 try device.lockForConfiguration()
-                let maxZoom = min(device.maxAvailableVideoZoomFactor, 5.0)
-                device.videoZoomFactor = max(device.minAvailableVideoZoomFactor, min(factor, maxZoom))
+                let maxZoom = min(device.maxAvailableVideoZoomFactor, 8.0)
+                let applied = max(device.minAvailableVideoZoomFactor, min(factor, maxZoom))
+                device.videoZoomFactor = applied
                 device.unlockForConfiguration()
+                DispatchQueue.main.async { self.currentZoomFactor = applied }
             } catch {
                 Log.error("CameraController: zoom ayarlanamadı: \(error.localizedDescription)", category: .liveness)
             }

@@ -96,7 +96,7 @@
 "operation_cancelled_toast" = "Cancelled";
 "card_data_cleared" = "Registered card deleted.";
 "card_deleted_toast" = "Card Deleted";
-"login_failed_title" = "Login Failed";
+"login_failed_title" = "Verification Failed";
 "ticket_revoked_title" = "Identity Registration Revoked";
 "ticket_revoked_message" = "This identity registration has been revoked. Please re-add your ID.";
 "invalid_request" = "Invalid Request";
@@ -201,7 +201,7 @@
 "settings_biometric_title" = "Biometric Lock";
 "settings_biometric_desc" = "Biometric verification at app startup";
 "settings_history_title" = "Transaction History";
-"settings_history_desc" = "All verification and login records";
+"settings_history_desc" = "All verification records";
 "settings_security_title" = "System Security";
 "settings_security_desc" = "Hardware and Enclave details";
 "settings_help_title" = "How It Works";
@@ -359,8 +359,8 @@
 "help_step2_desc" = "Bring your phone close to your ID to securely access the digital chip inside.";
 "help_step3_title" = "3. Liveness Test";
 "help_step3_desc" = "Biometrically confirm you are a real person by taking a selfie.";
-"help_step4_title" = "4. QR Login";
-"help_step4_desc" = "Log in instantly to all services with the secure QR code generated.";
+"help_step4_title" = "4. QR Verification";
+"help_step4_desc" = "Instantly verify your identity at any service with the secure QR code generated.";
 "help_screen_guide" = "SCREEN USAGE GUIDE";
 "help_faq_label" = "FREQUENTLY ASKED QUESTIONS";
 "help_version" = "VERSION 1.0.0-STABLE";

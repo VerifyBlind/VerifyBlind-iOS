@@ -96,7 +96,7 @@
 "operation_cancelled_toast" = "İptal edildi";
 "card_data_cleared" = "Kayıtlı kart silindi.";
 "card_deleted_toast" = "Kart Silindi";
-"login_failed_title" = "Giriş Başarısız";
+"login_failed_title" = "Doğrulama Başarısız";
 "ticket_revoked_title" = "Kimlik Kaydı İptal Edildi";
 "ticket_revoked_message" = "Bu kimlik kaydı iptal edildi. Lütfen kimliğinizi yeniden ekleyin.";
 "invalid_request" = "Geçersiz İstek";
@@ -201,7 +201,7 @@
 "settings_biometric_title" = "Biyometrik Kilitleme";
 "settings_biometric_desc" = "Uygulama açılışında biyometrik doğrulama";
 "settings_history_title" = "İşlem Geçmişi";
-"settings_history_desc" = "Tüm doğrulama ve giriş kayıtları";
+"settings_history_desc" = "Tüm doğrulama kayıtları";
 "settings_security_title" = "Sistem Güvenliği";
 "settings_security_desc" = "Donanım ve Enclave detayları";
 "settings_help_title" = "Nasıl Çalışır";
@@ -359,8 +359,8 @@
 "help_step2_desc" = "Telefonunuzu kimliğinize yaklaştırarak içindeki dijital çipe güvenle erişin.";
 "help_step3_title" = "3. Canlılık Testi";
 "help_step3_desc" = "Selfie çekimi ile gerçek bir kişi olduğunuzu biometrik olarak onaylayın.";
-"help_step4_title" = "4. QR Giriş";
-"help_step4_desc" = "Oluşturulan güvenli QR kod ile tüm servislerde anında oturum açın.";
+"help_step4_title" = "4. QR Doğrulama";
+"help_step4_desc" = "Oluşturulan güvenli QR kod ile tüm servislerde anında kimliğinizi doğrulayın.";
 "help_screen_guide" = "EKRAN KULLANIM REHBERİ";
 "help_faq_label" = "SIKÇA SORULAN SORULAR";
 "help_version" = "VERSION 1.0.0-STABLE";

@@ -71,6 +71,8 @@ private struct QRScanStepView: View {
     @State private var scanner = QRScanner()
     @State private var zoom: CGFloat = 1.0
     @State private var scanLineDown = false
+    @State private var autoZoom = true
+    @State private var lastAutoZoomAt = Date.distantPast
 
     var body: some View {
         ZStack {
@@ -118,19 +120,31 @@ private struct QRScanStepView: View {
 
                     Spacer()
 
-                    // Marka görseli — alt orta, ekran genişliğinin 1/4'ü (Android paritesi)
-                    Image("logo")
+                    // Marka görseli — alt orta, ekran genişliğinin 1/5'i (Android paritesi)
+                    Image("scanBrand")
                         .resizable()
                         .scaledToFit()
-                        .frame(width: UIScreen.main.bounds.width / 4)
+                        .frame(width: UIScreen.main.bounds.width / 5)
                         .padding(.bottom, 28)
                 }
 
-                // Zoom butonu — sağ alt köşe (Android paritesi)
-                zoomButton(2.0)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                    .padding(.trailing, 16)
-                    .padding(.bottom, 40)
+                // Zoom kontrolleri — sağ alt köşe. AZ = otomatik zoom (varsayılan açık).
+                VStack(spacing: 8) {
+                    zoomPill("2x", active: abs(zoom - 2.0) < 0.01 && !autoZoom) {
+                        let target: CGFloat = abs(zoom - 2.0) < 0.01 ? 1.0 : 2.0
+                        zoom = target
+                        autoZoom = false   // manuel zoom → AZ kapanır
+                        camera.setZoom(target)
+                    }
+                    zoomPill("AZ", active: autoZoom) {
+                        autoZoom.toggle()  // tıkla → kapat (manuel 1x) / tekrar tıkla → aç
+                        zoom = 1.0
+                        camera.setZoom(1.0)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                .padding(.trailing, 16)
+                .padding(.bottom, 40)
             }
         }
         .onAppear {
@@ -139,6 +153,7 @@ private struct QRScanStepView: View {
                 Log.info("QR okundu (login)", category: .flow)
                 onResult(payload)
             }
+            scanner.onUndecodedBarcode = { fraction in handleAutoZoom(fraction) }
             camera.onFrame = { buf, o in scanner.process(buf, orientation: o) }
             camera.start()
             withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
@@ -148,15 +163,24 @@ private struct QRScanStepView: View {
         .onDisappear { camera.stop() }
     }
 
-    /// Sabit zoom seviyesi butonu (2x). Aynı orana tekrar basınca 1x'e döner.
-    private func zoomButton(_ factor: CGFloat) -> some View {
-        let label = "\(Int(factor))x"
-        let active = abs(zoom - factor) < 0.01
-        return Button {
-            let target: CGFloat = active ? 1.0 : factor
-            zoom = target
-            camera.setZoom(target)
-        } label: {
+    /// Otomatik zoom: çözülemeyen bir QR çerçevenin %50'sinden küçükse kademeli yakınlaşır
+    /// (Android ML Kit ZoomSuggestion paritesi). Saniyede ~2 kez uygulanır, sadece içeri zoom yapar.
+    private func handleAutoZoom(_ fraction: CGFloat) {
+        guard autoZoom, fraction > 0.02, fraction < 0.5 else { return }
+        let now = Date()
+        guard now.timeIntervalSince(lastAutoZoomAt) > 0.4 else { return }
+        lastAutoZoomAt = now
+        // QR'ı çerçevenin ~%60'ına getirecek hedef faktör.
+        let target = camera.currentZoomFactor * (0.6 / fraction)
+        let clamped = min(max(target, 1.0), camera.maxZoomFactor)
+        if clamped > camera.currentZoomFactor + 0.05 {
+            camera.setZoom(clamped)
+        }
+    }
+
+    /// Sağ alt köşe zoom pill butonu (2x / AZ).
+    private func zoomPill(_ label: String, active: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
             Text(label)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(.white)
