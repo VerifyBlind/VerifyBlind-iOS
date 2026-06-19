@@ -77,9 +77,14 @@ actor HandshakeService {
         if result.isValid, let pub = result.enclavePubKey, !pub.isEmpty {
             return pub
         }
-        // Dev modda attestation belgesi yoksa (sunucu henüz döndürmüyor) relay anahtarına geri dön
-        if isDev, let fallback = fallbackKey, !fallback.isEmpty {
-            Log.warning("Attestation belgesi yok/başarısız (dev-skip): \(result.failReason ?? "—")", category: .flow)
+        // Dev-skip YALNIZCA sunucu attestation belgesi DÖNDÜRMÜYORSA geçerli (dev sunucusu henüz
+        // üretmiyor olabilir). Belge VAR ama doğrulama BAŞARISIZSA (örn. süresi dolmuş AWS sertifikası,
+        // hatalı PCR0/COSE) bu GERÇEK bir güvenlik sinyalidir — dev'de bile maskeleme, fırlat. Eski
+        // davranış (her başarısızlıkta relay'e düşmek) bozuk donanım doğrulamasını sessizce gizleyip
+        // ZK garantisini düşürüyordu. Production'da zaten isDev=false → her durumda fırlatılır.
+        let documentMissing = (attestationDoc ?? "").isEmpty
+        if isDev, documentMissing, let fallback = fallbackKey, !fallback.isEmpty {
+            Log.warning("Attestation belgesi sunucudan gelmedi (dev-skip): relay anahtarı kullanılıyor", category: .flow)
             return fallback
         }
         throw HandshakeError.attestationFailed(result.failReason ?? "Attestation doğrulaması başarısız")
