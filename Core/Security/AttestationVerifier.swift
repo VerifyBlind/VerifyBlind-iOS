@@ -50,7 +50,7 @@ IwLz3/Y=
 
     // MARK: - Entry point
 
-    static func verify(attestationBase64: String, pcr0Signature: String?, isDevelopment: Bool) -> VerificationResult {
+    static func verify(attestationBase64: String, pcr0Signature: String?) -> VerificationResult {
         guard !attestationBase64.isEmpty else {
             return .fail("Attestation document eksik")
         }
@@ -68,14 +68,9 @@ IwLz3/Y=
             return .fail("Geçersiz COSE_Sign1 yapısı")
         }
 
-        let result = verifyPayload(payloadMap: payloadMap, pcr0Signature: pcr0Signature, isDevelopment: isDevelopment)
+        let result = verifyPayload(payloadMap: payloadMap, pcr0Signature: pcr0Signature)
         guard result.isValid else { return result }
 
-        // K-1: COSE_Sign1 imza doğrulaması (payload ↔ donanım bağı). Mevcut 3 kontrol (zincir/PCR0/
-        // pubkey), saldırganın gerçek bir belgenin user_data'sını kendi anahtarıyla değiştirmesini
-        // ENGELLEMEZ; bu imza payload'ın (user_data dahil) leaf'in private key'iyle imzalandığını
-        // kanıtlar. Dev/mock belge (PCR0 sıfır) gerçek donanım imzası taşımaz → atlanır.
-        if result.isMockDocument { return result }
         guard case let .byteString(protectedBytes) = arr[0],
               case let .byteString(signatureBytes) = arr[3] else {
             return .fail("COSE protected header / signature okunamadı")
@@ -89,7 +84,7 @@ IwLz3/Y=
 
     // MARK: - Ana doğrulama
 
-    private static func verifyPayload(payloadMap: [CBOR: CBOR], pcr0Signature: String?, isDevelopment: Bool) -> VerificationResult {
+    private static func verifyPayload(payloadMap: [CBOR: CBOR], pcr0Signature: String?) -> VerificationResult {
         // Kontrol 1: Sertifika zinciri
         let (chainOK, chainErr) = verifyCertChain(payloadMap: payloadMap)
         guard chainOK else {
@@ -100,14 +95,8 @@ IwLz3/Y=
         let pcr0 = extractPcr0(payloadMap: payloadMap)
         Log.info("[Tasdik] PCR0: \(pcr0.prefix(16))…", category: .flow)
 
-        // Tümü-sıfır PCR0 → debug enclave
         if pcr0 != "UNKNOWN" && pcr0.allSatisfy({ $0 == "0" }) {
-            if isDevelopment {
-                Log.warning("[Tasdik] ⚠️ Debug enclave (PCR0 sıfır), development modda kabul", category: .flow)
-                let pub = extractEnclavePubKey(payloadMap: payloadMap)
-                return VerificationResult(isValid: true, failReason: nil, pcr0: pcr0, enclavePubKey: pub, isMockDocument: true)
-            }
-            return .fail("Enclave debug modda (PCR0 sıfır) — prod'da kabul edilmez")
+            return .fail("Enclave debug-mode (PCR0 sıfır) — reddedildi")
         }
 
         // Kontrol 2: PCR0 developer imzası (Android `verifyPcr0Authorization` portu)
