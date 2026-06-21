@@ -1,104 +1,125 @@
-# VerifyBlind.iOS
+# VerifyBlind — iOS
 
-iOS portu (VerifyBlind.Android uygulamasının işlevsel eşdeğeri). Mac'siz geliştirme akışı için tasarlandı: kod VSCode'da yazılır, GitHub'a push'lanır, **CodeMagic** Mac runner'da build alır, **TestFlight**'a yükler, telefondan TestFlight uygulaması ile cihaza kurulur.
+**Bu, VerifyBlind iOS uygulamasının herkese açık kaynak kodudur.** App Store'a yüklenen sürümün
+**tam olarak burada gördüğünüz koddan** derlendiğini kriptografik olarak doğrulayabilirsiniz.
 
-## Tek seferlik kurulum (Apple Dev hesabı onaylandıktan sonra)
+**This is the public source code of the VerifyBlind iOS app.** You can cryptographically verify that
+the version published to the App Store was built from **exactly the code you see here**.
 
-### 1) Apple Developer Console
-- App ID kayıt: bundle ID `app.verifyblind.ios` (geçici; final isim netleşince değiştirilebilir)
-- Capabilities: NFC Tag Reading, App Attest, iCloud (CloudDocuments), Associated Domains
-- App Store Connect'te yeni app oluştur (TestFlight Internal grubu hazırla)
+🌐 [verifyblind.com](https://verifyblind.com) · 📦 [Releases](https://github.com/VerifyBlind/VerifyBlind-iOS/releases) · 🤖 [Android](https://github.com/VerifyBlind/VerifyBlind-Android) · 🔐 [Enclave](https://github.com/VerifyBlind/VerifyBlind-Enclave)
 
-### 2) App Store Connect API Key
-- App Store Connect → Users and Access → Keys → "+" → Admin role
-- `.p8` dosyasını indir, Key ID + Issuer ID'yi not al
+**[🇹🇷 Türkçe](#türkçe) · [🇬🇧 English](#english)**
 
-### 3) CodeMagic ayarları
-- App Store Connect Integration: yukarıdaki API Key'i CodeMagic > Teams > Integrations > App Store Connect'e ekle, name `VerifyBlind_ASC_API_Key`
-- Code signing: CodeMagic Distribution → iOS code signing → otomatik provisioning (App Store distribution + manual signing)
-- Environment groups oluştur:
-  - **`verifyblind_ios_dev`** (dev branch için):
-    - `APP_BASE_URL_DEV=https://dev.api.verifyblind.com/api/Verify/`
-    - `IOS_BUNDLE_ID=app.verifyblind.ios`
-    - `APPLE_TEAM_ID=<senin Team ID>`
-    - `IOS_CERT_PIN_1=<SHA256 SPKI hash>`, `IOS_CERT_PIN_2=<root hash>`
-    - `VERIFYBLIND_DEVELOPER_PUBLIC_KEY=<SPKI base64; sunucuyla aynı>`
-    - `ICLOUD_CONTAINER_ID=iCloud.app.verifyblind.ios`
-    - `SENTRY_DSN=<sentry projesinden alınır>`
-    - `DROPBOX_IOS_APP_KEY=<dropbox dev console>`
-    - `APP_STORE_APP_ID=<App Store Connect numerik ID>`
-  - **`verifyblind_ios_prod`** (main branch için): Aynı değişkenler + `APP_BASE_URL_PROD=https://api.verifyblind.com/api/Verify/`
+---
 
-### 4) Sentry projesi
-- sentry.io'da yeni iOS projesi → DSN'i kopyala → CodeMagic env'e gir
+## Türkçe
 
-## Geliştirme akışı
+### Bu repo nedir?
 
-```
-[VSCode'da .swift düzenle]
-        ↓
-[git commit + git push origin dev]
-        ↓
-[CodeMagic auto-build (5-15 dk)]
-        ↓
-[TestFlight Internal'a yüklenir (5-30 dk processing)]
-        ↓
-[Telefonda TestFlight uygulamasından "Install"]
-        ↓
-[Cihazda aç → Sentry'de log'ları izle (browser)]
-```
+VerifyBlind, Türk dijital kimliğiyle çalışan **sıfır-bilgi (zero-knowledge)** bir kimlik doğrulama
+sistemidir: kimlik numaranız (TCKN) cihazınızdan ve güvenli enclave'den asla dışarı çıkmaz. Bu
+güvenlik vaadinin anlamlı olması için **çalıştırdığınız kodu doğrulayabilmeniz** gerekir.
 
-Branch stratejisi:
-- `dev` → CodeMagic `ios-dev` workflow → TestFlight Internal grubu (App Attest dev environment)
-- `main` → CodeMagic `ios-prod` workflow → TestFlight External grubu (App Attest prod environment)
+> Bu repo, özel geliştirme monorepo'sunun **salt-okunur kaynak aynasıdır**. Her sürüm, herkese açık
+> GitHub Actions üzerinde derlenir ve Sigstore imzalı build provenance ile yayınlanır.
 
-## Kod organizasyonu
+### iOS'ta doğrulama Android'den neden farklı?
 
-- `App/` — uygulama giriş noktası (`@main`, root view)
-- `Config/` — xcconfig (build-time env injection) + Config.swift + entitlements
-- `Core/` — paylaşılan altyapı: Logging, Crypto, Network, Storage, Security
-- `Features/` — ekran/akış bazlı modüller: Register, Liveness, Login, Wallet, History, Settings, …
-- `NFC/` — CoreNFC + NFCPassportReader bridge
-- `Camera/`, `OCR/` — AVFoundation + Vision sarmalayıcılar
-- `Backup/` — iCloud Drive + Dropbox provider'ları
-- `Resources/` — Assets, Localizable
-- `Tests/` — Unit + UI testleri
-- `project.yml` — XcodeGen şeması (`.xcodeproj` Mac'te `xcodegen generate` ile üretilir; CodeMagic build'inde otomatik)
-- `codemagic.yaml` — CI/CD pipeline (test + build + TestFlight upload)
+Android'de telefonunuzdaki APK'yı USB ile çekip GitHub'daki kodla bit-bit karşılaştırabilirsiniz.
+iOS'ta bu **mümkün değildir**: Apple'ın FairPlay DRM'i App Store'dan inen her uygulamanın binary'sini
+şifreler; stok bir iPhone'dan karşılaştırılabilir kopya çıkarılamaz. Bu VerifyBlind'e özgü değil, bir
+platform kısıtıdır (Telegram dahil tüm iOS uygulamaları için geçerli). Bu yüzden iOS'ta güven zinciri
+**üç bağımsız halkayla** kapanır:
 
-## Lokal "soft check" (Mac yoksa)
+1. **Build provenance (bu repo)** — Her release'e eklenen `attestation.sigstore.json`, App Store'a
+   yüklenen IPA'nın yukarıdaki commit'ten, bu repo'nun GitHub Actions iş akışında derlendiğini
+   matematiksel olarak kanıtlar. İmza, iş akışının OIDC kimliğine bağlıdır; bu repo dışında kimse üretemez.
+2. **Apple kod imzalama zorunluluğu** — Stok iOS yalnızca Apple'ın imzaladığı App Store kopyasını
+   çalıştırır; değiştirilmiş bir uygulama cihazda hiç açılmaz. Aynı build numarası App Store Connect'te
+   yalnızca bir kez var olabilir.
+3. **App Attest** — VerifyBlind sunucusu her kayıtta, cihazdaki uygulamanın gerçek App Store build'i
+   olduğunu Apple üzerinden doğrular.
 
-Push etmeden önce yazım hatalarını yakalamak için VSCode + Swift extension:
-- VSCode marketplace: **`Swift for Visual Studio Code`** (sourcekit-lsp tabanlı) yüklü olmalı
-- VSCode marketplace: **`sweetpad`** Xcode-benzeri kolaylıklar
-- `.vscode/settings.json` repoda hazır
+### Nasıl doğrularsınız?
 
-Compile değil ama yazım/import hataları, signature uyumsuzlukları, missing types görünür.
+Her [Release](https://github.com/VerifyBlind/VerifyBlind-iOS/releases) sayfasında `VerifyBlind.ipa`,
+`ipa-hashes.json` ve `attestation.sigstore.json` bulunur.
 
-## Konfigürasyon değişkenleri
+**Otomatik:** [verify-ios.ps1 (Windows)](https://cdn.verifyblind.com/autoverifyscripts/verify-ios.ps1) ·
+[verify-ios.sh (macOS / Linux)](https://cdn.verifyblind.com/autoverifyscripts/verify-ios.sh) — IPA
+hash'ini manifest'le karşılaştırır ve attestation'ı cosign ile **çevrimdışı** doğrular.
 
-Tüm build-time değerler **Info.plist üzerinden** akar:
-
-```
-CodeMagic env vars
-        ↓
-codemagic.yaml içinde xcconfig dosyasına yazılır
-        ↓
-Info.plist'teki $(VAR) referansları build sırasında doldurulur
-        ↓
-Config.swift Bundle.main.object(forInfoDictionaryKey:) ile okur
+**Manuel ([cosign](https://github.com/sigstore/cosign) ≥ 2.4):**
+```bash
+cosign verify-blob-attestation \
+  --bundle attestation.sigstore.json --new-bundle-format \
+  --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+  --certificate-identity-regexp="^https://github.com/VerifyBlind/VerifyBlind-iOS/.github/workflows/ios-prod.yml@" \
+  VerifyBlind.ipa
 ```
 
-Lokal placeholder değerler `Config/Debug.xcconfig` ve `Config/Release.xcconfig` içinde; production'da CodeMagic her build'de bunların üzerine yazar. Hardcoded gizli değer YOK.
+Telefonunuzdaki sürüm ve commit'i uygulama içinde **Ayarlar ekranının en altındaki sürüm satırında**
+görebilirsiniz (`sürüm (build) · commit`); satıra dokunmak ilgili release sayfasını açar.
 
-## Aşama 0 doğrulaması (ilk dummy build)
+### Build nasıl çalışır?
+GitHub Actions ([`.github/workflows/ios-prod.yml`](.github/workflows/ios-prod.yml) ve
+[`ios-dev.yml`](.github/workflows/ios-dev.yml)) IPA'yı derler, `actions/attest-build-provenance` ile
+Sigstore attestation üretir ve [`scripts/ci/ios-release-publish.sh`](scripts/ci/ios-release-publish.sh)
+ile `build-N` (prod) / `dev-build-N` (dev) etiketli release yayınlar.
 
-Beklenen sonuç:
-1. CodeMagic build yeşil
-2. TestFlight Internal'a yüklendi
-3. Telefonda "Hello VerifyBlind" ekranı görünüyor
-4. Build info satırları (bundle ID, version, API, Sentry) doluy
-5. "Sentry'e test event gönder" butonuna basınca Sentry dashboard'da event görünüyor
-6. Uygulama açıldığında log'lar Sentry'e akıyor
+---
 
-Doğrulanırsa Aşama 1 (Network + Crypto) başlar.
+## English
+
+### What is this repo?
+
+VerifyBlind is a **zero-knowledge** identity verification system built on the Turkish digital ID: your
+national ID number never leaves your device or the secure enclave. For that security promise to mean
+anything, **you must be able to verify the code you are running**.
+
+> This repo is a **read-only source mirror** of the private development monorepo. Every release is
+> built on public GitHub Actions and published with Sigstore-signed build provenance.
+
+### Why is iOS verification different from Android?
+
+On Android you can pull the APK off your phone over USB and compare it bit-for-bit with the code on
+GitHub. On iOS this is **impossible**: Apple's FairPlay DRM encrypts the binary of every App Store
+download, so no comparable copy can be extracted from a stock iPhone. This is not specific to
+VerifyBlind — it's a platform constraint (it applies to every iOS app, Telegram included). So on iOS
+the chain of trust closes through **three independent links**:
+
+1. **Build provenance (this repo)** — The `attestation.sigstore.json` attached to each release is
+   mathematical proof that the IPA uploaded to the App Store was built from the commit above, in this
+   repo's GitHub Actions workflow. The signature is bound to the workflow's OIDC identity; no one
+   outside this repo can produce it.
+2. **Apple code-signing enforcement** — Stock iOS only runs the App Store copy signed by Apple; a
+   modified app will not even launch. The same build number can exist only once in App Store Connect.
+3. **App Attest** — On every registration the VerifyBlind server verifies, via Apple, that the app on
+   the device is the genuine App Store build.
+
+### How to verify
+
+Every [Release](https://github.com/VerifyBlind/VerifyBlind-iOS/releases) ships `VerifyBlind.ipa`,
+`ipa-hashes.json` and `attestation.sigstore.json`.
+
+**Automatic:** [verify-ios.ps1 (Windows)](https://cdn.verifyblind.com/autoverifyscripts/verify-ios.ps1) ·
+[verify-ios.sh (macOS / Linux)](https://cdn.verifyblind.com/autoverifyscripts/verify-ios.sh) — compares
+the IPA hash against the manifest and verifies the attestation **offline** with cosign.
+
+**Manual (with [cosign](https://github.com/sigstore/cosign) ≥ 2.4):**
+```bash
+cosign verify-blob-attestation \
+  --bundle attestation.sigstore.json --new-bundle-format \
+  --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+  --certificate-identity-regexp="^https://github.com/VerifyBlind/VerifyBlind-iOS/.github/workflows/ios-prod.yml@" \
+  VerifyBlind.ipa
+```
+
+You can see your installed version and commit in the app, on the **version line at the bottom of the
+Settings screen** (`version (build) · commit`); tapping it opens the matching release page.
+
+### How the build works
+GitHub Actions ([`.github/workflows/ios-prod.yml`](.github/workflows/ios-prod.yml) and
+[`ios-dev.yml`](.github/workflows/ios-dev.yml)) builds the IPA, produces a Sigstore attestation via
+`actions/attest-build-provenance`, and [`scripts/ci/ios-release-publish.sh`](scripts/ci/ios-release-publish.sh)
+publishes a release tagged `build-N` (prod) / `dev-build-N` (dev).
