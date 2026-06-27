@@ -52,12 +52,9 @@ enum Config {
         #endif
     }
 
-    /// TestFlight (beta) build mı? TestFlight makbuzu "sandboxReceipt", App Store prod "receipt" olur.
-    /// App Store Connect Beta App Review + harici testçiler bu build'i kurar → demo modu onlara açılır,
-    /// ama gerçek App Store production build'inde gizli kalır. App Attest ortamından bağımsızdır.
-    static var isTestFlight: Bool {
-        Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
-    }
+    // NOT: Demo modu görünürlüğü artık `Config.isTestFlight` ile DEĞİL, sunucu-kontrollü sürüm
+    // eşleşmesiyle belirlenir: admin `demoVersionIos` == cihaz build sürümü (bkz AppState.loadConfig,
+    // ConfigController app-config). Eski receipt-bazlı `isTestFlight` (kullanılmıyordu) kaldırıldı.
 
     private static func string(_ key: String) -> String {
         let value = Bundle.main.object(forInfoDictionaryKey: key) as? String ?? ""

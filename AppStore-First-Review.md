@@ -1,147 +1,139 @@
-# App Store — İlk Review (External TestFlight) Hazırlık Rehberi
+# App Store Review Runbook (Beta ✅ + Production)
 
-> Hazırlandı: 2026-06-09 · Hedef: TestFlight **External Testing** için Beta App Review.
-> Beta App Review tipik süre: **~24-48 saat** (çoğu zaman <24s). Bu, production App Store review'undan
-> daha hafif ve hızlıdır; ama aynı guideline'lar (2.1, 5.1.1) uygulanır.
-
----
-
-## BÖLÜM 1 — Kod tarafında YAPILDI (Claude)
-
-| # | Eksik | Durum | Dosya |
-|---|-------|-------|-------|
-| 1 | **Privacy Manifest yoktu** (2024-05'ten beri zorunlu; yoksa upload uyarı/red) | ✅ Eklendi | `Resources/PrivacyInfo.xcprivacy` |
-| 2 | **Demo modu yalnız dev build'de görünüyordu** → reviewer production build'de demo butonunu göremez → **garantili Guideline 2.1 reddi** | ✅ Düzeltildi: TestFlight build'lerinde de demo açık (gerçek App Store prod'da gizli) | `Config/Config.swift` (`isTestFlight`), `App/AppState.swift` (`demoEnabled`) |
-
-**#2 nasıl çalışıyor:** `demoEnabled = (dev) || Config.isTestFlight`. TestFlight makbuzu `sandboxReceipt`,
-App Store prod makbuzu `receipt` olur. Yani:
-- TestFlight (reviewer + harici testçiler) → **demo görünür** ✅
-- Gerçek App Store yayını (production) → demo **gizli** ✅
-
-> ⚠️ İstersen bu davranışı değiştirebiliriz (örn. demo'yu production'da da göster, ya da yalnız
-> gizli bir jest/koddan aç). Şu anki seçim "TestFlight'ta aç, production'da gizle" — review için ideal.
+> Güncellendi: **2026-06-27**. External TestFlight **Beta App Review = TAMAM** (2026-06-09).
+> Bu doküman artık **Production App Store submission**'ı kapsar.
+>
+> ⚠️ **Önemli düzeltme:** Demo modu görünürlük mekanizması bu dokümanın eski sürümünde yanlış
+> anlatılıyordu (`demoEnabled = dev || Config.isTestFlight`). O mekanizma artık YOK. Güncel ve doğru
+> hali **Bölüm 0**'da. `Config.isTestFlight` ölü koddu, kaldırıldı.
 
 ---
 
-## BÖLÜM 2 — SENİN YAPACAKLARIN (App Store Connect + web)
+## BÖLÜM 0 — Demo modu nasıl çalışıyor (GÜNCEL — production review'ın çekirdeği)
 
-### Adım 0 — Ön koşullar (muhtemelen hazır)
-- [ ] App Store Connect'te uygulama kaydı var (Bundle ID: `app.verifyblind.ios`).
-- [ ] Prod GitHub Actions secret'ları dolu: `APP_STORE_APP_ID`, `APP_STORE_CONNECT_ISSUER_ID`,
-      `APP_STORE_CONNECT_KEY_IDENTIFIER`, `APP_STORE_CONNECT_PRIVATE_KEY`, `CERTIFICATE_PRIVATE_KEY`,
-      `APPLE_TEAM_ID` (+ ENCLAVE_DEVELOPER_PUBLIC_KEY, opsiyonel Sentry/Dropbox/Google).
-      Cert pin'leri artık koda gömülü (secret değil) — `CertificatePinningDelegate.pinnedPublicKeys`.
-- [ ] **Backend canlı:** Demo, `api.verifyblind.com/api/verify/demo-register`'a istek atar. Review
-      penceresi boyunca prod API + Enclave ayakta olmalı, yoksa reviewer demo'da hata görür → red.
+Demo modu artık **tamamen sunucu-kontrollü, sürüm-eşleşmeli**dir. Receipt (`sandboxReceipt`) ile ilgisi
+yoktur.
 
-### Adım 1 — Privacy Policy URL (zorunlu)
-Apple, review için **herkese açık bir gizlilik politikası URL'i** ister. Politika zaten yayında ve
-KVKK açısından kapsamlı (7 bölüm). Apple'ın 6 şartını (ne toplanıyor, 3. taraflar, saklama, silme,
-haklar, iletişim) karşılıyor.
-- [ ] App Store Connect'e **locale önekli** URL ver — çıplak `/privacy` için redirect YOK:
-      **`https://verifyblind.com/en/gizlilik`** (reviewer için İngilizce) veya `/en/privacy` (→ 301 gizlilik'e).
-- [ ] **Submit öncesi 3 tutarlılık düzeltmesi** (label ↔ politika uyumu; kaynak:
-      `src/landing-site/app/[locale]/gizlilik/page.tsx` TR+EN):
-  1. **Sentry/çökme teşhisi 3. taraf olarak EKSİK** — App Privacy label'ın "Crash Data" diyecek ama
-     politikanın "Paylaştığımız Taraflar" tablosunda Sentry yok. Bir satır ekle (PII redakte, kimlik gitmez).
-  2. **Güvenlik bölümü yalnız "Android Keystore" diyor** — iOS Keychain/Secure Enclave de ekle.
-  3. (İyi olur) **Bulut yedek (Dropbox/Google Drive)** politikada yok — kullanıcı-başlatımlı, uçtan
-     uca şifreli, kullanıcının kendi hesabına olduğunu belirten bir cümle ekle.
+**Mekanizma:**
+1. **Admin** `PATCH /api/admin/demo-versions` ile `demoVersionIos` değerini `system_settings`'e yazar
+   (`AdminController.SetDemoVersions`).
+2. **iOS client** açılışta `loadConfig` ile app-config çeker ve:
+   `demoEnabled = (demoVersionIos != "" && demoVersionIos == CFBundleShortVersionString)`
+   (`App/AppState.swift` → `loadConfig`). Eşleşmezse demo butonu **gizli**.
+3. **Sunucu demo-register guard** da **platform-aware**'dir ve aynı sürüme kilitlidir
+   (`VerifyController` ~443-453): `platform=="ios" ? DemoVersionIosKey : DemoVersionAndroidKey`;
+   `AppVersion != demoVersion` ise `404 DEMO_NOT_ACTIVE` döner. Yani sadece butonu gizlemekle kalmaz,
+   backend de kapanır.
 
-### Adım 2 — Export Compliance kararı (ŞİFRELEME) — **senin/hukuk kararın**
-Şu an `App/Info.plist` → `ITSAppUsesNonExemptEncryption = false`.
-- VerifyBlind çekirdeği RSA-OAEP / AES-GCM / RSA-PSS + cert pinning kullanıyor → "yalnız HTTPS"
-  değil; **standart algoritmalarla özel bir kripto protokolü** uyguluyorsun.
-- `false` (kullanmıyorum) pek çok standart-kripto kimlik uygulamasının yaptığı şey ama senin
-  durumun için **sınırda**. Doğru/güvenli yol genelde:
-  `ITSAppUsesNonExemptEncryption = true` → App Store Connect export sorularında **muafiyet** beyan
-  et (standart algoritmalar / mass-market). Bu, yılda bir basit self-classification raporu
-  gerektirebilir.
-- **Karar senin (hukuki).** İlk TestFlight beta'sını **mevcut `false` ile geçirebilirsin** (ASC soru
-  sormaz, build geçer). Ama **production'a çıkmadan önce** bu beyanı bir uzmanla netleştir.
-- Eğer `true` yapmak istersen `Info.plist`'i ben güncelleyebilirim — söyle.
+**Production review için bunun anlamı (kritik avantaj):**
+Aynı binary'yi hem review ettirir hem yayınlarsın; demo görünürlüğünü **rebuild gerektirmeden,
+sunucudan aç/kapat** edebilirsin:
+- Review için: `demoVersionIos = <submit edilen build sürümü>` → reviewer kartsız tüm akışı dener.
+- Yayından hemen önce: `demoVersionIos = ""` → demo butonu + demo-register herkese kapanır.
+
+> Eski "demo-register Android Play sürümüyle çakışır" notu da artık geçersiz — guard platform-aware.
+
+---
+
+## BÖLÜM 1 — Kod tarafı durum (Claude)
+
+| # | Konu | Durum | Dosya |
+|---|------|-------|-------|
+| 1 | **Privacy Manifest** (2024-05'ten beri zorunlu) | ✅ Var | `Resources/PrivacyInfo.xcprivacy` |
+| 2 | **Demo görünürlüğü** — sunucu-kontrollü sürüm eşleşmesi | ✅ Bölüm 0 | `App/AppState.swift`, `Controllers/{Admin,Config,Verify}Controller.cs` |
+| 3 | **Export compliance** — `ITSAppUsesNonExemptEncryption` | ✅ **`true`** (2026-06-27) | `App/Info.plist` |
+| 4 | Ölü `Config.isTestFlight` kaldırıldı | ✅ | `Config/Config.swift` |
+
+**Export compliance kararı (verildi):** VerifyBlind kimlik payload'ını uygulama katmanında özel
+protokolle şifreliyor (RSA-OAEP-SHA256 + AES-GCM + RSA-PSS + cert pinning) → "yalnız HTTPS/auth"
+muafiyeti DEĞİL. Doğru beyan `true`. ASC submit'inde export sorularına **standart-algoritma /
+mass-market muafiyeti** (5D992) ile cevap verilir; bu, yılda bir basit self-classification gerektirebilir.
+Detay → **Bölüm 2 / Adım 2**.
+
+---
+
+## BÖLÜM 2 — Production submission adımları (App Store Connect)
+
+### Adım 0 — Ön koşullar
+- [ ] App Store Connect'te uygulama kaydı (Bundle ID: `app.verifyblind.ios`).
+- [ ] Prod GitHub Actions secret'ları dolu (`ios-prod.yml`): `APP_STORE_APP_ID`,
+      `APP_STORE_CONNECT_ISSUER_ID`, `APP_STORE_CONNECT_KEY_IDENTIFIER`, `APP_STORE_CONNECT_PRIVATE_KEY`,
+      `CERTIFICATE_PRIVATE_KEY`, `APPLE_TEAM_ID` (+ Sentry/Dropbox/Google). Cert pin'leri koda gömülü.
+- [ ] **Backend canlı:** demo `api.verifyblind.com/api/verify/demo-register`'ı çağırır. Review penceresi
+      boyunca prod API + Enclave ayakta olmalı, yoksa reviewer demo'da hata görür → red.
+
+### Adım 1 — Privacy Policy URL
+- [ ] ASC'ye **locale önekli** URL ver (çıplak `/privacy` redirect verme):
+      `https://verifyblind.com/en/gizlilik` (reviewer için EN).
+- [ ] **Submit öncesi tutarlılık düzeltmeleri** (App Privacy label ↔ politika uyumu; kaynak
+      `src/landing-site/app/[locale]/gizlilik/page.tsx`):
+  1. **Sentry/çökme teşhisi 3. taraf olarak** politikanın "Paylaştığımız Taraflar" tablosunda olmalı
+     (label "Crash Data" diyecek). Bir satır ekle (PII redakte).
+  2. Güvenlik bölümüne **iOS Keychain / Secure Enclave** ekle (yalnız "Android Keystore" demesin).
+  3. (İyi olur) Kullanıcı-başlatımlı, uçtan-uca şifreli **bulut yedek (Dropbox/Google Drive)** cümlesi.
+
+### Adım 2 — Export Compliance (plist artık `true`)
+`App/Info.plist` → `ITSAppUsesNonExemptEncryption = true`. Submit sırasında ASC export sorularını sorar:
+- "Does your app use encryption?" → **Yes**.
+- "Qualifies for any of the exemptions?" → **Yes** — standart/yayınlanmış algoritmalar, mass-market
+  (5D992). VerifyBlind özel kripto-sistem ÜRETMİYOR; standart RSA/AES/ECDSA kullanıyor.
+- Sonuç: muaf. ASC bir **yıl-sonu self-classification** (Fransa için ek beyan) isteyebilir — basittir.
+> Bunu hukuki danışmanla teyit etmen iyi olur; teknik sınıflandırma yukarıdaki gibi.
 
 ### Adım 3 — App Privacy (Privacy Nutrition Labels)
-App Store Connect → uygulaman → **App Privacy** → "Get Started / Edit".
+ASC → App Privacy. Zero-knowledge mimariye göre:
+- **Do you collect data?** → **Yes** (yalnız çökme teşhisi — Sentry).
+- **Diagnostics → Crash Data** ✅ → Purpose: *App Functionality*, Linked: **No**, Tracking: **No**.
+- **Performance Data EKLEME** (`enableAutoPerformanceTracing = false`).
+- **Tracking** → **None**. **Data Linked to You** → **None**.
+- Başka kategori (Contact, Identifiers, Location, Health, Financial…) **işaretleme**.
+- **Kimlik/biyometrik veri neden "collected" DEĞİL:** Enclave public key'iyle uçtan-uca şifrelenir,
+  gerçek-zamanlı işlenir, **saklanmaz** → Apple'ın "collect" tanımına girmez. (Koşul: backend gerçekten
+  saklamıyor — çekirdek mimari bu.) Bu yüzden label'a eklenmez; zero-knowledge iddiasıyla tutarlı.
+- **Device ID:** push bildirimi UI'da aktifse ve cihaz token'ı toplanıyorsa
+  Identifiers → Device ID (App Functionality, Not Linked, No tracking) ekle. Aksi halde ekleme.
+- Chatbot UI'da aktif değilse User Content ekleme.
 
-**Akış (ASC ekranları sırası):** önce "Veri topluyor musun?" → **Yes**. Sonra bir **veri tipi
-ızgarası** çıkar (Contact, Identifiers, Diagnostics, Usage Data, …) — burada SADECE topladığını seç.
-**"Data Linked / Not Linked / Tracking" ayrı seçenek DEĞİL** — onları, seçtiğin her tip için sonradan
-sorulan "ne amaçla / kimliğe bağlı mı / takip için mi" sorularından ASC kendi üretir.
+### Adım 4 — App Information / Age Rating / Category
+- [ ] **Age Rating** → kısa anket; sakıncalı içerik yok → 4+.
+- [ ] **Content Rights** → 3. taraf içerik? Hayır.
+- [ ] **Category** → Utilities veya Business.
 
-Seç:
-- **Diagnostics → Crash Data** ✅ → sonraki sorular: Purpose = **App Functionality**, Linked = **No**,
-  Tracking = **No**. (Sonuç: "Data Not Linked to You → Diagnostics → Crash Data".)
-- **Identifiers → Device ID → ŞİMDİLİK SEÇME.** Label mevcut build'i yansıtır; push bildirimi henüz
-  yok → cihaz token'ı toplanmıyor. Sentry'nin kurulum UUID'si "Crash Data" altında sayılır, takip
-  Device ID'si değil. **Push'u eklediğinde** Device ID'yi (App Functionality, Not Linked, No tracking)
-  ekle — label'ı yeni build olmadan da güncelleyebilirsin.
-- Başka tip seçme.
+### Adım 5 — Store Listing (PRODUCTION'DA ZORUNLU — beta'da gerekmiyordu)
+- [ ] **Screenshots** — iPhone **6.9"/6.7"** ve **6.5"** setleri (App Store'un istediği güncel boyutlar).
+      Demo akışından alınmış ekranlar uygundur (kartsız çekilebilir).
+- [ ] **App Name / Subtitle / Promotional Text / Description / Keywords**.
+- [ ] **Support URL** (`https://verifyblind.com`), **Marketing URL**, **Privacy Policy URL** (Adım 1).
+- [ ] Hedef ülke: **yalnız Türkiye** (ilk lansman).
 
-Cevaplar (zero-knowledge mimariye göre):
-- **Do you collect data from this app?** → **Yes** (yalnız çökme teşhisi — Sentry).
-- **Tracking (Used to Track You):** → **None.** ("Ask App Not to Track" gerektiren takip yok.)
-- **Data Linked to You:** → **None.** (Kimlik verisi sunucuda saklanmaz; kullanıcıya bağlı veri yok.)
-- **Data Not Linked to You → Diagnostics:**
-  - ✅ **Crash Data** — Purpose: *App Functionality*
-  - ❌ Performance Data EKLEME — `enableAutoPerformanceTracing = false`, Sentry yalnız çökme/hata topluyor.
-- Başka hiçbir kategori işaretleme (Contact, Identifiers, Location, Health, Financial, vb. → hayır).
+### Adım 6 — Build üret/seç + App Store sürümüne iliştir
+İki seçenek:
+- **(En hızlı) Mevcut build'i kullan:** kod değişmediyse, hâlihazırda TestFlight'a yüklenmiş build'i
+  App Store sürümüne iliştir. (Bu doküman + Info.plist değişikliği kod değişikliğidir → yeni build
+  gerekir; bkz aşağı.)
+- **Yeni build:** `main`'e push veya GitHub Actions → **"iOS Prod → TestFlight External"**
+  (`ios-prod.yml`) `workflow_dispatch`. Build ASC'ye yüklenir (TestFlight'a düşer; App Store sürümüne
+  de aynı build iliştirilir). Build numarası otomatik +1.
+  > ⚠️ `ITSAppUsesNonExemptEncryption=true` ve `isTestFlight` kaldırma değişiklikleri yeni build
+  > gerektirir — bu yüzden bu submit'te **yeni build** kullan.
 
-> **Kimlik/biyometrik veri neden "collected" DEĞİL?** Apple'ın "collect" tanımı = veriyi cihaz dışına
-> gönderip *gerçek-zamanlı isteği işlemek için gerekenden uzun süre* erişilebilir tutmak. VerifyBlind'de
-> kimlik verisi Enclave'in public key'iyle uçtan uca şifrelenir (Relay okuyamaz bile), Enclave gerçek
-> zamanlı işler ve **saklamaz** → tanım gereği "collected" değildir. Sentry'de de `beforeSend` PII'ı
-> redact ediyor. Bu yüzden kimlik/biyometriği label'a EKLEMİYORUZ — zero-knowledge iddianla tutarlı.
-> (Koşul: backend gerçekten saklamıyor olmalı — ki çekirdek mimarin bu.)
+### Adım 7 — Demo'yu reviewer için AÇ
+- [ ] Admin panel → demo sürümleri → `demoVersionIos = <submit edilen build'in CFBundleShortVersionString'i>`
+      (örn. `1.0.1`). Backend `PATCH /api/admin/demo-versions`.
+- [ ] Doğrula: o build'de demo butonu görünüyor + demo-register çalışıyor.
 
-> Not: Uygulama içi **chatbot şu an UI'da açık DEĞİL** (kod var ama hiçbir ekrandan çağrılmıyor).
-> İleride chatbot'u bağlarsan label'a **User Content → Customer Support (Not Linked)** ekle.
+### Adım 8 — Submit for App Store Review
+- [ ] App Store sürümü oluştur → build'i iliştir → **App Review Information** → **Bölüm 3.1 (EN)**
+      reviewer notes + iletişim (ad/telefon/email).
+- [ ] **Version Release** → **"Manually release this version"** seç (kontrolü elde tut).
+- [ ] (Opsiyonel ama önerilir) Gerçek NFC+canlılık akışını gösteren kısa video linki notes'a — reviewer
+      demo ile geçse de "gerçek çekirdek işlev çalışıyor mu" sorusunu önceden kapatır.
 
-### Adım 4 — External Testers grubu
-App Store Connect → TestFlight → Groups → **+** :
-- [ ] Grup adı **tam olarak**: `External Testers`  *(workflow'daki `BETA_GROUP` ile birebir aynı olmalı)*.
-- [ ] En az 1 harici testçi e-postası ekle (kendi 2. mailin olabilir) ya da Public Link aç.
-
-### Adım 4.5 — App Information (uygulama-seviyesi minimum)
-App Store Connect → uygulaman → **App Information** / **Age Rating**. Beta için gereken minimum:
-
-| Alan | Beta için | Not |
-|------|-----------|-----|
-| **Age Rating** | ✅ Doldur | Kısa anket; sakıncalı içerik yok → 4+ |
-| **Content Rights** | ✅ Doldur | "Üçüncü taraf içeriği içeriyor mu?" → Hayır |
-| **Category** | ⚠️ Önerilir | Utilities veya Business |
-| Subtitle | ⏭️ Atla | Store listing alanı |
-| App Encryption Documentation | ⏭️ Boş bırak | plist `false` zaten kapsıyor |
-| Screenshots (App Store) | ⏭️ Atla | **Sadece production yayınında** gerekli (6.7"+6.5") |
-
-> "Atla" denenler production'a submit ederken gerekli olacak — beta için değil.
-
-### Adım 5 — Test Information (External için zorunlu)
-App Store Connect → TestFlight → **Test Information** (tüm diller için):
-- [ ] **Beta App Description** → aşağıdaki metin
-- [ ] **Feedback Email** → senin destek/iletişim mailin (örn. `ercumente@gmail.com` veya destek adresi)
-- [ ] **Marketing URL** → `https://verifyblind.com`
-- [ ] **Privacy Policy URL** → Adım 1'deki URL (`https://verifyblind.com/en/gizlilik`)
-- [ ] **App Review Information** (beta review notu + iletişim) → aşağıdaki **Reviewer Notes** metni,
-      ve First/Last name + telefon + email doldur. (Demo butonlu olduğu için ayrı "demo account"
-      kullanıcı adı/şifresi GEREKMEZ — notta bunu belirttim.)
-
-> **"What to Test" burada DEĞİL** — build'e özeldir. Build yüklendikten sonra (Adım 6) ilgili build'in
-> üzerinde "Test Details / What to Test" alanına aşağıdaki metni gir.
->
-> **"Invitation Experience → Show approved screenshots and category"** → işaretleme/boş bırak;
-> onaylı store screenshot'ın yok, beta review'a etkisi yok (sadece davet görselleri).
-
-### Adım 6 — Build üret + yükle
-- [ ] GitHub → Actions → **"iOS Prod → TestFlight External"** workflow'unu `workflow_dispatch` ile
-      çalıştır (veya `main`'e push). Build numarası TestFlight'tan otomatik +1 alınır.
-- [ ] Build işlenince (ASC'de "Processing" biter, ~5-30 dk) → build'in üzerinde **What to Test**
-      metnini gir → build'i **External Testers** grubuna ata → **Submit for Beta App Review**.
-- [ ] Export compliance sorusu çıkarsa Adım 2 kararına göre cevapla (`false` ise sormaz).
-
-### Adım 7 — Bekle
-- Beta App Review ~1 gün. Onaylanınca harici testçiler (ve sen) build'i kurabilir.
-- Red gelirse Resolution Center'daki sebebi bana getir — birlikte düzeltiriz.
+### Adım 9 — Onay → yayın (demo'yu KAPAT, sonra release)
+- [ ] Durum **"Pending Developer Release"** (onaylandı) olunca:
+      admin → `demoVersionIos = ""` (boş). Demo butonu + demo-register **tüm public** için kapanır.
+- [ ] Sonra ASC → **Release this version** → uygulama canlı.
+> Sıra önemli: önce demo'yu kapat, sonra release. Manuel release bu kontrolü sağlar.
 
 ---
 
@@ -156,8 +148,8 @@ national ID number to third parties (zero-knowledge). It is NOT a KYC/data-colle
 
 IMPORTANT FOR REVIEW — no physical ID card needed:
 Normal use requires a physical Turkish NFC ID card, which you will not have. The app therefore
-includes a built-in DEMO MODE (automatically enabled on TestFlight builds) that walks through the
-entire flow without any card or real biometric data.
+includes a built-in DEMO MODE that walks through the entire flow without any card or real biometric
+data. Demo mode is enabled for this review build.
 
 How to run the demo:
 1. Launch the app and continue past the intro to the home (Wallet) screen.
@@ -181,6 +173,10 @@ Third-party login note (Guideline 4.8): Google Sign-In and Dropbox are used ONLY
 destinations for the user's ENCRYPTED backup file. They are NOT used to create or authenticate the
 account/identity, so Sign in with Apple does not apply.
 
+Encryption (export compliance): The app uses only standard, published algorithms (RSA-OAEP, AES-GCM,
+RSA-PSS) for end-to-end protection of the identity payload; no proprietary cryptography. Qualifies
+for the mass-market exemption.
+
 Network: The demo calls our backend at api.verifyblind.com; it is live during the review window.
 
 Contact: <ADIN SOYADIN> — <EMAIL> — <TELEFON>
@@ -196,8 +192,8 @@ toplama uygulaması DEĞİLDİR.
 
 REVIEW İÇİN ÖNEMLİ — fiziksel kart gerekmez:
 Normal kullanım fiziksel Türk NFC kimlik kartı gerektirir; sizde olmayacaktır. Bu yüzden uygulamada,
-tüm akışı kartsız ve gerçek biyometri olmadan gezdiren bir DEMO MODU vardır (TestFlight
-build'lerinde otomatik açıktır).
+tüm akışı kartsız ve gerçek biyometri olmadan gezdiren bir DEMO MODU vardır (bu review build'inde
+açıktır).
 
 Demo adımları:
 1. Uygulamayı açın, giriş ekranlarını geçip ana (Cüzdan) ekrana gelin.
@@ -220,45 +216,27 @@ dokunup onaylayın — cihazdaki tüm kimlik verisi ve anahtarlar kalıcı olara
 dosyası için opsiyonel bulut hedefidir. Hesap/kimlik oluşturma veya doğrulama için KULLANILMAZ; bu
 nedenle Sign in with Apple kapsam dışıdır.
 
+Şifreleme (export compliance): Uygulama yalnızca standart, yayınlanmış algoritmalar (RSA-OAEP,
+AES-GCM, RSA-PSS) kullanır; özel/tescilli kripto yoktur. Mass-market muafiyetine girer.
+
 Ağ: Demo, api.verifyblind.com backend'ine istek atar; review penceresinde canlıdır.
 
 İletişim: <ADIN SOYADIN> — <EMAIL> — <TELEFON>
 ```
 
-### 3.3 — Beta App Description — **EN / TR**
+### 3.3 — App Store Description — **EN / TR**
 
 EN:
 ```
 VerifyBlind lets you prove you are a real, unique person to websites and apps using your NFC ID card
 and a quick face check — without ever sharing your ID number. Your identity stays encrypted on your
-device. This beta lets you try the full verification flow via the built-in Demo mode (no physical
-card required).
+device.
 ```
 TR:
 ```
 VerifyBlind, NFC kimlik kartınız ve hızlı bir yüz kontrolü ile, kimlik numaranızı hiç paylaşmadan,
 gerçek ve tekil bir kişi olduğunuzu web sitelerine ve uygulamalara kanıtlamanızı sağlar. Kimliğiniz
-cihazınızda şifreli kalır. Bu beta'da, dahili Demo modu ile tüm doğrulama akışını fiziksel kart
-gerekmeden deneyebilirsiniz.
-```
-
-### 3.4 — What to Test — **EN / TR**
-
-EN:
-```
-Please test using the "Demo" button on the home screen (no ID card needed):
-- Complete a demo verification (consent → simulated scan/NFC → camera liveness → success).
-- Try "Delete Identity" to confirm data is removed.
-- Browse History, Settings, Backup and Help.
-Report any crash, confusing wording, or step that fails to advance.
-```
-TR:
-```
-Lütfen ana ekrandaki "Demo" düğmesiyle test edin (kimlik kartı gerekmez):
-- Bir demo doğrulamayı tamamlayın (onay → simüle tarama/NFC → kamera canlılık → başarı).
-- "Kimliği Sil" ile verinin silindiğini doğrulayın.
-- Geçmiş, Ayarlar, Yedekleme ve Yardım'ı gezin.
-Çökme, kafa karıştıran ifade veya ilerlemeyen bir adım olursa bildirin.
+cihazınızda şifreli kalır.
 ```
 
 ---
@@ -266,13 +244,12 @@ Lütfen ana ekrandaki "Demo" düğmesiyle test edin (kimlik kartı gerekmez):
 ## BÖLÜM 4 — Operasyonel watch-item'lar (red riskini azaltır)
 
 1. **Backend canlı olsun** (Enclave dahil) — demo gerçek API'yi çağırır.
-2. **demo-register sürüm çakışması:** Sunucu, `app_version`'ı **Android Play Store** sürümüyle
-   karşılaştırıp eşitse 403/`DEMO_PUBLISHED_APP` döner. iOS build sürümü `1.0.1`; Android Play Store
-   yayını yoksa fallback `1.0.0` → demo geçer. İleride Android `1.0.1` yayınlanırsa iOS demo'su
-   kırılabilir — sürümleri ayrı tut.
-3. **PrivacyInfo.xcprivacy bundle'a girdi mi:** CI `xcodegen generate` sonrası dosya "Copy Bundle
-   Resources"ta olmalı (Resources/ zaten target source'u, otomatik girer). Build sonrası ASC'den
-   privacy uyarısı gelmezse tamamdır.
-4. **Store screenshot'ları:** External TestFlight için **gerekmez**. Production App Store yayınında
-   gerekecek (6.7" + 6.5" iPhone setleri).
-```
+2. **Demo sürüm eşleşmesi:** `demoVersionIos` submit edilen build'in `CFBundleShortVersionString`'i ile
+   **birebir** aynı olmalı (yoksa reviewer demo butonunu göremez). Guard platform-aware
+   (`VerifyController`), Android demo sürümüyle çakışmaz.
+3. **Yayından önce demo'yu KAPAT** (`demoVersionIos = ""`) — public kullanıcılar demo görmesin.
+4. **PrivacyInfo.xcprivacy bundle'a girdi mi:** CI `xcodegen generate` sonrası "Copy Bundle
+   Resources"ta olmalı; ASC'den privacy uyarısı gelmezse tamam.
+5. **Screenshots:** Production'da ZORUNLU (6.9"/6.7" + 6.5"). Beta'da gerekmiyordu.
+6. **Video (opsiyonel):** Gerçek cihazda NFC kart okuma + yüz canlılık + başarı — 45-90 sn, TCKN
+   bulanık, unlisted link. "Gerçek çekirdek işlev çalışıyor mu" sorusunu önceden kapatır.
