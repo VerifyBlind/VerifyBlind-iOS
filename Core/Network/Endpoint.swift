@@ -40,8 +40,16 @@ enum APIClientError: Error, LocalizedError {
                     ? L.t("error_service_unavailable")
                     : L.t("error_server_temporary")
             }
-            let detail = [body?.error, body?.details].compactMap { $0 }.joined(separator: " — ")
-            return detail.isEmpty ? "Sunucu hatası (\(status))" : "Sunucu hatası (\(status)): \(detail)"
+            // Relay 4xx işletme hataları (enclave kodları) zaten YERELLEŞTİRİLMİŞ, kullanıcı dostu
+            // bir `error` metni taşır → Android `parseApiError` gibi DOĞRUDAN göster (teknik
+            // "Sunucu hatası (kod)" öneki dostça/çok-satırlı mesajı bozmasın). Metin yoksa fallback.
+            if let serverError = body?.error, !serverError.isEmpty {
+                if let details = body?.details, !details.isEmpty {
+                    return "\(serverError)\n\n\(details)"
+                }
+                return serverError
+            }
+            return "Sunucu hatası (\(status))"
         case .rateLimited(let secs):
             guard let secs, secs > 0 else { return L.t("error_rate_limited_generic") }
             return secs >= 60
