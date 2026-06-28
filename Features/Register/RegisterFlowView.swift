@@ -18,10 +18,13 @@ struct RegisterFlowView: View {
             Theme.background.ignoresSafeArea()
             switch vm.step {
             case .liveness:
-                // Liveness tam ekran (Android ayrı LivenessActivity).
+                // Liveness tam ekran (Android ayrı LivenessActivity). Demo: sahte jest + chip yok.
                 LivenessView(
-                    viewModel: LivenessViewModel(challenges: vm.challenges, chipPhotoData: vm.chipPhoto, isDemo: false),
-                    onSuccess: { selfie, score in vm.onLiveness(selfie: selfie, score: score) },
+                    viewModel: LivenessViewModel(
+                        challenges: vm.isDemo ? [1, 2, 3] : vm.challenges,
+                        chipPhotoData: vm.isDemo ? nil : vm.chipPhoto,
+                        isDemo: vm.isDemo),
+                    onSuccess: { selfie, crop, score in vm.onLiveness(selfie: selfie, antiSpoofCrop: crop, score: score) },
                     onCancel: { vm.onLivenessCancel() }
                 )
             case .processing:
@@ -30,6 +33,20 @@ struct RegisterFlowView: View {
                 SuccessStepView(onHome: onFinish)
             case .failed(let title, let message):
                 FailedStepView(title: title, message: message, onClose: onFinish)
+            case .biometricConsent:
+                ZStack(alignment: .bottom) {
+                    VStack(spacing: 0) {
+                        header
+                        StepperHeader(steps: [L.t("step_prepare"), L.t("step_mrz"), L.t("step_nfc"), L.t("step_face")], current: 4)
+                        Spacer()
+                    }
+                    Color.black.opacity(0.5).ignoresSafeArea()
+                    BiometricConsentSheet(
+                        onApprove: { vm.approveBiometricConsent() },
+                        onReject: onFinish
+                    )
+                    .transition(.move(edge: .bottom))
+                }
             default:
                 VStack(spacing: 0) {
                     header
@@ -55,9 +72,21 @@ struct RegisterFlowView: View {
         case .preparation:
             PreparationStepView(vm: vm)
         case .mrz:
-            MRZScanStepView(onResult: { vm.onMrz($0) })
+            MRZScanStepView(isDemo: vm.isDemo, onResult: { vm.onMrz($0) })
         case .nfc:
-            NfcStepView(status: vm.nfcStatus).onAppear { vm.startNfc() }
+            NfcStepView(
+                status: vm.nfcStatus,
+                isDemo: vm.isDemo,
+                retryMessage: vm.nfcRetryMessage,
+                onStart: {
+                    if vm.isDemo {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { vm.demoAfterNfc() }
+                    } else {
+                        vm.startNfc()
+                    }
+                },
+                onRetry: { vm.retryNfc() }
+            )
         default:
             EmptyView()
         }
@@ -85,6 +114,9 @@ struct RegisterFlowView: View {
 
 private struct PreparationStepView: View {
     @ObservedObject var vm: RegisterViewModel
+
+    @State private var privacyDoc: PrivacyDoc? = nil
+    @State private var loadingPrivacy = false
 
     private let tips: [(String, String, String)] = [
         ("sun.max", "tip1_title", "tip1_desc"),
@@ -117,6 +149,22 @@ private struct PreparationStepView: View {
 
                 Spacer().frame(height: 8)
 
+                // Aydınlatma Metni link (Android tvPrivacyNoticeCardAdd paritesi)
+                Button {
+                    fetchPrivacy()
+                } label: {
+                    if loadingPrivacy {
+                        ProgressView().frame(height: 20)
+                    } else {
+                        Text(L.t("read_privacy_notice"))
+                            .font(.system(size: 13))
+                            .foregroundColor(Theme.themePrimary)
+                            .underline()
+                    }
+                }
+                .buttonStyle(.plain)
+                .padding(.bottom, 2)
+
                 // KVKK onay kutusu
                 Button { vm.kvkkAccepted.toggle() } label: {
                     HStack(alignment: .top, spacing: 10) {
@@ -132,10 +180,30 @@ private struct PreparationStepView: View {
                 }
                 .buttonStyle(.plain)
 
-                PrimaryGradientButton(title: L.t("btn_start"), enabled: vm.kvkkAccepted) { vm.begin() }
+                PrimaryGradientButton(title: L.t("btn_start"),
+                                      enabled: vm.kvkkAccepted && !vm.isStarting,
+                                      loading: vm.isStarting) { vm.begin() }
                     .padding(.top, 8)
             }
             .padding(20)
+        }
+        .sheet(item: $privacyDoc) { doc in PrivacyNoticeView(text: doc.text) }
+    }
+
+    private func fetchPrivacy() {
+        guard !loadingPrivacy else { return }
+        loadingPrivacy = true
+        Task { @MainActor in
+            defer { loadingPrivacy = false }
+            var text = L.t("privacy_notice_load_failed")
+            do {
+                let resp = try await VerifyAPI.shared.privacyNotice()
+                let t = resp.text ?? ""
+                text = t.isEmpty ? L.t("privacy_notice_load_error") : t
+            } catch {
+                Log.warning("Aydınlatma metni yüklenemedi: \(error.localizedDescription)", category: .flow)
+            }
+            privacyDoc = PrivacyDoc(text: text)
         }
     }
 }
@@ -143,9 +211,11 @@ private struct PreparationStepView: View {
 // MARK: - MRZ tarama
 
 private struct MRZScanStepView: View {
+    var isDemo: Bool = false
     let onResult: (MRZParser.Result) -> Void
     @StateObject private var camera = CameraController(position: .back)
     @State private var scanner = MRZScanner()
+    @State private var scanLineProgress: CGFloat = 0
 
     var body: some View {
         ZStack {
@@ -155,29 +225,80 @@ private struct MRZScanStepView: View {
             if camera.permissionDenied || camera.configurationFailed {
                 cameraError
             } else {
-                VStack {
-                    Text(L.t("scan_mrz_instruction"))
-                        .font(.system(size: 16, weight: .bold)).foregroundColor(.white)
-                        .padding(10).background(.black.opacity(0.5), in: Capsule())
-                        .padding(.top, 16)
-                    Text(L.t("scan_mrz_subtitle"))
-                        .font(.system(size: 13)).foregroundColor(.white.opacity(0.85))
-                        .multilineTextAlignment(.center).padding(.top, 4)
-                    Spacer()
-                    RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.85), lineWidth: 2)
-                        .frame(height: 120).padding(.horizontal, 24)
-                    Spacer()
+                GeometryReader { geo in
+                    let frameW = geo.size.width * 0.85
+                    let frameH = frameW / 1.58  // credit card aspect ratio (Android 1.58:1)
+                    let frameX = (geo.size.width - frameW) / 2
+                    // Android vertical_bias=0.75 → frame center at ~55% of usable height
+                    let usable = geo.size.height - 120  // reserve bottom for text
+                    let frameY = usable * 0.5 - frameH / 2
+
+                    ZStack(alignment: .topLeading) {
+                        // Dark overlay outside scan frame
+                        Color.black.opacity(0.55)
+                            .mask(
+                                Rectangle().fill(.white)
+                                    .reverseMask(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .frame(width: frameW, height: frameH)
+                                            .position(x: frameX + frameW / 2, y: frameY + frameH / 2)
+                                    )
+                            )
+
+                        // Corner brackets
+                        MRZCornerBrackets(frameX: frameX, frameY: frameY, w: frameW, h: frameH)
+
+                        // Animated scan line
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(
+                                LinearGradient(
+                                    colors: [.clear, Color(red: 0.13, green: 0.39, blue: 0.94).opacity(0.8), .clear],
+                                    startPoint: .leading, endPoint: .trailing
+                                )
+                            )
+                            .frame(width: frameW - 8, height: 3)
+                            .position(x: frameX + frameW / 2,
+                                      y: frameY + 4 + (frameH - 8) * scanLineProgress)
+                            .animation(.linear(duration: 1.6).repeatForever(autoreverses: true), value: scanLineProgress)
+                    }
+                    .ignoresSafeArea(edges: .bottom)
+
+                    // Bottom instructions
+                    VStack(spacing: 4) {
+                        Text(L.t("scan_mrz_instruction"))
+                            .font(.system(size: 16, weight: .semibold)).foregroundColor(.white)
+                        Text(L.t("scan_mrz_subtitle"))
+                            .font(.system(size: 13)).foregroundColor(Color(white: 0.69))
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 32)
+                    }
+                    .frame(width: geo.size.width)
+                    .position(x: geo.size.width / 2, y: geo.size.height - 70)
+                }
+                .onAppear {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        scanLineProgress = 1
+                    }
                 }
             }
         }
         .onAppear {
-            scanner.onResult = { r in
-                camera.stop()
-                Log.info("MRZ okundu (register): type=\(r.documentType)", category: .nfc)
-                onResult(r)
+            if isDemo {
+                camera.start()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    camera.stop()
+                    onResult(MRZParser.Result(documentNumber: "A12345678", dateOfBirth: "920101",
+                                              dateOfExpiry: "301231", documentType: "ID"))
+                }
+            } else {
+                scanner.onResult = { r in
+                    camera.stop()
+                    Log.info("MRZ okundu (register): type=\(r.documentType)", category: .nfc)
+                    onResult(r)
+                }
+                camera.onFrame = { buf, o in scanner.process(buf, orientation: o) }
+                camera.start()
             }
-            camera.onFrame = { buf, o in scanner.process(buf, orientation: o) }
-            camera.start()
         }
         .onDisappear { camera.stop() }
     }
@@ -190,32 +311,92 @@ private struct MRZScanStepView: View {
     }
 }
 
+/// Dört köşede L-şekilli braket çizer (Android ScanFrameView eşdeğeri).
+private struct MRZCornerBrackets: View {
+    let frameX: CGFloat
+    let frameY: CGFloat
+    let w: CGFloat
+    let h: CGFloat
+
+    private let len: CGFloat = 24
+    private let thick: CGFloat = 3
+    private let color = Color.white.opacity(0.95)
+
+    var body: some View {
+        Canvas { ctx, _ in
+            let corners: [(CGFloat, CGFloat, CGFloat, CGFloat)] = [
+                (frameX, frameY, 1, 1),
+                (frameX + w, frameY, -1, 1),
+                (frameX, frameY + h, 1, -1),
+                (frameX + w, frameY + h, -1, -1)
+            ]
+            for (cx, cy, dx, dy) in corners {
+                var hp = Path(); hp.move(to: CGPoint(x: cx, y: cy)); hp.addLine(to: CGPoint(x: cx + dx * len, y: cy))
+                var vp = Path(); vp.move(to: CGPoint(x: cx, y: cy)); vp.addLine(to: CGPoint(x: cx, y: cy + dy * len))
+                ctx.stroke(hp, with: .color(color), lineWidth: thick)
+                ctx.stroke(vp, with: .color(color), lineWidth: thick)
+            }
+        }
+    }
+}
+
+extension View {
+    func reverseMask<M: View>(_ mask: M) -> some View {
+        self.mask(
+            ZStack {
+                Rectangle().fill(.white)
+                mask.blendMode(.destinationOut)
+            }
+            .compositingGroup()
+        )
+    }
+}
+
 // MARK: - NFC
 
 private struct NfcStepView: View {
     let status: String
+    var isDemo: Bool = false
+    var retryMessage: String? = nil
+    var onStart: () -> Void = {}
+    var onRetry: () -> Void = {}
 
     var body: some View {
         VStack(spacing: 24) {
             Spacer()
-            ZStack {
-                Circle().stroke(Theme.nfcRing.opacity(0.3), lineWidth: 2).frame(width: 200, height: 200)
-                Circle().stroke(Theme.nfcRing.opacity(0.2), lineWidth: 2).frame(width: 150, height: 150)
-                Image(systemName: "wave.3.right")
-                    .font(.system(size: 64))
-                    .foregroundColor(Theme.themePrimary)
+            if let retry = retryMessage {
+                // Recoverable (kart kaydı/bağlantı koptu) — akış kırılmaz, tekrar dene.
+                ZStack {
+                    Circle().stroke(Theme.error.opacity(0.25), lineWidth: 2).frame(width: 160, height: 160)
+                    Image(systemName: "wave.3.right").font(.system(size: 56)).foregroundColor(Theme.error)
+                }
+                Text(retry)
+                    .font(.system(size: 16)).foregroundColor(Theme.onSurface)
+                    .multilineTextAlignment(.center).padding(.horizontal, 40)
+                PrimaryGradientButton(title: L.t("handshake_retry"), action: onRetry)
+                    .padding(.horizontal, 40)
+            } else {
+                ZStack {
+                    Circle().stroke(Theme.nfcRing.opacity(0.3), lineWidth: 2).frame(width: 200, height: 200)
+                    Circle().stroke(Theme.nfcRing.opacity(0.2), lineWidth: 2).frame(width: 150, height: 150)
+                    Image(systemName: "wave.3.right")
+                        .font(.system(size: 64))
+                        .foregroundColor(Theme.themePrimary)
+                }
+                Text(L.t("nfc_id_card_instruction"))
+                    .font(.system(size: 16))
+                    .foregroundColor(Theme.onSurface)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+                Text(isDemo ? L.t("nfc_searching") : status)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(Theme.onSurfaceVariant)
             }
-            Text(L.t("nfc_id_card_instruction"))
-                .font(.system(size: 16))
-                .foregroundColor(Theme.onSurface)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-            Text(status)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(Theme.onSurfaceVariant)
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Gerçek: NFC okumayı başlat. Demo: ~2s sonra biyometrik rızaya geç (onStart parent'ta sürer).
+        .onAppear { onStart() }
     }
 }
 

@@ -21,6 +21,14 @@ final class LoginViewModel: ObservableObject {
     private var nonce: String = ""
     private var pkHash: String?
 
+    /// `initialPayload` (deep-link URL) verilirse QR taramayı atla, doğrudan o nonce ile başla.
+    init(initialPayload: String? = nil) {
+        if let initialPayload {
+            step = .loadingPartner   // kamera adımı gösterilmesin
+            onQr(initialPayload)
+        }
+    }
+
     // MARK: - QR
 
     func onQr(_ payload: String) {
@@ -71,8 +79,13 @@ final class LoginViewModel: ObservableObject {
     private func completeLogin() async {
         do {
             let enclavePubKey = try await HandshakeService.shared.ensureLoginHandshake()
-            // Biyometrik decrypt → saklı SignedTicket RAW JSON.
-            let signedTicketJson = try await TicketStore.decryptSignedTicket(reason: L.t("biometric_subtitle_decrypt"))
+            // Holder-of-key (Y-4): bu login'e özgü mesaj — enclave UserPubKey ile doğrular.
+            // Kanonik form Android/enclave ile BYTE-BYTE aynı olmalı: "VBLOK1|{nonce}|{pk_hash}|{ts}".
+            let sigTs = Int64(Date().timeIntervalSince1970)
+            let hokMessage = "VBLOK1|\(nonce)|\(pkHash ?? "")|\(sigTs)"
+            // TEK biyometrik promptla decrypt + imza.
+            let (signedTicketJson, userSig) = try await TicketStore.decryptSignedTicketAndSign(
+                message: hokMessage, reason: L.t("biometric_subtitle_decrypt"))
             let wrapper = try LoginWrapperBuilder.build(signedTicketJson: signedTicketJson, nonce: nonce, pkHash: pkHash)
 
             let (aesBlob, aesKey) = try CryptoUtils.aesEncrypt(wrapper)
@@ -80,12 +93,21 @@ final class LoginViewModel: ObservableObject {
             let hybrid = HybridContent(encKey: encKey, blob: aesBlob)
             let hybridJson = String(decoding: try JSONEncoder().encode(hybrid), as: UTF8.self)
 
-            let req = LoginRequest(encrSignedTicket: hybridJson, nonce: nonce)
-            _ = try await VerifyAPI.shared.login(req)
+            let req = LoginRequest(encrSignedTicket: hybridJson, nonce: nonce, userSignature: userSig, userSigTs: sigTs)
+            try await VerifyAPI.shared.login(req)
 
             recordHistory()
             step = .success
         } catch {
+            if case let APIClientError.http(_, body) = error, body?.errorCode == "ERR_TICKET_REVOKED" {
+                // Ticket sunucu tarafında iptal edildi → yerel kaydı sil. Akış kapanınca RootView'in
+                // onDismiss'i AppState.refresh() çağırır → kayıtsız (kimlik ekleme) durumuna dönülür.
+                TicketStore.clear()
+                fail(title: L.t("ticket_revoked_title"),
+                     message: body?.error ?? L.t("ticket_revoked_message"),
+                     error: nil)
+                return
+            }
             fail(title: L.t("login_failed_title"),
                  message: (error as? LocalizedError)?.errorDescription ?? error.localizedDescription,
                  error: error)
@@ -113,8 +135,9 @@ final class LoginViewModel: ObservableObject {
     }
 
     private func fail(title: String, message: String, error: Error?) {
-        if let error { Log.error("Login başarısız: \(title)", error: error, category: .flow) }
-        else { Log.error("Login başarısız: \(title) — \(message)", category: .flow) }
+        // Seviye hatanın türünden gelir (geçersiz QR/kart yok/ağ/biyometrik iptal = warning/info, gerçek arıza = error).
+        Log.failure(error != nil ? "Login başarısız: \(title)" : "Login başarısız: \(title) — \(message)",
+                    error: error, category: .flow)
         step = .failed(title: title, message: message)
     }
 }

@@ -9,6 +9,7 @@ final class RegisterViewModel: ObservableObject {
         case preparation
         case mrz
         case nfc
+        case biometricConsent   // KVKK biyometrik rıza — liveness'tan hemen önce (Android paritesi)
         case liveness
         case processing
         case success
@@ -17,7 +18,14 @@ final class RegisterViewModel: ObservableObject {
 
     @Published var step: Step = .preparation
     @Published var kvkkAccepted = false
+    /// "Başla" basıldıktan sonra handshake biter ekran değişene kadar true — çift basmayı + ikinci
+    /// handshake'i engeller, butonu spinner durumuna geçirir.
+    @Published var isStarting = false
     @Published var nfcStatus: String = L.t("nfc_searching")
+    /// Kart kaydı/bağlantı koparsa: akışı kırmadan NFC adımında "tekrar dene" mesajı (Android UX).
+    @Published var nfcRetryMessage: String? = nil
+
+    private var nfcAttempt = 0   // sessiz oto-tekrar sayacı (en fazla 3)
 
     let isDemo: Bool
 
@@ -26,6 +34,7 @@ final class RegisterViewModel: ObservableObject {
     private var mrz: MRZParser.Result?
     private(set) var scanned: ScannedPassport?
     private var selfieData: Data?
+    private var antiSpoofCropData: Data?
     private var registrationNonce: String?
 
     var challenges: [Int] { session?.challenges ?? [] }
@@ -39,9 +48,12 @@ final class RegisterViewModel: ObservableObject {
 
     /// "Başla" → user key + (gerçekte) handshake; demo'da doğrudan işleme.
     func begin() {
-        guard kvkkAccepted else { return }
+        guard kvkkAccepted, !isStarting else { return }
+        isStarting = true
         AppPrefs.kvkkConsentAccepted = true
         Task {
+            // Hangi yoldan çıkarsak çıkalım (başarı/hata/erken return) butonu serbest bırak.
+            defer { isStarting = false }
             do {
                 userPubKey = try KeychainKeyStore.ensureUserKey()
             } catch {
@@ -49,8 +61,9 @@ final class RegisterViewModel: ObservableObject {
                 return
             }
             if isDemo {
-                step = .processing
-                await runDemo()
+                // Demo: handshake yok; gerçek akışla aynı ekranlardan geçer (Android demo paritesi).
+                // MRZ(~2s, sahte) → NFC(~2s) → Liveness(demo, oto-jest) → İşlem → demoRegister.
+                step = .mrz
             } else {
                 do {
                     session = try await HandshakeService.shared.performRegisterHandshake()
@@ -71,7 +84,19 @@ final class RegisterViewModel: ObservableObject {
 
     // MARK: - NFC
 
+    /// NFC giriş noktası (MRZ→NFC veya manuel "Yeniden Dene"): deneme sayacını sıfırlar.
     func startNfc() {
+        nfcAttempt = 0
+        nfcRetryMessage = nil
+        runNfcAttempt()
+    }
+
+    /// Manuel "Yeniden Dene" (3 sessiz deneme de başarısız olduktan sonraki hata ekranından).
+    func retryNfc() {
+        startNfc()
+    }
+
+    private func runNfcAttempt() {
         guard let mrz, let session else {
             fail(title: L.t("error_system_title"), message: L.t("err_passport_data_lost"), error: nil)
             return
@@ -86,41 +111,69 @@ final class RegisterViewModel: ObservableObject {
                     dateOfExpiry: mrz.dateOfExpiry,
                     handshakeNonce: session.nonce
                 )
+                nfcAttempt = 0
                 scanned = result
                 if challenges.isEmpty {
                     step = .processing
                     await finalizeReal()
                 } else {
-                    step = .liveness
+                    step = .biometricConsent   // rıza → liveness
                 }
             } catch let e as NFCReadError {
-                if case .cancelled = e {
-                    // İptal → MRZ'ye geri dön (kullanıcı tekrar deneyebilir).
+                switch e {
+                case .cancelled:
                     Log.info("NFC iptal edildi", category: .nfc)
                     step = .mrz
-                } else {
-                    fail(title: L.t("nfc_connection_failed_status"),
-                         message: e.errorDescription ?? L.t("nfc_read_error"),
-                         error: e)
+                case .notAvailable, .invalidInput:
+                    fail(title: L.t("nfc_not_found_title"), message: e.errorDescription ?? L.t("nfc_read_error"), error: e)
+                default:
+                    await retryOrFail(reason: "\(e)")
                 }
             } catch {
-                fail(title: L.t("nfc_connection_failed_status"),
-                     message: (error as? LocalizedError)?.errorDescription ?? error.localizedDescription,
-                     error: error)
+                await retryOrFail(reason: error.localizedDescription)
             }
+        }
+    }
+
+    /// Bağlantı koparsa (kart kaydı/timeout/unknown): UYARI ÇIKARMADAN 1s bekleyip sessizce tekrar
+    /// dener — en fazla 3 kez. Üçü de başarısızsa hata ekranı + "Yeniden Dene" (Android UX).
+    private func retryOrFail(reason: String) async {
+        if nfcAttempt < 3 {
+            nfcAttempt += 1
+            Log.warning("NFC denemesi başarısız (\(reason)) → 1s sonra sessiz tekrar #\(nfcAttempt)/3", category: .nfc)
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            runNfcAttempt()
+        } else {
+            Log.warning("NFC 3 sessiz deneme başarısız → hata ekranı (\(reason))", category: .nfc)
+            nfcAttempt = 0
+            nfcRetryMessage = L.t("nfc_read_error")
         }
     }
 
     // MARK: - Liveness
 
-    func onLiveness(selfie: Data, score: Float) {
+    func onLiveness(selfie: Data, antiSpoofCrop: Data?, score: Float) {
         selfieData = selfie
+        antiSpoofCropData = antiSpoofCrop
         step = .processing
-        Task { await finalizeReal() }
+        Task {
+            if isDemo { await runDemo() } else { await finalizeReal() }
+        }
     }
 
     func onLivenessCancel() {
         step = .mrz
+    }
+
+    /// Demo: NFC ekranı ~2s sonra biyometrik rızaya geçer (Android `demoProceedAfterNfc`).
+    func demoAfterNfc() {
+        guard isDemo else { return }
+        step = .biometricConsent
+    }
+
+    /// Biyometrik rıza onaylandı → liveness (gerçek + demo ortak).
+    func approveBiometricConsent() {
+        step = .liveness
     }
 
     // MARK: - Gerçek kayıt finalize
@@ -138,7 +191,10 @@ final class RegisterViewModel: ObservableObject {
                 nonceSignature: session.nonceSignature
             )
             if let selfieData { payload.userSelfie = selfieData.base64EncodedString() }
-            // integrityToken = "" (Aşama 4 dev-skip)
+            if let antiSpoofCropData { payload.antiSpoofCrop = antiSpoofCropData.base64EncodedString() }
+            // iOS App Attest (Aşama 6) relay'de el sıkışmada doğrulanır; register enclave'e proxy'lenir
+            // ve el sıkışma nonce'una bağlıdır → şifreli IntegrityToken iOS'ta BOŞ bırakılır (Android'de
+            // bu alan Play Integrity taşır). Bkz. AppAttestService + sunucu ClientAttestationGate.
 
             let json = try encodeToString(payload)
             let (aesBlob, aesKey) = try CryptoUtils.aesEncrypt(json)
@@ -224,8 +280,9 @@ final class RegisterViewModel: ObservableObject {
     }
 
     private func fail(title: String, message: String, error: Error?) {
-        if let error { Log.error("Register başarısız: \(title)", error: error, category: .flow) }
-        else { Log.error("Register başarısız: \(title) — \(message)", category: .flow) }
+        // Seviye hatanın türünden gelir (NFC/ağ/biyometrik iptal = warning/info, gerçek arıza = error).
+        Log.failure(error != nil ? "Register başarısız: \(title)" : "Register başarısız: \(title) — \(message)",
+                    error: error, category: .flow)
         step = .failed(title: title, message: message)
     }
 }

@@ -59,6 +59,9 @@ enum FaceAligner {
 
         let result = renderer.image { ctx in
             let cg = ctx.cgContext
+            // Yüksek kaliteli yeniden örnekleme — affine warp + 112'ye küçültmede daha az aliasing
+            // (Android'deki FILTER_BITMAP/anti-alias karşılığı). R50'ye giden görüntü daha temiz.
+            cg.interpolationQuality = .high
             if p.usedFallback || leftEye == nil {
                 // Fallback: düz 112×112 ölçek (Android createScaledBitmap eşdeğeri)
                 sourceImage.draw(in: CGRect(origin: .zero, size: size))

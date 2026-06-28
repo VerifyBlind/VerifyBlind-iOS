@@ -31,6 +31,15 @@ enum TicketStore {
         return try CryptoUtils.aesDecrypt(blobBase64: hybrid.blob, keyBase64: aesKey)
     }
 
+    /// Holder-of-key (Y-4): TEK biyometrik promptla hem SignedTicket RAW JSON'ını çözer hem de
+    /// `message`'i user key ile imzalar. Login akışı bu imzayı `user_signature` olarak gönderir.
+    static func decryptSignedTicketAndSign(message: String, reason: String) async throws -> (signedTicketJson: String, signatureBase64: String) {
+        guard let hybrid = loadEncrypted() else { throw TicketStoreError.noTicket }
+        let (aesKey, signature) = try await KeychainKeyStore.decryptAndSign(hybrid.encKey, message: message, reason: reason)
+        let ticketJson = try CryptoUtils.aesDecrypt(blobBase64: hybrid.blob, keyBase64: aesKey)
+        return (ticketJson, signature)
+    }
+
     /// Android `clearTicket()` — prefs ticket/pubkey/expiry temizler (key silme + SecureStore wallet akışında).
     static func clear() {
         AppPrefs.clearTicket()

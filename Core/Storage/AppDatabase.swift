@@ -7,6 +7,9 @@ final class AppDatabase {
 
     let dbQueue: DatabaseQueue
 
+    /// Disk üzerindeki DB dosyası (self-test/teşhis için). Bellek-içi DB'de nil.
+    private(set) static var fileURL: URL?
+
     init(_ dbQueue: DatabaseQueue) throws {
         self.dbQueue = dbQueue
         try Self.migrator.migrate(dbQueue)
@@ -18,8 +21,13 @@ final class AppDatabase {
             let dir = try fm.url(for: .applicationSupportDirectory, in: .userDomainMask,
                                  appropriateFor: nil, create: true)
             let dbURL = dir.appendingPathComponent("verifyblind.sqlite")
-            let queue = try DatabaseQueue(path: dbURL.path)
-            Log.info("AppDatabase açıldı: \(dbURL.lastPathComponent)", category: .app)
+            let queue = try DatabaseQueue(path: dbURL.path)   // dosyayı oluşturur
+            // ZKP: DB'yi iCloud/iTunes cihaz yedeğinden hariç tut (personId/cardId düz metin kolonlar).
+            // DatabaseQueue WAL kullanmaz → tek .sqlite dosyası; -journal yalnız yazma sırasında geçici.
+            // Bkz [[project_ios_backup_zkp_hardening]] — Android data_extraction_rules.xml karşılığı.
+            BackupExclusion.exclude(dbURL)
+            fileURL = dbURL
+            Log.info("AppDatabase açıldı: \(dbURL.lastPathComponent) (yedekten hariç: \(BackupExclusion.isExcluded(dbURL)))", category: .app)
             return try AppDatabase(queue)
         } catch {
             Log.error("AppDatabase açılamadı — in-memory fallback", error: error, category: .app)

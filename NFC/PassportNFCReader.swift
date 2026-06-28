@@ -38,18 +38,27 @@ final class PassportNFCReader {
         let reader = PassportReader(masterListURL: nil)
         let model: NFCPassportModel
         do {
-            // customDisplayMessage atlandı → kütüphane varsayılan metni. Türkçe ekran metinleri
-            // gerçek Register akışında (Aşama 4) eklenecek.
+            // NFC sistem sheet'i TR metinleri (Android paritesi). nil → kütüphane varsayılanı.
             model = try await reader.readPassport(
                 mrzKey: mrzKey,
                 tags: [.SOD, .DG1, .DG2, .DG15],
-                aaChallenge: challenge
+                aaChallenge: challenge,
+                customDisplayMessage: { msg in
+                    switch msg {
+                    case .requestPresentPassport: return L.t("nfc_id_card_instruction")
+                    case .successfulRead:         return L.t("nfc_completed")
+                    case .error:                  return nil
+                    default:                      return L.t("nfc_reading") // authenticating / reading progress
+                    }
+                }
             )
         } catch let e as NFCPassportReaderError {
             Log.warning("NFC okuma başarısız: \(e)", category: .nfc)
             throw Self.map(e)
         } catch {
-            Log.error("NFC okuma beklenmeyen hata", error: error, category: .nfc)
+            // NFC çevresel/donanımsal flaky bir kanal — `NFCPassportReaderError` dışı bir hata bile
+            // genelde kullanıcı/ortam kaynaklı (kart kaydı, oturum sonlanması). Kod arızası değil → warning.
+            Log.warning("NFC okuma beklenmeyen hata: \(error.localizedDescription)", category: .nfc)
             throw NFCReadError.unknown("\(error)")
         }
 
@@ -60,11 +69,15 @@ final class PassportNFCReader {
             throw NFCReadError.missingData("DG1")
         }
         let dg15Bytes = model.getDataGroup(.DG15)?.data
+        // RAW DG2 EF bytes for SOD hash verification (the extracted faceImage is re-encoded and
+        // won't match the SOD hash). (Security review Y-3.)
+        let dg2RawBytes = model.getDataGroup(.DG2)?.data
         let faceBytes = (model.getDataGroup(.DG2) as? DataGroup2)?.imageData
 
         let scanned = ScannedPassport(
             sod: Data(sodBytes),
             dg1: Data(dg1Bytes),
+            dg2Raw: (dg2RawBytes?.isEmpty == false) ? Data(dg2RawBytes!) : nil,
             dg15: (dg15Bytes?.isEmpty == false) ? Data(dg15Bytes!) : nil,
             faceImage: (faceBytes?.isEmpty == false) ? Data(faceBytes!) : nil,
             activeAuthSignature: Data(model.activeAuthenticationSignature),

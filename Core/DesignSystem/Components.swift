@@ -8,26 +8,36 @@ struct PrimaryGradientButton: View {
     let title: String
     var systemImage: String? = nil
     var enabled: Bool = true
+    /// İşlem sürerken: spinner göster + butonu devre dışı bırak (çift basmayı engeller).
+    var loading: Bool = false
     var height: CGFloat = 60
     var fontSize: CGFloat = 17
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 10) {
-                if let systemImage {
-                    Image(systemName: systemImage).font(.system(size: 20, weight: .semibold))
+            ZStack {
+                // Yükleme sırasında içeriği görünmez yap ama yerde tut → buton boyutu sabit kalır.
+                HStack(spacing: 10) {
+                    if let systemImage {
+                        Image(systemName: systemImage).font(.system(size: 20, weight: .semibold))
+                    }
+                    Text(title).font(.system(size: fontSize, weight: .bold))
                 }
-                Text(title).font(.system(size: fontSize, weight: .bold))
+                .opacity(loading ? 0 : 1)
+
+                if loading {
+                    ProgressView().tint(.white)
+                }
             }
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
             .frame(height: height)
             .background(Theme.buttonGradient)
             .clipShape(RoundedRectangle(cornerRadius: Theme.radiusButton, style: .continuous))
-            .opacity(enabled ? 1 : 0.5)
+            .opacity(enabled || loading ? 1 : 0.5)
         }
-        .disabled(!enabled)
+        .disabled(!enabled || loading)
     }
 }
 

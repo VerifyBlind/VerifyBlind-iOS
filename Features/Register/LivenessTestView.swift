@@ -7,10 +7,10 @@ import SwiftUI
 ///
 /// Çip okuma Aşama 2 `PassportNFCReader`'ı yeniden kullanır (prefilled dev kart MRZ'si).
 struct LivenessTestView: View {
-    // Dev test kartı (NFCTestView ile aynı).
-    @State private var docNo = "A36S661356"
-    @State private var dob = "10.06.1981"
-    @State private var doe = "04.07.2032"
+    // Dev test kartı — default'lar BOŞ (gerçek kart verisi release binary'de/public repo'da olmasın, Y-13).
+    @State private var docNo = ""
+    @State private var dob = ""
+    @State private var doe = ""
 
     @State private var session: LivenessSession?
     @State private var lastSelfie: UIImage?
@@ -100,7 +100,7 @@ struct LivenessTestView: View {
         .fullScreenCover(item: $session) { cfg in
             LivenessView(
                 viewModel: LivenessViewModel(challenges: challenges, chipPhotoData: cfg.chip, isDemo: cfg.isDemo),
-                onSuccess: { jpeg, score in
+                onSuccess: { jpeg, _, score in
                     lastSelfie = UIImage(data: jpeg)
                     lastScore = score
                     statusText = "Liveness başarılı (skor %\(Int(score * 100)))."

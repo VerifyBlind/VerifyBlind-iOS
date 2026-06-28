@@ -14,14 +14,14 @@ enum Config {
     static let apiBaseURL: URL = {
         let raw = string("API_BASE_URL")
         guard let url = URL(string: raw) else {
-            fatalError("Config: API_BASE_URL geçersiz veya eksik. xcconfig dosyasını kontrol edin.")
+            // Çökmeden önce Sentry'e açıklayıcı mesajı gönderir (düz fatalError'da bu metin rapora girmez).
+            Log.fatal("Config: API_BASE_URL geçersiz veya eksik. xcconfig dosyasını kontrol edin.", category: .app)
         }
         return url
     }()
 
-    static let certPins: [String] = {
-        [string("CERT_PIN_1"), string("CERT_PIN_2")].filter { !$0.isEmpty }
-    }()
+    // Cert pinning pin'leri artık koda gömülü tek kaynak (CertificatePinningDelegate.pinnedPublicKeys);
+    // CERT_PIN_* secret/xcconfig yolu kaldırıldı (pin gizli değil, değişiklik zaten rebuild gerektirir).
 
     /// Enclave PCR0 imzalarını doğrulamak için kullanılan RSA public key (base64 SPKI).
     static let enclaveDeveloperPublicKey: String = string("ENCLAVE_DEVELOPER_PUBLIC_KEY")
@@ -31,11 +31,18 @@ enum Config {
         return AppAttestEnvironment(rawValue: raw) ?? .development
     }()
 
-    static let iCloudContainerID: String = string("ICLOUD_CONTAINER_ID")
+    // iCloud KALDIRILDI (Aşama 5, ZKP): yedekleme yalnız Dropbox + Google Drive.
 
     static let sentryDSN: String = string("SENTRY_DSN")
 
     static let dropboxAppKey: String = string("DROPBOX_IOS_APP_KEY")
+
+    /// Google Sign-In OAuth client id (Aşama 5 yedekleme). Boşsa Google Drive devre dışı.
+    static let googleClientID: String = string("GOOGLE_IOS_CLIENT_ID")
+
+    /// CI'da gömülen kaynak commit SHA'sı (boş = lokal build). Ayarlar'daki sürüm satırında gösterilir;
+    /// kod şeffaflığı zincirinin (GitHub Release build-N + Sigstore provenance) cihaz tarafı ucu.
+    static let gitCommit: String = string("GIT_COMMIT")
 
     static var isDebugBuild: Bool {
         #if DEBUG
@@ -44,6 +51,10 @@ enum Config {
         return false
         #endif
     }
+
+    // NOT: Demo modu görünürlüğü artık `Config.isTestFlight` ile DEĞİL, sunucu-kontrollü sürüm
+    // eşleşmesiyle belirlenir: admin `demoVersionIos` == cihaz build sürümü (bkz AppState.loadConfig,
+    // ConfigController app-config). Eski receipt-bazlı `isTestFlight` (kullanılmıyordu) kaldırıldı.
 
     private static func string(_ key: String) -> String {
         let value = Bundle.main.object(forInfoDictionaryKey: key) as? String ?? ""

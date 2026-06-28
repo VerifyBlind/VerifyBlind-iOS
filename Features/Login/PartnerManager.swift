@@ -25,6 +25,11 @@ enum PartnerManager {
         load()[partnerId]
     }
 
+    /// Tüm önbellekli partnerler — bulut yedek/geri yükleme (Aşama 5) enumerate eder.
+    static func all() -> [String: PartnerItem] {
+        load()
+    }
+
     private static func load() -> [String: PartnerItem] {
         guard let data = d.data(forKey: key),
               let map = try? JSONDecoder().decode([String: PartnerItem].self, from: data) else {

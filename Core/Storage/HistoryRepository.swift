@@ -98,6 +98,119 @@ final class HistoryRepository {
         }
     }
 
+    // MARK: - Senkron (Aşama 5 — Android HistoryDao/HistoryRepository sync sorguları)
+
+    /// Android `getAllHistorySnapshot`: silinmemiş tüm kayıtlar, timestamp DESC, title/description ÇÖZÜLMÜŞ.
+    /// SyncManager yükleme adımı bunu kullanır (içeriği personId-AES-GCM ile yeniden şifrelemek için).
+    /// `fetchAll`'dan farkı: cardId filtresi YOK (tüm kimliklerin kayıtları).
+    func getAllHistorySnapshot() -> [HistoryRecord] {
+        do {
+            let raw = try db.read { db in
+                try HistoryRecord
+                    .filter(Column("isDeleted") == false)
+                    .order(Column("timestamp").desc)
+                    .fetchAll(db)
+            }
+            return raw.map { decryptItem($0) }
+        } catch {
+            Log.error("HistoryRepository.getAllHistorySnapshot başarısız", error: error, category: .flow)
+            return []
+        }
+    }
+
+    /// Android `getAllNonces`: yereldeki TÜM nonce'lar (silinmiş dahil).
+    func getAllNonces() -> Set<String> {
+        let list = (try? db.read { db in
+            try String.fetchAll(db, sql: "SELECT nonce FROM history")
+        }) ?? []
+        return Set(list)
+    }
+
+    /// Android `getDeletedNonces`: tombstone (isDeleted=1) nonce'lar.
+    func getDeletedNonces() -> Set<String> {
+        let list = (try? db.read { db in
+            try String.fetchAll(db, sql: "SELECT nonce FROM history WHERE isDeleted = 1")
+        }) ?? []
+        return Set(list)
+    }
+
+    /// Android `getAllPersonIds`: boş olmayan DISTINCT personId (bulut öğelerini çözmek için anahtarlar).
+    func getAllPersonIds() -> [String] {
+        (try? db.read { db in
+            try String.fetchAll(db, sql: "SELECT DISTINCT personId FROM history WHERE personId != ''")
+        }) ?? []
+    }
+
+    /// Android `getSentItems`: buluta gönderilmiş, silinmemiş kayıtlar (çözülmüş). SyncManager yalnız
+    /// nonce kullanır ama Android paritesi için title/description çözülür.
+    func getSentItems() -> [HistoryRecord] {
+        let raw = (try? db.read { db in
+            try HistoryRecord.filter(Column("isSent") == true && Column("isDeleted") == false).fetchAll(db)
+        }) ?? []
+        return raw.map { decryptItem($0) }
+    }
+
+    /// Android `getUnsentItems`: henüz gönderilmemiş kayıtlar (isDeleted dahil). title/description ŞİFRELİ
+    /// bırakılır — çağıran yalnız `nonce`/`isDeleted` okur.
+    func getUnsentItems() -> [HistoryRecord] {
+        (try? db.read { db in
+            try HistoryRecord.filter(Column("isSent") == false).fetchAll(db)
+        }) ?? []
+    }
+
+    /// Android `markAsSent(nonces)`: kayıtları buluta gönderildi olarak işaretle.
+    func markAsSent(_ nonces: [String]) {
+        guard !nonces.isEmpty else { return }
+        do {
+            try db.write { db in
+                for nonce in nonces {
+                    try db.execute(sql: "UPDATE history SET isSent = 1 WHERE nonce = ?", arguments: [nonce])
+                }
+            }
+        } catch {
+            Log.error("HistoryRepository.markAsSent başarısız", error: error, category: .flow)
+        }
+    }
+
+    /// Android `markAsDeletedByNonce`: tombstone (silinmiş + yeniden gönderilecek olarak işaretle).
+    func markDeletedByNonce(_ nonce: String) {
+        do {
+            try db.write { db in
+                try db.execute(sql: "UPDATE history SET isDeleted = 1, isSent = 0 WHERE nonce = ?", arguments: [nonce])
+            }
+        } catch {
+            Log.error("HistoryRepository.markDeletedByNonce başarısız", error: error, category: .flow)
+        }
+    }
+
+    /// Android `cleanupSyncedTombstones`: hem silinmiş hem (silinmesi) buluta gönderilmiş kayıtları kalıcı sil.
+    func cleanupSyncedTombstones() {
+        do {
+            try db.write { db in
+                try db.execute(sql: "DELETE FROM history WHERE isDeleted = 1 AND isSent = 1")
+            }
+        } catch {
+            Log.error("HistoryRepository.cleanupSyncedTombstones başarısız", error: error, category: .flow)
+        }
+    }
+
+    /// Android `insertCloudItem`: buluttan çözülmüş öğeyi yerele yaz. title/description yerel history key
+    /// ile YENİDEN şifrelenir; `isSent = true`, yeni `id`.
+    func insertCloudItem(_ item: HistoryRecord) {
+        do {
+            let encTitle = try encryptString(item.title)
+            let encDesc = try encryptString(item.description)
+            var rec = item
+            rec.id = nil
+            rec.title = encTitle
+            rec.description = encDesc
+            rec.isSent = true
+            try db.write { db in try rec.insert(db) }
+        } catch {
+            Log.error("HistoryRepository.insertCloudItem başarısız", error: error, category: .flow)
+        }
+    }
+
     // MARK: - Şifreleme (Android encryptString/decryptString)
 
     private func encryptString(_ plain: String) throws -> String {

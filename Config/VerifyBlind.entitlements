@@ -10,20 +10,12 @@
 	<string>$(APP_ATTEST_ENVIRONMENT)</string>
 	<key>com.apple.developer.associated-domains</key>
 	<array>
-		<string>applinks:verifyblind.com</string>
-		<string>applinks:api.verifyblind.com</string>
+		<string>applinks:app.verifyblind.com</string>
 	</array>
-	<key>com.apple.developer.icloud-services</key>
-	<array>
-		<string>CloudDocuments</string>
-	</array>
-	<key>com.apple.developer.icloud-container-identifiers</key>
-	<array>
-		<string>$(ICLOUD_CONTAINER_ID)</string>
-	</array>
-	<key>com.apple.developer.ubiquity-container-identifiers</key>
-	<array>
-		<string>$(ICLOUD_CONTAINER_ID)</string>
-	</array>
+	<!-- Push Notifications: debug=development, release=production (Xcode otomatik yönetir) -->
+	<key>aps-environment</key>
+	<string>development</string>
+	<!-- iCloud KASITLI OLARAK YOK (Asama 5, ZKP): yedekleme yalniz Dropbox + Google Drive ile,
+	     uygulama kontrolunde. iCloud Drive/Keychain otomatik yedegi engellendi. iCloud entitlement EKLEME. -->
 </dict>
 </plist>

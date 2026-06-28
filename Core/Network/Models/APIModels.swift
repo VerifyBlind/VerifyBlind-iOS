@@ -62,6 +62,10 @@ struct LoginHandshakeResponse: Codable {
 struct SecurePayload: Codable {
     var sod: String
     var dg1: String
+    /// RAW DG2 EF bytes (Base64) — SOD hash binding for the face data group AND biometric face source:
+    /// the enclave extracts the face from this verified DG2 (Dg2FaceExtractor); it is no longer sent
+    /// separately. Enclave `VerifyDGHashes` requires this. (Security review Y-3.)
+    var dg2: String = ""
     var dg15: String = ""
     var activeSig: String
     var aaChallenge: String = ""
@@ -69,15 +73,19 @@ struct SecurePayload: Codable {
     var nonce: String = ""
     var timestamp: Int64 = 0
     var nonceSignature: String = ""
-    var dg2Photo: String = ""
+    // NOT: Kimlik yüz fotoğrafı ayrı GÖNDERİLMEZ — enclave biyometrik yüzü SOD-doğrulanmış ham DG2'den
+    // çıkarır (Dg2FaceExtractor). Eski dg2Photo alanı belgeye bağlı olmayan görüntüye güvendiği için kaldırıldı.
     var livenessVideo: String = ""
     var zoomVideo: String = ""
     var userSelfie: String = ""
     var integrityToken: String = ""
+    /// 2.7x geniş yüz crop, 80x80 JPEG Base64 — enclave MiniFASNetV2 pasif liveness (Android `AntiSpoofCrop` paritesi).
+    var antiSpoofCrop: String = ""
 
     enum CodingKeys: String, CodingKey {
         case sod = "SOD"
         case dg1 = "DG1"
+        case dg2 = "DG2"
         case dg15 = "DG15"
         case activeSig = "ActiveSig"
         case aaChallenge = "AAChallenge"
@@ -85,11 +93,11 @@ struct SecurePayload: Codable {
         case nonce = "Nonce"
         case timestamp = "Timestamp"
         case nonceSignature = "NonceSignature"
-        case dg2Photo = "DG2_Photo"
         case livenessVideo = "LivenessVideo"
         case zoomVideo = "ZoomVideo"
         case userSelfie = "UserSelfie"
         case integrityToken = "IntegrityToken"
+        case antiSpoofCrop = "AntiSpoofCrop"
     }
 }
 
@@ -108,10 +116,13 @@ struct RegistrationRequest: Codable {
 struct DemoRegisterRequest: Codable {
     var userPubKey: String
     var appVersion: String = ""
+    /// Relay sürüm kontrolünü App Store'a yönlendirir (Play Store değil).
+    var platform: String = "ios"
 
     enum CodingKeys: String, CodingKey {
         case userPubKey = "user_pub_key"
         case appVersion = "app_version"
+        case platform
     }
 }
 
@@ -249,21 +260,21 @@ struct LoginRequest: Codable {
     var encrSignedTicket: String
     var nonce: String
     var integrityToken: String = ""
+    // Holder-of-key (Y-4): "VBLOK1|{nonce}|{pk_hash}|{user_sig_ts}" mesajının user key (RSA-PSS/SHA-256) imzası
+    var userSignature: String = ""
+    var userSigTs: Int64 = 0
 
     enum CodingKeys: String, CodingKey {
         case encrSignedTicket = "encr_signed_ticket"
         case nonce
         case integrityToken = "integrity_token"
+        case userSignature = "user_signature"
+        case userSigTs = "user_sig_ts"
     }
 }
 
-struct LoginResponse: Codable {
-    let encryptedResponse: String
-
-    enum CodingKeys: String, CodingKey {
-        case encryptedResponse = "encrypted_response"
-    }
-}
+// LoginResponse KALDIRILDI: relay /login mobile'a daima `{}` döner (encrypted_response partner
+// callback'ine gider, app'e değil). `VerifyAPI.login` artık postNoContent (Void) — decode yok.
 
 // MARK: - Partner / PoP
 
@@ -316,14 +327,15 @@ struct AppConfigResponse: Codable {
     let minimumIosVersion: String?
     let storeUrl: String?
     let environment: String?
-    let demoPassword: String?
+    /// Admin panelden tanımlanır; cihaz sürümü buna eşitse demo butonu görünür (şifre yok).
+    let demoVersionIos: String?
 
     enum CodingKeys: String, CodingKey {
         case minimumAndroidVersion = "minimum_android_version"
         case minimumIosVersion = "minimum_ios_version"
         case storeUrl = "store_url"
         case environment
-        case demoPassword = "demo_password"
+        case demoVersionIos = "demo_version_ios"
     }
 }
 
@@ -346,13 +358,50 @@ struct KvkkBlockCardRequest: Codable {
     }
 }
 
+// MARK: - Privacy notice (KVKK aydınlatma metni)
+
+/// `GET /api/kvkk/privacy-notice?format=text` → `{ version, effectiveDate, language, text }`.
+struct PrivacyNoticeResponse: Codable {
+    let text: String?
+    let version: String?
+    let language: String?
+}
+
+// MARK: - App Attest (Aşama 6)
+
+/// `GET /api/Verify/appattest/challenge` → `{ challenge }` (base64 rastgele, tek-kullanımlık, Redis TTL).
+struct AppAttestChallengeResponse: Codable {
+    let challenge: String
+}
+
+/// `POST /api/Verify/appattest/enroll` gövdesi — attestation + challenge ile anahtar kaydı.
+struct AppAttestEnrollRequest: Codable {
+    let keyId: String
+    let attestation: String   // base64 CBOR attestation object
+    let challenge: String
+}
+
+/// Korunan isteklerin `X-App-Attest` başlığı (JSON → base64). Assertion belirli bir challenge'a bağlı.
+struct AppAttestToken: Codable {
+    let keyId: String
+    let challenge: String
+    let assertion: String     // base64 CBOR assertion
+}
+
 // MARK: - Error body
 
 /// Sunucu hata gövdesi (`{error, code, details}`) — Android `ApiError`/`parseApiError` eşdeğeri.
+/// `errorCode`: login akışında enclave'in döndürdüğü top-level `error_code` (ör. ERR_TICKET_REVOKED).
 struct APIErrorBody: Codable {
     let error: String?
     let code: String?
     let details: String?
+    let errorCode: String?
+
+    enum CodingKeys: String, CodingKey {
+        case error, code, details
+        case errorCode = "error_code"
+    }
 }
 
 // MARK: - JSONValue (keyfi JSON taşıyıcı — örn. PartnerInfoResponse.validations)

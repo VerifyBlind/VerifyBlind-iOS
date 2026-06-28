@@ -21,7 +21,7 @@ configs:
   Debug: debug
   Release: release
 
-# Sürüm aralıkları `from:` (Stage 0'da kanıtlanmış config). Gerçek kilit = Package.resolved
+# Sürüm aralıkları  `from:` (Stage 0'da kanıtlanmış config). Gerçek kilit = Package.resolved
 # (idiomatic Swift yaklaşımı: manifest'te aralık + resolved'da kilit). exactVersion DENENMEDİ:
 # Xcode 26 SwiftPM, Sentry 8.36.0'ı (trait bildirmiyor) exact pinleyince "disabled default traits
 # on package that declares no traits" hatası veriyor; `from:` daha yeni trait-aware Sentry'ye çözülüp
@@ -39,6 +39,11 @@ packages:
   SwiftyDropbox:
     url: https://github.com/dropbox/SwiftyDropbox
     from: 10.0.0
+  GoogleSignIn:
+    # Aşama 5 yedekleme: yalnız OAuth (Drive işlemleri elle URLSession REST). AppAuth/
+    # GTMSessionFetcher/GTMAppAuth transitive gelir; ağır GoogleAPIClientForREST KULLANILMAZ.
+    url: https://github.com/google/GoogleSignIn-iOS
+    from: 7.1.0
   Sentry:
     url: https://github.com/getsentry/sentry-cocoa
     from: 8.36.0
@@ -54,6 +59,7 @@ targets:
           - "*.xcconfig"
       - path: Core
       - path: Features
+      - path: Views
       - path: NFC
       - path: Camera
       - path: OCR
@@ -66,22 +72,22 @@ targets:
         com.apple.developer.nfc.readersession.formats:
           - TAG
         com.apple.developer.devicecheck.appattest-environment: $(APP_ATTEST_ENVIRONMENT)
+        # APNs push notifications — distribution build (TestFlight + App Store) daima production.
+        # App Attest environment'dan bağımsız: dev CI de TestFlight'a yüklediği için production gerekir.
+        aps-environment: production
+        # Deep-link / Universal Links: SDK widget'ı app.verifyblind.com/request?nonce=... üretir
+        # (cdn-static/sdk/v1/verifyblind.js + QRPayloadParser). AASA: app.verifyblind.com/.well-known/.
         com.apple.developer.associated-domains:
-          - applinks:verifyblind.com
-          - applinks:api.verifyblind.com
-        # iCloud: Backup feature implement edilince eklenecek
-        # com.apple.developer.icloud-services:
-        #   - CloudDocuments
-        # com.apple.developer.icloud-container-identifiers:
-        #   - $(ICLOUD_CONTAINER_ID)
-        # com.apple.developer.ubiquity-container-identifiers:
-        #   - $(ICLOUD_CONTAINER_ID)
+          - applinks:app.verifyblind.com
+        # iCloud KASITLI OLARAK YOK (Aşama 5 kararı, ZKP): yedekleme yalnız Dropbox + Google Drive
+        # ile, uygulama kontrolünde. iCloud device backup + Keychain sync engellendi
+        # ([[project_ios_backup_zkp_hardening]]). iCloud entitlement EKLEME.
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(IOS_BUNDLE_ID)
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CURRENT_PROJECT_VERSION: $(BUILD_NUMBER)
-        MARKETING_VERSION: "1.0.0"
+        MARKETING_VERSION: "1.0.1"  # demo-register: app_version sunucu fallback "1.0.0" ile çakışmasın (DEMO_PUBLISHED_APP 403)
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Manual
         SWIFT_OBJC_BRIDGING_HEADER: ""
@@ -102,6 +108,8 @@ targets:
       - package: GRDB
         product: GRDB
       - package: SwiftyDropbox
+      - package: GoogleSignIn
+        product: GoogleSignIn
       - package: Sentry
         product: Sentry
     scheme:

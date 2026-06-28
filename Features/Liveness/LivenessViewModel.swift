@@ -35,9 +35,11 @@ final class LivenessViewModel: ObservableObject {
     @Published var showScore = false   // chipEmbedding != nil
     @Published var checkmark = false
     @Published var wrongMove = false
+    @Published var qualityWarning: String?   // (b) ışık uyarısı — Android tvQualityWarning karşılığı
     @Published var debugEyeOpen = 0   // dev: canlı göz-açıklık % (blink kalibrasyonu)
     @Published var debugSmile = 0     // dev: canlı smile sinyali ×100 (smile kalibrasyonu)
     @Published private(set) var alignedSelfieJPEG: Data?
+    @Published private(set) var antiSpoofCropJPEG: Data?
     @Published private(set) var selfiePreview: UIImage?
     @Published private(set) var chipPreview: UIImage?
     private(set) var finalMatchScore: Float = 0
@@ -62,6 +64,8 @@ final class LivenessViewModel: ObservableObject {
     private var lastActionTime: TimeInterval = 0
     private var lastCaptureTime: TimeInterval = 0
     private var selfieJPEG: Data?
+    private var lumaWarning: String?   // ışık uyarısı (her kare — video kuyruğu)
+    private var blurWarning: String?   // netlik uyarısı (best-frame yakalamada — video kuyruğu)
     private let blinkDetector = BlinkDetector()
     private let smileDetector = SmileDetector()
 
@@ -81,6 +85,7 @@ final class LivenessViewModel: ObservableObject {
         if let data = chipPhotoData, let ui = UIImage(data: data) { chipPreview = ui }
 
         camera.onFrame = { [weak self] buffer, orientation in
+            self?.updateQualityWarning(for: buffer)   // (b) ışık uyarısı — her kare (yüz olmasa da)
             self?.analyzer.process(buffer, orientation: orientation)
         }
         analyzer.onFace = { [weak self] frame in
@@ -121,6 +126,8 @@ final class LivenessViewModel: ObservableObject {
 
     // MARK: - Video kuyruğu logic
 
+    private var antiSpoofCropJPEGLogic: Data?  // video kuyruğu; main'e finalizeSuccessAttempt'te taşınır
+
     private func resetLogicState() {
         var list = challengesInput
         while list.count < 5 { list.append(.randomGesture()) }
@@ -131,6 +138,7 @@ final class LivenessViewModel: ObservableObject {
         bestSavedQualityScore = -1
         isIdentityVerified = false
         selfieJPEG = nil
+        antiSpoofCropJPEGLogic = nil
         lastActionTime = 0
         lastCaptureTime = 0
     }
@@ -178,12 +186,20 @@ final class LivenessViewModel: ObservableObject {
             self?.debugSmile = smilePct
         }
 
-        guard now - lastActionTime >= 2000 else { return }
         let target = challenges[index]
+
+        // Göreceli detektörleri HER karede besle (throttle'dan ÖNCE) → nötr baseline erken yakalanır.
+        // Smile bug'ı: throttle (2s) bitene kadar besleme yoktu; kullanıcı "Gülümseyin"i görüp hemen
+        // gülünce baseline yüksek başlıyor, ilk gülümseme "yükseliş" sayılmıyordu (ikincide oluyordu).
+        let blinkFired = (target == .blink) ? blinkDetector.feed(eyeOpen) : false
+        let smileFired = (target == .smile) ? smileDetector.feed(signals.smile) : false
+
+        // İlerleme throttle'dan SONRA (önceki jestin yeni challenge'a sızmasını önler).
+        guard now - lastActionTime >= 2000 else { return }
 
         // Blink: göreceli detektör (Vision gözü tam kapatmıyor) + statik fallback.
         if target == .blink {
-            if blinkDetector.feed(eyeOpen) || LivenessGestureDetector.detect(signals) == .blink {
+            if blinkFired || LivenessGestureDetector.detect(signals) == .blink {
                 advanceOnSuccess(now: now)
             }
             return
@@ -191,7 +207,7 @@ final class LivenessViewModel: ObservableObject {
 
         // Smile: göreceli detektör (Vision smile olasılığı yok) + statik fallback.
         if target == .smile {
-            if smileDetector.feed(signals.smile) || LivenessGestureDetector.detect(signals) == .smile {
+            if smileFired || LivenessGestureDetector.detect(signals) == .smile {
                 advanceOnSuccess(now: now)
             }
             return
@@ -253,6 +269,16 @@ final class LivenessViewModel: ObservableObject {
         let rightEyeInCrop = frame.signals.rightEye.map { CGPoint(x: $0.x - left, y: $0.y - top) }
         guard let aligned = FaceAligner.alignedImage(from: crop, leftEye: leftEyeInCrop, rightEye: rightEyeInCrop) else { return }
 
+        // Netlik (112×112 aligned) → anlık "net değil" uyarısı + best-frame için kalite bonusu.
+        // Bulanık/kirli lens veya hareket bulanıklığında düşük çıkar (Android computeSharpness paritesi).
+        let sharpness = Self.sharpness(of: aligned)
+        blurWarning = (sharpness >= 0 && sharpness <= Self.blurWarnThreshold)
+            ? NSLocalizedString("liveness_quality_blur", comment: "") : nil
+        publishWarning()
+        let sharpBonus: Float = sharpness >= 0 ? min(max(sharpness / Self.sharpQualityRef, 0), 1) * 15 : 0
+        // Eşit benzerlikte best-frame seçimini en NET kareye kaydır (poz + netlik birleşik).
+        let effQuality = min(quality + sharpBonus, 115)
+
         var currentMatch: Float = 0
         if let chipEmbedding, let selfieEmb = embedder.embedding(from: aligned) {
             currentMatch = FaceEmbedder.cosineSimilarity(chipEmbedding, selfieEmb)
@@ -262,19 +288,22 @@ final class LivenessViewModel: ObservableObject {
         if chipEmbedding != nil {
             if currentMatch > bestSavedMatchScore + 0.005 {
                 shouldSave = true
-            } else if abs(currentMatch - bestSavedMatchScore) < 0.005, quality > bestSavedQualityScore + 5 {
+            } else if abs(currentMatch - bestSavedMatchScore) < 0.005, effQuality > bestSavedQualityScore + 5 {
                 shouldSave = true
             } else if selfieJPEG == nil {
                 shouldSave = true
             }
-        } else if quality > bestSavedQualityScore + 5 || selfieJPEG == nil {
+        } else if effQuality > bestSavedQualityScore + 5 || selfieJPEG == nil {
             shouldSave = true
         }
 
         if shouldSave {
-            selfieJPEG = UIImage(cgImage: aligned).jpegData(compressionQuality: 0.95)
+            // PNG (lossless): R50 girişi tam bu 112×112 pikseller; bu boyutta JPEG blok artefaktı
+            // embedding'i bozabilir, dosya zaten ~20-40 KB. (Değişken adı geçmişten "JPEG" kaldı.)
+            selfieJPEG = UIImage(cgImage: aligned).pngData()
+            antiSpoofCropJPEGLogic = makeAntiSpoofCrop(fullCG: fullCG, box: box)
             bestSavedMatchScore = currentMatch
-            bestSavedQualityScore = quality
+            bestSavedQualityScore = effQuality
             if currentMatch > bestMatchScore { bestMatchScore = currentMatch }
             if currentMatch > Self.matchThreshold { isIdentityVerified = true }
         }
@@ -297,6 +326,7 @@ final class LivenessViewModel: ObservableObject {
         let hasChip = chipEmbedding != nil
         let score = bestMatchScore
         let jpeg = selfieJPEG
+        let cropJPEG = antiSpoofCropJPEGLogic
 
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
@@ -312,6 +342,7 @@ final class LivenessViewModel: ObservableObject {
                 return
             }
             if let jpeg { self.alignedSelfieJPEG = jpeg }
+            self.antiSpoofCropJPEG = cropJPEG
             Log.info("Liveness başarı: score=\(Int(score * 100))% verified=\(verified)", category: .liveness)
             self.phase = .success
         }
@@ -336,11 +367,11 @@ final class LivenessViewModel: ObservableObject {
         checkmark = false
         wrongMove = false
         switch action {
-        case .faceLeft: instruction = "Başınızı sola çevirin"
-        case .faceRight: instruction = "Başınızı sağa çevirin"
-        case .blink: instruction = "Göz kırpın"
-        case .smile: instruction = "Gülümseyin"
-        case .none: instruction = "—"
+        case .faceLeft:  instruction = NSLocalizedString("liveness_face_left", comment: "")
+        case .faceRight: instruction = NSLocalizedString("liveness_face_right", comment: "")
+        case .blink:     instruction = NSLocalizedString("liveness_face_blink", comment: "")
+        case .smile:     instruction = NSLocalizedString("liveness_face_smile", comment: "")
+        case .none:      instruction = "—"
         }
         subInstruction = "Hareketi yapın"
     }
@@ -352,6 +383,11 @@ final class LivenessViewModel: ObservableObject {
         if step >= demoList.count {
             invalidateTimer()
             camera.stop()
+            // Demo selfie gerektirmez (runDemo selfieData'yı kullanmaz). Ama telefon masadaysa/yüz
+            // yoksa captureFrame hiç çalışmaz → alignedSelfieJPEG nil kalır ve View'ın onSuccess
+            // koşulu (`let jpeg = alignedSelfieJPEG`) sağlanmaz → akış .processing'e geçemez, ekran
+            // durmuş kamerada kilitlenir. Yüz yakalanmadıysa boş placeholder ver ki demo tıkanmasın.
+            if alignedSelfieJPEG == nil { alignedSelfieJPEG = Data() }
             phase = .success
             return
         }
@@ -396,6 +432,116 @@ final class LivenessViewModel: ObservableObject {
     private func cgImage(from pixelBuffer: CVPixelBuffer) -> CGImage? {
         let ci = CIImage(cvPixelBuffer: pixelBuffer)
         return ciContext.createCGImage(ci, from: ci.extent)
+    }
+
+    /// MiniFASNetV2 için 2.7x geniş 80x80 JPEG crop (Android LivenessActivity:666 port).
+    /// box: captureFrame'deki piksel-koordinatlı yüz kutusu (captureFrame'den doğrudan gelir).
+    private func makeAntiSpoofCrop(fullCG: CGImage, box: CGRect) -> Data? {
+        let cx = box.midX, cy = box.midY
+        let halfW = box.width * 2.7 / 2
+        let halfH = box.height * 2.7 / 2
+        let left   = max(0, cx - halfW)
+        let top    = max(0, cy - halfH)
+        let right  = min(CGFloat(fullCG.width),  cx + halfW)
+        let bottom = min(CGFloat(fullCG.height), cy + halfH)
+        let asRect = CGRect(x: left, y: top, width: right - left, height: bottom - top).integral
+        guard asRect.width > 0, asRect.height > 0,
+              let wideCrop = fullCG.cropping(to: asRect) else { return nil }
+        UIGraphicsBeginImageContextWithOptions(CGSize(width: 80, height: 80), true, 1)
+        UIImage(cgImage: wideCrop).draw(in: CGRect(x: 0, y: 0, width: 80, height: 80))
+        let scaled = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext()
+        return scaled?.jpegData(compressionQuality: 0.9)
+    }
+
+    // MARK: - (b) Ortam kalitesi (ışık) — Android LivenessAnalyzer.averageLuma karşılığı
+
+    /// Her karede ortalama parlaklığı ölçer ve karanlık/aşırı-parlak uyarısını (ana kuyrukta) günceller.
+    /// Video kuyruğunda çağrılır (Android onFrameLuma ile aynı disiplin).
+    private func updateQualityWarning(for pixelBuffer: CVPixelBuffer) {
+        let luma = Self.averageLuma(pixelBuffer)
+        if luma < 55 {
+            lumaWarning = NSLocalizedString("liveness_quality_dark", comment: "")
+        } else if luma > 235 {
+            lumaWarning = NSLocalizedString("liveness_quality_bright", comment: "")
+        } else {
+            lumaWarning = nil
+        }
+        publishWarning()
+    }
+
+    /// Işık (öncelikli) + netlik uyarısını tek label'da birleştirir (Android `publishQualityWarning`).
+    /// Video kuyruğunda çağrılır; `@Published` güncellemesi ana kuyruğa marshalled edilir.
+    private func publishWarning() {
+        let w = lumaWarning ?? blurWarning
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.qualityWarning != w else { return }
+            self.qualityWarning = w
+        }
+    }
+
+    // MARK: - Netlik (blur) ölçümü — Android computeSharpness karşılığı
+
+    /// 112×112 yüz CGImage'ında ileri-fark gradyan enerjisi (Brenner benzeri). Yüksek = net.
+    /// Eşikler `blurWarnThreshold` / `sharpQualityRef` ile aynı; sabit 112 boyut → eşik anlamlı
+    /// (yine de cihazda ince ayar gerekebilir).
+    static let blurWarnThreshold: Float = 45
+    static let sharpQualityRef: Float = 250   // bu enerjide tam +15 kalite bonusu
+
+    static func sharpness(of cg: CGImage) -> Float {
+        let w = cg.width, h = cg.height
+        guard w >= 4, h >= 4 else { return -1 }
+        var gray = [UInt8](repeating: 0, count: w * h)
+        let cs = CGColorSpaceCreateDeviceGray()
+        guard let ctx = CGContext(data: &gray, width: w, height: h, bitsPerComponent: 8,
+                                  bytesPerRow: w, space: cs,
+                                  bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return -1 }
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        var sum: Double = 0
+        var count = 0
+        var y = 1
+        while y < h - 1 {
+            let row = y * w
+            var x = 1
+            while x < w - 1 {
+                let c = Int(gray[row + x])
+                let gx = Int(gray[row + x + 1]) - c
+                let gy = Int(gray[row + w + x]) - c
+                sum += Double(gx * gx + gy * gy)
+                count += 1
+                x += 2
+            }
+            y += 2
+        }
+        return count > 0 ? Float(sum / Double(count)) : -1
+    }
+
+    /// BGRA pixel buffer'dan ~2048 örnekle ortalama parlaklık (0..255). Hatada 128 (nötr).
+    /// iOS kamerası kCVPixelFormatType_32BGRA verir → Y düzlemi yok, luma BGRA'dan türetilir.
+    static func averageLuma(_ pixelBuffer: CVPixelBuffer) -> Float {
+        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+        guard let base = CVPixelBufferGetBaseAddress(pixelBuffer) else { return 128 }
+        let width = CVPixelBufferGetWidth(pixelBuffer)
+        let height = CVPixelBufferGetHeight(pixelBuffer)
+        let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
+        guard width > 0, height > 0 else { return 128 }
+        let ptr = base.assumingMemoryBound(to: UInt8.self)
+        let total = width * height
+        let step = max(1, total / 2048)
+        var sum = 0
+        var count = 0
+        var i = 0
+        while i < total {
+            let x = i % width
+            let y = i / width
+            let off = y * bytesPerRow + x * 4   // BGRA
+            let b = Int(ptr[off]); let g = Int(ptr[off + 1]); let r = Int(ptr[off + 2])
+            sum += (r * 77 + g * 150 + b * 29) >> 8   // ~Rec.601 luma
+            count += 1
+            i += step
+        }
+        return count > 0 ? Float(sum) / Float(count) : 128
     }
 
     /// Tek-atış yüz/göz tespiti (chip fotoğrafı) — top-left piksel göz merkezleri.

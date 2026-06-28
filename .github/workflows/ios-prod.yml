@@ -16,10 +16,17 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 60
     environment: production
+    # Kod şeffaflığı (build provenance): contents=release oluşturma, id-token+attestations=Sigstore
+    # keyless imza (actions/attest-build-provenance).
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     env:
       BUNDLE_ID: app.verifyblind.ios
       APP_ATTEST_ENVIRONMENT: production
       BETA_GROUP: External Testers
+      GIT_COMMIT: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
 
@@ -44,15 +51,33 @@ jobs:
           APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
           CERTIFICATE_PRIVATE_KEY: ${{ secrets.CERTIFICATE_PRIVATE_KEY }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          CERT_PIN_1: ${{ secrets.CERT_PIN_1 }}
-          CERT_PIN_2: ${{ secrets.CERT_PIN_2 }}
           ENCLAVE_DEVELOPER_PUBLIC_KEY: ${{ secrets.ENCLAVE_DEVELOPER_PUBLIC_KEY }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           DROPBOX_IOS_APP_KEY: ${{ secrets.DROPBOX_IOS_APP_KEY }}
+          GOOGLE_IOS_CLIENT_ID: ${{ secrets.GOOGLE_IOS_CLIENT_ID }}
+          GOOGLE_IOS_REVERSED_CLIENT_ID: ${{ secrets.GOOGLE_IOS_REVERSED_CLIENT_ID }}
         run: bash scripts/ci/ios-build-upload.sh
+
+      # ── Kod şeffaflığı: Android build-android.yml paritesi (iOS provenance modeli) ──
+      # Zincir: commit → bu workflow → IPA hash'i → Sigstore attestation → Apple upload.
+      # Doğrulama: cdn.verifyblind.com/autoverifyscripts/verify-ios.{ps1,sh}
+      - name: Prepare transparency assets (ipa-hashes.json)
+        run: bash scripts/ci/ios-release-prepare.sh
+
+      - name: Attest build provenance (Sigstore)
+        id: attest
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: release-assets/VerifyBlind.ipa
+
+      - name: Publish transparency release (build-N)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ATTESTATION_BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: bash scripts/ci/ios-release-publish.sh
 
       - name: Upload IPA artifact
         if: always()

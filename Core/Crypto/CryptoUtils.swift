@@ -190,6 +190,26 @@ enum CryptoUtils {
         return ok
     }
 
+    // MARK: - RSA-PSS imzalama (holder-of-key, Y-4)
+
+    /// Holder-of-key kanıtı: user key (Keychain, biyometrik-kapılı) ile RSA-PSS/SHA-256 imza.
+    /// `.rsaSignatureMessagePSSSHA256` → MGF1-SHA256, salt=digest(32); .NET `RSASignaturePadding.Pss`
+    /// (enclave `CryptoUtils.VerifySignature`) ve Android `SHA256withRSA/PSS` ile byte-uyumlu.
+    /// `privateKey` çağrıdan ÖNCE doğrulanmış bir LAContext ile çekilmiş olmalı (ek prompt çıkmaz).
+    static func rsaSignPSS(_ message: String, privateKey: SecKey) throws -> String {
+        let algorithm: SecKeyAlgorithm = .rsaSignatureMessagePSSSHA256
+        guard SecKeyIsAlgorithmSupported(privateKey, .sign, algorithm) else {
+            throw CryptoError.algorithmUnsupported
+        }
+        var error: Unmanaged<CFError>?
+        guard let sig = SecKeyCreateSignature(privateKey, algorithm, Data(message.utf8) as CFData, &error) as Data? else {
+            let msg = Self.cfErr(error)
+            Log.error("CryptoUtils.rsaSignPSS başarısız: \(msg)", category: .crypto)
+            throw CryptoError.encryptionFailed(msg)
+        }
+        return sig.base64EncodedString()
+    }
+
     // MARK: - Base64 yardımcı
 
     /// Android `Base64.DEFAULT` toleransı: whitespace/newline trim + bilinmeyen karakter atla.

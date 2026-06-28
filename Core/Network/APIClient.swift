@@ -17,7 +17,7 @@ final class APIClient {
     private let maxRetries = 2
     private let initialBackoffNanos: UInt64 = 500_000_000 // 500 ms
 
-    init(baseURL: URL = Config.apiBaseURL, pins: [String] = Config.certPins) {
+    init(baseURL: URL = Config.apiBaseURL) {
         self.origin = APIClient.origin(of: baseURL)
 
         let cfg = URLSessionConfiguration.default
@@ -25,7 +25,7 @@ final class APIClient {
         cfg.timeoutIntervalForResource = 300        // Android read/write = ∞; pratik üst sınır
         cfg.waitsForConnectivity = false
 
-        let delegate = CertificatePinningDelegate(pins: pins, host: baseURL.host)
+        let delegate = CertificatePinningDelegate(host: baseURL.host)
         self.session = URLSession(configuration: cfg, delegate: delegate, delegateQueue: nil)
 
         self.encoder = JSONEncoder()
@@ -89,6 +89,12 @@ final class APIClient {
                     continue
                 }
 
+                // 429 → rate limit: Retry-After header'ını taşı, mobil lokalize "X sonra dene" mesajı kursun.
+                if http.statusCode == 429 {
+                    let retryAfter = http.value(forHTTPHeaderField: "Retry-After").flatMap { Int($0) }
+                    throw APIClientError.rateLimited(retryAfterSeconds: retryAfter)
+                }
+
                 guard (200..<300).contains(http.statusCode) else {
                     throw apiError(status: http.statusCode, data: data)
                 }
@@ -101,7 +107,8 @@ final class APIClient {
                     attempt += 1
                     continue
                 }
-                Log.error("APIClient: ağ hatası (\(endpoint.path))", error: urlError, category: .network)
+                // Geçici bağlanırlık (no internet/timeout) — retry'lar tükendi. Kod arızası değil → warning.
+                Log.warning("APIClient: ağ hatası (\(endpoint.path)) — \(urlError.code)", category: .network)
                 throw APIClientError.network("\(urlError.code)")
             }
         }
@@ -119,7 +126,9 @@ final class APIClient {
     }
 
     private func buildRequest(_ endpoint: Endpoint) -> URLRequest {
-        let url = origin.appendingPathComponent(endpoint.path)
+        // origin = scheme://host[:port] (path yok). String birleştirme query string'i KORUR
+        // (appendingPathComponent "?"yi encode edip query'yi bozardı). Path'ler URL-güvenli.
+        let url = URL(string: origin.absoluteString + "/" + endpoint.path) ?? origin.appendingPathComponent(endpoint.path)
         var req = URLRequest(url: url)
         req.httpMethod = endpoint.method.rawValue
         req.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -143,7 +152,7 @@ final class APIClient {
         if let text = String(data: data, encoding: .utf8),
            text.count < 500,
            !text.lowercased().contains("<html") {
-            return .http(status, APIErrorBody(error: text.trimmingCharacters(in: .whitespacesAndNewlines), code: nil, details: nil))
+            return .http(status, APIErrorBody(error: text.trimmingCharacters(in: .whitespacesAndNewlines), code: nil, details: nil, errorCode: nil))
         }
         return .http(status, nil)
     }

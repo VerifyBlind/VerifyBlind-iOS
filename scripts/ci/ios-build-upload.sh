@@ -24,18 +24,27 @@ echo "=== Generate xcconfig ==="
 # Escape '//' → '/$()/' ($() expands to empty string at Xcode build time). gotcha #10.
 DSN_ESC=$(printf '%s' "${SENTRY_DSN:-}" | sed 's|//|/$()/|g')
 
+# Google Sign-In (Aşama 5 yedekleme): reversed client id yoksa client id'den türet.
+# client id "<NUM>-<HASH>.apps.googleusercontent.com" → reversed "com.googleusercontent.apps.<NUM>-<HASH>".
+GCID="${GOOGLE_IOS_CLIENT_ID:-}"
+GREV="${GOOGLE_IOS_REVERSED_CLIENT_ID:-}"
+if [ -z "$GREV" ] && [ -n "$GCID" ]; then
+  GREV="com.googleusercontent.apps.${GCID%.apps.googleusercontent.com}"
+fi
+
 xcconfig_body() {
   echo "API_BASE_URL = https:/\$()/api.verifyblind.com/api/verify/"
-  echo "CERT_PIN_1 = ${CERT_PIN_1:-}"
-  echo "CERT_PIN_2 = ${CERT_PIN_2:-}"
   echo "ENCLAVE_DEVELOPER_PUBLIC_KEY = ${ENCLAVE_DEVELOPER_PUBLIC_KEY:-}"
   echo "APPLE_TEAM_ID = ${APPLE_TEAM_ID}"
   echo "IOS_BUNDLE_ID = ${BUNDLE_ID}"
   echo "APP_ATTEST_ENVIRONMENT = ${APP_ATTEST_ENVIRONMENT}"
-  echo "ICLOUD_CONTAINER_ID = iCloud.${BUNDLE_ID}"
   echo "SENTRY_DSN = $DSN_ESC"
   echo "DROPBOX_IOS_APP_KEY = ${DROPBOX_IOS_APP_KEY:-}"
+  echo "GOOGLE_IOS_CLIENT_ID = ${GCID}"
+  echo "GOOGLE_IOS_REVERSED_CLIENT_ID = ${GREV}"
   echo "BUILD_NUMBER = $BUILD_NUMBER"
+  # Kod şeffaflığı: kaynak commit SHA'sı Info.plist'e gömülür (Ayarlar sürüm satırı + provenance).
+  echo "GIT_COMMIT = ${GIT_COMMIT:-}"
 }
 
 if [ "$APP_ATTEST_ENVIRONMENT" = "development" ]; then
@@ -123,4 +132,21 @@ PUBLISH_ARGS=(
 if [ -n "${BETA_GROUP:-}" ]; then
   PUBLISH_ARGS+=("--beta-group" "$BETA_GROUP")
 fi
-"${PUBLISH_ARGS[@]}"
+
+# Apple altyapısı upload SONRASI adımlarda (RETRIEVE UPLOAD OPERATIONS / beta-review) zaman zaman
+# geçici 500 verip altool'u exit≠0 yapıyor — IPA aslında YÜKLENMİŞ oluyor ("UPLOAD SUCCEEDED").
+# Internal testçiler binary VALID olunca otomatik alır; post-adımlar best-effort. Bu yüzden:
+# yalnızca çıktıda "UPLOAD SUCCEEDED" VARSA publish hatasını yut; YOKSA gerçekten başarısızdır → fail.
+PUBLISH_LOG="$(mktemp)"
+set +e
+"${PUBLISH_ARGS[@]}" 2>&1 | tee "$PUBLISH_LOG"
+PUBLISH_RC=${PIPESTATUS[0]}
+set -e
+if [ "$PUBLISH_RC" -ne 0 ]; then
+  if grep -q "UPLOAD SUCCEEDED" "$PUBLISH_LOG"; then
+    echo "⚠️  publish exit=$PUBLISH_RC ama IPA yüklendi (UPLOAD SUCCEEDED) — Apple geçici post-adım hatası, build YEŞİL sayılıyor."
+  else
+    echo "❌ publish başarısız (UPLOAD SUCCEEDED yok) — gerçek yükleme hatası."
+    exit "$PUBLISH_RC"
+  fi
+fi

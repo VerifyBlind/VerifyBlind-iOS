@@ -78,6 +78,15 @@ enum Theme {
     static let stepperActive   = Color(hex: "#2563EB")
     static let stepperInactive = Color(hex: "#CBD5E1")
 
+    // History item ikon daireleri (bg_circle_green/gray/red) — beyaz glyph
+    static let circleGreen = Color(hex: "#2E7D32")  // bg_circle_green (Green 800)
+    static let circleGray  = Color(hex: "#404040")  // bg_circle_gray
+    static let circleRed   = Color(hex: "#C62828")  // bg_circle_red (Red 800)
+
+    // Consent logo / delete dialog ikon kabı (bg_lock_icon_circle) — yuvarlatılmış DİKDÖRTGEN
+    static let lockIconBg     = Color(hex: "#112038")
+    static let lockIconStroke = Color(hex: "#1A3A6A")
+
     // Birincil CTA — wallet/register "vault" butonu (bg_vault_button): #002451→#1A3A6B, 45°
     static let buttonGradient = LinearGradient(
         colors: [Color(hex: "#002451"), Color(hex: "#1A3A6B")],

@@ -18,6 +18,17 @@ enum AppPrefs {
         static let lastHardwareVerified = "last_hardware_verified"
         static let lastIsMock = "last_is_mock"
         static let lastAttestationTime = "last_attestation_time"
+        // Bulut yedekleme (Aşama 5) — hassas değil: sağlayıcı adı + son yedek zaman damgası
+        static let cloudProvider = "cloud_provider"
+        static let cloudLastBackup = "cloud_last_backup"
+        // Uygulama-içi dil seçimi (Android vb_prefs/user_lang paritesi): "system"/"tr"/"en"
+        static let appLanguage = "app_language"
+        // App Attest (Aşama 6) — anahtar sunucuya kaydedildi mi (enroll). KeyId SecureStore'da.
+        static let appAttestEnrolled = "appattest_enrolled"
+        // APNs push token (hex) — handshake'te sunucuya gönderilir, device_tokens tablosuna kaydedilir.
+        static let apnsToken = "apns_token"
+        // Bildirim izni soft-ask: "Daha Sonra" denince banner'ın tekrar gösterileceği epoch saniye.
+        static let notifSoftAskNextShow = "notif_softask_next_show"
     }
 
     /// Hibrit-şifreli ticket zarfı (HybridContent JSON string).
@@ -63,10 +74,64 @@ enum AppPrefs {
         set { d.set(Int(newValue), forKey: Key.lastAttestationTime) }
     }
 
+    /// Seçili bulut yedekleme sağlayıcısı id'si ("dropbox"/"google_drive") veya nil (bağlı değil).
+    static var cloudProvider: String? {
+        get { d.string(forKey: Key.cloudProvider) }
+        set { d.set(newValue, forKey: Key.cloudProvider) }
+    }
+
+    /// Son başarılı yedek epoch ms; 0 = henüz yedeklenmedi.
+    static var cloudLastBackup: Int64 {
+        get { Int64(d.integer(forKey: Key.cloudLastBackup)) }
+        set { d.set(Int(newValue), forKey: Key.cloudLastBackup) }
+    }
+
+    /// Bulut bağlantısı kesildiğinde sağlayıcı seçimi + son yedek zamanı temizlenir.
+    static func clearCloud() {
+        d.removeObject(forKey: Key.cloudProvider)
+        d.removeObject(forKey: Key.cloudLastBackup)
+    }
+
     /// Android `clearTicket()` — kart kaldırıldığında ticket+pubkey+expiry temizlenir.
     static func clearTicket() {
         d.removeObject(forKey: Key.ticket)
         d.removeObject(forKey: Key.userPubKey)
         d.removeObject(forKey: Key.expiryDate)
+    }
+
+    /// Uygulama-içi dil tercihi: "system" (cihaz dili), "tr", "en". Boş/yoksa "system".
+    static var appLanguage: String {
+        get { d.string(forKey: Key.appLanguage) ?? "system" }
+        set { d.set(newValue, forKey: Key.appLanguage) }
+    }
+
+    /// App Attest anahtarı sunucuya kaydedildi mi (enroll tamam). Reset'te temizlenir.
+    static var appAttestEnrolled: Bool {
+        get { d.bool(forKey: Key.appAttestEnrolled) }
+        set { d.set(newValue, forKey: Key.appAttestEnrolled) }
+    }
+
+    /// APNs cihaz token'ı (hex string). AppDelegate'ten set edilir, handshake'te sunucuya gönderilir.
+    /// Kart sıfırlamada temizlenmez — token cihaza aittir, kartla ilişkili değil.
+    static var apnsToken: String? {
+        get { d.string(forKey: Key.apnsToken) }
+        set { d.set(newValue, forKey: Key.apnsToken) }
+    }
+
+    /// Soft-ask banner'ının tekrar gösterileceği epoch saniye (0 = hemen gösterilebilir).
+    /// "Daha Sonra" denince ileri bir tarihe atılır; sistem izni bir kez sorulunca banner zaten kaybolur.
+    static var notifSoftAskNextShow: Double {
+        get { d.double(forKey: Key.notifSoftAskNextShow) }
+        set { d.set(newValue, forKey: Key.notifSoftAskNextShow) }
+    }
+
+    /// Verilerimi Sil / Sıfırla — TÜM UserDefaults anahtarlarını temizler (Android `prefs.clear()` paritesi).
+    /// Dil tercihi korunur (UI dili sıfırlama sonrası değişmesin); attestation teşhis bayrakları sıfırlanır.
+    static func clearAll() {
+        for key in [Key.ticket, Key.userPubKey, Key.expiryDate, Key.kvkkConsent, Key.biometricEnabled,
+                    Key.lastPcr0, Key.lastHardwareVerified, Key.lastIsMock, Key.lastAttestationTime,
+                    Key.cloudProvider, Key.cloudLastBackup, Key.appAttestEnrolled] {
+            d.removeObject(forKey: key)
+        }
     }
 }

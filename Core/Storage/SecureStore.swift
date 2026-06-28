@@ -19,9 +19,13 @@ enum SecureStore {
     static func saveFcmToken(_ token: String) { set("fcm_token", token) }
     static func getFcmToken() -> String? { get("fcm_token") }
 
+    /// App Attest anahtar kimliği (gizli değil ama cihaza-özel; iCloud/yedek dışında tutulur). Aşama 6.
+    static func saveAppAttestKeyId(_ keyId: String) { set("appattest_key_id", keyId) }
+    static func getAppAttestKeyId() -> String? { get("appattest_key_id") }
+
     /// Android `clear()` — kart silindiğinde / reset'te.
     static func clear() {
-        for account in ["personId", "cardId", "fcm_token"] { delete(account) }
+        for account in ["personId", "cardId", "fcm_token", "appattest_key_id"] { delete(account) }
     }
 
     // MARK: - Keychain çekirdek

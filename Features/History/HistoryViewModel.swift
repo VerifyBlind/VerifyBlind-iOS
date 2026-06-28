@@ -30,7 +30,8 @@ final class HistoryViewModel: ObservableObject {
             toast = L.t("revoke_shared_success")
             load()
         } catch {
-            Log.error("Doğrulama geri alma başarısız", error: error, category: .flow)
+            // Geri alma = ağ/sunucu çağrısı; geçici hata (kullanıcı tekrar deneyebilir) error değil — tür bazlı seviye.
+            Log.failure("Doğrulama geri alma başarısız", error: error, category: .flow)
             toast = L.t("revoke_failed_message")
         }
     }

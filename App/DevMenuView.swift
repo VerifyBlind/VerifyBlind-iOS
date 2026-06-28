@@ -12,6 +12,8 @@ struct DevMenuView: View {
     @State private var stage2Results: [SelfTestResult] = []
     @State private var stage3Results: [SelfTestResult] = []
     @State private var stage4Results: [SelfTestResult] = []
+    @State private var stage5Results: [SelfTestResult] = []
+    @State private var stage6Results: [SelfTestResult] = []
 
     var body: some View {
         NavigationStack {
@@ -37,6 +39,10 @@ struct DevMenuView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(didSendTestEvent)
 
+                    crashTestSection
+
+                    stage6Section
+                    stage5Section
                     stage4Section
                     stage3Section
                     stage2Section
@@ -55,6 +61,77 @@ struct DevMenuView: View {
             Text(label).foregroundStyle(.secondary).frame(width: 110, alignment: .leading)
             Text(value).lineLimit(2).truncationMode(.middle)
         }
+    }
+
+    // MARK: - Crash testi (Sentry teslim doğrulaması)
+
+    /// Crash raporu cihazda gerçekten Sentry'e gidiyor mu? Düğmeye bas → uygulama çöker →
+    /// TEKRAR AÇ → rapor bir sonraki açılışta otomatik gönderilir (`onCrashedLastRun` log'u görünür).
+    private var crashTestSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Divider()
+            Text("Crash Testi — Sentry teslimi").font(.headline)
+            Text("Crash anında gönderilemez; SDK diske yazar, UYGULAMAYI TEKRAR AÇINCA otomatik gönderir. Test sonrası uygulamayı yeniden başlat ve Sentry panosunu kontrol et.")
+                .font(.caption).foregroundStyle(.secondary)
+            Button(role: .destructive) {
+                Log.breadcrumb("Dev menü: SentrySDK.crash() tetiklendi", category: .app)
+                SentrySDK.crash()   // gerçek hard crash (sinyal yolu)
+            } label: {
+                Label("Force Crash (SentrySDK.crash)", systemImage: "exclamationmark.triangle.fill")
+            }
+            .buttonStyle(.bordered)
+            Button(role: .destructive) {
+                Log.breadcrumb("Dev menü: Swift nil-unwrap crash tetiklendi", category: .app)
+                let nilValue: String? = nil
+                _ = nilValue!   // Swift fatal: force-unwrap nil → sinyal yolu, stack trace yakalanır
+            } label: {
+                Label("Force Crash (Swift nil-unwrap)", systemImage: "xmark.octagon.fill")
+            }
+            .buttonStyle(.bordered)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Aşama 6 (Settings/Help/Security/Consent + App Attest)
+
+    private var stage6Section: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Divider()
+            Text("Stage 6 — Settings/Help/Security + App Attest").font(.headline)
+            Text("App Attest clientDataHash konvansiyonu (sunucu paritesi), token zarf round-trip, enroll anahtar şeması, enclave PCR0 CBOR çıkarımı (+ graceful), dil tercihi. Sonuçlar Sentry'e loglanır.")
+                .font(.caption).foregroundStyle(.secondary)
+            Button {
+                stage6Results = Stage6SelfTest.runAll()
+                let passed = stage6Results.filter { $0.passed }.count
+                Log.info("Stage6 self-test: \(passed)/\(stage6Results.count) passed", category: .flow)
+            } label: {
+                Label("Stage 6 self-test çalıştır", systemImage: "checklist")
+            }
+            .buttonStyle(.bordered)
+            ForEach(stage6Results) { resultRow($0) }
+            summary(stage6Results)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Aşama 5 (Backup)
+
+    private var stage5Section: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Divider()
+            Text("Stage 5 — Backup (Dropbox / Google Drive)").font(.headline)
+            Text("personId-AES-GCM çapraz-platform şifreleme, bulut yedek JSON şema/anahtar paritesi, GRDB DB iCloud yedeğinden hariç + keychain ThisDeviceOnly, HistoryRepository sync zinciri. Sonuçlar Sentry'e loglanır.")
+                .font(.caption).foregroundStyle(.secondary)
+            Button {
+                stage5Results = Stage5SelfTest.runAll()
+            } label: {
+                Label("Stage 5 self-test çalıştır", systemImage: "checklist")
+            }
+            .buttonStyle(.bordered)
+            ForEach(stage5Results) { resultRow($0) }
+            summary(stage5Results)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Aşama 4 (Storage / GRDB / payload)
