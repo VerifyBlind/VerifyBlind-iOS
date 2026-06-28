@@ -62,8 +62,9 @@ struct LoginHandshakeResponse: Codable {
 struct SecurePayload: Codable {
     var sod: String
     var dg1: String
-    /// RAW DG2 EF bytes (Base64) — SOD hash binding for the face data group (dg2Photo is re-encoded
-    /// and won't match the SOD hash). Enclave `VerifyDGHashes` requires this. (Security review Y-3.)
+    /// RAW DG2 EF bytes (Base64) — SOD hash binding for the face data group AND biometric face source:
+    /// the enclave extracts the face from this verified DG2 (Dg2FaceExtractor); it is no longer sent
+    /// separately. Enclave `VerifyDGHashes` requires this. (Security review Y-3.)
     var dg2: String = ""
     var dg15: String = ""
     var activeSig: String
@@ -72,7 +73,8 @@ struct SecurePayload: Codable {
     var nonce: String = ""
     var timestamp: Int64 = 0
     var nonceSignature: String = ""
-    var dg2Photo: String = ""
+    // NOT: Kimlik yüz fotoğrafı ayrı GÖNDERİLMEZ — enclave biyometrik yüzü SOD-doğrulanmış ham DG2'den
+    // çıkarır (Dg2FaceExtractor). Eski dg2Photo alanı belgeye bağlı olmayan görüntüye güvendiği için kaldırıldı.
     var livenessVideo: String = ""
     var zoomVideo: String = ""
     var userSelfie: String = ""
@@ -91,7 +93,6 @@ struct SecurePayload: Codable {
         case nonce = "Nonce"
         case timestamp = "Timestamp"
         case nonceSignature = "NonceSignature"
-        case dg2Photo = "DG2_Photo"
         case livenessVideo = "LivenessVideo"
         case zoomVideo = "ZoomVideo"
         case userSelfie = "UserSelfie"

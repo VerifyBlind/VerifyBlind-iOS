@@ -3,8 +3,9 @@ import Foundation
 /// Çipten okunan ham veriler — Android `PassportReader.PassportData` (`PassportReader.kt:38-46`) eşdeğeri.
 ///
 /// Tüm baytlar HAM çip baytlarıdır (re-encode YOK): SOD/DG1/DG15 tam dosya (header dahil,
-/// Android `sod.encoded` / `dg1Raw` karşılığı), `faceImage` DG2'deki ham JPEG/JP2 (Android
-/// `DG2_Photo`). Passive Authentication bu baytlar üzerinden ENCLAVE'de yapılır (istemcide değil).
+/// Android `sod.encoded` / `dg1Raw` karşılığı). `faceImage` DG2'deki ham JPEG'dir ve yalnız çip-foto
+/// GÖSTERİMİ için tutulur — enclave'e ayrı GÖNDERİLMEZ; biyometrik yüz enclave'de ham DG2'den çıkarılır.
+/// Passive Authentication bu baytlar üzerinden ENCLAVE'de yapılır (istemcide değil).
 struct ScannedPassport {
     let sod: Data
     let dg1: Data
@@ -25,8 +26,9 @@ struct ScannedPassport {
     let documentType: String
 
     /// Android `MainViewModel.finalizeRegistration` (`:479-491`) eşlemesi: NFC alanlarını
-    /// `SecurePayload`'a (APIModels.swift) yerleştirir. Biyometri (DG2_Photo dışı) ve selfie
-    /// alanları boş bırakılır — Aşama 3/4'te doldurulacak. Şifreleme + ağ gönderimi Aşama 4.
+    /// `SecurePayload`'a (APIModels.swift) yerleştirir. Biyometri ve selfie alanları boş bırakılır —
+    /// Aşama 3/4'te doldurulacak. Kimlik yüzü ayrı gönderilmez (enclave ham DG2'den çıkarır).
+    /// Şifreleme + ağ gönderimi Aşama 4.
     func makeSecurePayload(userPubKey: String, nonce: String, timestamp: Int64, nonceSignature: String) -> SecurePayload {
         SecurePayload(
             sod: sod.base64EncodedString(),
@@ -38,8 +40,7 @@ struct ScannedPassport {
             userPubKey: userPubKey,
             nonce: nonce,
             timestamp: timestamp,
-            nonceSignature: nonceSignature,
-            dg2Photo: faceImage?.base64EncodedString() ?? ""
+            nonceSignature: nonceSignature
         )
     }
 }
