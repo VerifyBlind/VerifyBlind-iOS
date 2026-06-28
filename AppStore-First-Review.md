@@ -41,14 +41,18 @@ sunucudan aç/kapat** edebilirsin:
 |---|------|-------|-------|
 | 1 | **Privacy Manifest** (2024-05'ten beri zorunlu) | ✅ Var | `Resources/PrivacyInfo.xcprivacy` |
 | 2 | **Demo görünürlüğü** — sunucu-kontrollü sürüm eşleşmesi | ✅ Bölüm 0 | `App/AppState.swift`, `Controllers/{Admin,Config,Verify}Controller.cs` |
-| 3 | **Export compliance** — `ITSAppUsesNonExemptEncryption` | ✅ **`true`** (2026-06-27) | `App/Info.plist` |
+| 3 | **Export compliance** — `ITSAppUsesNonExemptEncryption` | ✅ **`false`** (2026-06-28) | `App/Info.plist` |
 | 4 | Ölü `Config.isTestFlight` kaldırıldı | ✅ | `Config/Config.swift` |
 
-**Export compliance kararı (verildi):** VerifyBlind kimlik payload'ını uygulama katmanında özel
-protokolle şifreliyor (RSA-OAEP-SHA256 + AES-GCM + RSA-PSS + cert pinning) → "yalnız HTTPS/auth"
-muafiyeti DEĞİL. Doğru beyan `true`. ASC submit'inde export sorularına **standart-algoritma /
-mass-market muafiyeti** (5D992) ile cevap verilir; bu, yılda bir basit self-classification gerektirebilir.
-Detay → **Bölüm 2 / Adım 2**.
+**Export compliance kararı (`false` — neden):** Anahtar "uygulama **muaf-olmayan** şifreleme kullanıyor
+mu?" diye sorar. VerifyBlind yalnızca **standart, yayınlanmış algoritmalar** (RSA-OAEP, AES-GCM, RSA-PSS,
+ECDSA) kullanıyor; özel/tescilli kripto YOK → bunlar EAR 5D992 (mass-market) kapsamında **muaf**.
+Şifreleme muaf olduğu için doğru cevap **`false`**.
+> ⚠️ **GEÇMİŞ HATA:** Bir ara `true` yapıldı → upload **90592 "Invalid Export Compliance Code"** ile
+> patladı (çünkü `true`, eşleşen bir `ITSEncryptionExportComplianceCode` ya da ASC dökümantasyonu ister;
+> uygulamada yok). `false`'a geri alındı.
+> 📌 **Ayrı hukuki kalem (Apple gate'i DEĞİL):** 5D992 muafiyeti, ABD BIS'e **yıllık self-classification
+> raporu** yükümlülüğü doğurabilir. Bunu hukukçuya sor — ama bu Apple upload/review'ı bloklamaz.
 
 ---
 
@@ -72,13 +76,16 @@ Detay → **Bölüm 2 / Adım 2**.
   2. Güvenlik bölümüne **iOS Keychain / Secure Enclave** ekle (yalnız "Android Keystore" demesin).
   3. (İyi olur) Kullanıcı-başlatımlı, uçtan-uca şifreli **bulut yedek (Dropbox/Google Drive)** cümlesi.
 
-### Adım 2 — Export Compliance (plist artık `true`)
-`App/Info.plist` → `ITSAppUsesNonExemptEncryption = true`. Submit sırasında ASC export sorularını sorar:
-- "Does your app use encryption?" → **Yes**.
-- "Qualifies for any of the exemptions?" → **Yes** — standart/yayınlanmış algoritmalar, mass-market
-  (5D992). VerifyBlind özel kripto-sistem ÜRETMİYOR; standart RSA/AES/ECDSA kullanıyor.
-- Sonuç: muaf. ASC bir **yıl-sonu self-classification** (Fransa için ek beyan) isteyebilir — basittir.
-> Bunu hukuki danışmanla teyit etmen iyi olur; teknik sınıflandırma yukarıdaki gibi.
+### Adım 2 — Export Compliance (plist `false`)
+`App/Info.plist` → `ITSAppUsesNonExemptEncryption = false` (muaf şifreleme — Bölüm 1/#3). Bu değerle
+altool upload'ı export-compliance gate'ine takılmaz; ASC ek soru sormaz, dökümantasyon/kod gerekmez.
+- **`true` YAPMA:** kod (`ITSEncryptionExportComplianceCode`) ya da tamamlanmış ASC dökümantasyonu
+  olmadan `true` → upload **90592** hatası. Standart algoritmalar muaf olduğu için zaten `false` doğru.
+- Eğer ileride maksimum-açık yolu istersen: ASC'de export compliance dökümantasyonunu bir kez tamamla
+  → ASC bir kod üretir → `ITSEncryptionExportComplianceCode`'u Info.plist'e ekle + `true` yap. Gerekli
+  değil; mevcut `false` doğru ve yeterli.
+> Hukuki kalem: 5D992 muafiyeti yıllık self-classification raporu doğurabilir (ABD BIS) — hukukçuya
+> sor; Apple gate'i değildir.
 
 ### Adım 3 — App Privacy (Privacy Nutrition Labels)
 ASC → App Privacy. Zero-knowledge mimariye göre:
@@ -114,8 +121,8 @@ ASC → App Privacy. Zero-knowledge mimariye göre:
 - **Yeni build:** `main`'e push veya GitHub Actions → **"iOS Prod → TestFlight External"**
   (`ios-prod.yml`) `workflow_dispatch`. Build ASC'ye yüklenir (TestFlight'a düşer; App Store sürümüne
   de aynı build iliştirilir). Build numarası otomatik +1.
-  > ⚠️ `ITSAppUsesNonExemptEncryption=true` ve `isTestFlight` kaldırma değişiklikleri yeni build
-  > gerektirir — bu yüzden bu submit'te **yeni build** kullan.
+  > ⚠️ `isTestFlight` kaldırma (+ export-compliance düzeltmesi) kod değişiklikleridir → bu submit'te
+  > **yeni build** kullan.
 
 ### Adım 7 — Demo'yu reviewer için AÇ
 - [ ] Admin panel → demo sürümleri → `demoVersionIos = <submit edilen build'in CFBundleShortVersionString'i>`
