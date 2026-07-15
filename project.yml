@@ -1,0 +1,142 @@
+name: VerifyBlind
+options:
+  bundleIdPrefix: app.verifyblind
+  deploymentTarget:
+    iOS: "16.0"
+  developmentLanguage: tr
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+  groupSortPosition: top
+  xcodeVersion: "15.4"
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+    ENABLE_BITCODE: NO
+    DEVELOPMENT_TEAM: $(APPLE_TEAM_ID)
+    SWIFT_STRICT_CONCURRENCY: minimal
+
+configs:
+  Debug: debug
+  Release: release
+
+# Sürüm aralıkları  `from:` (Stage 0'da kanıtlanmış config). Gerçek kilit = Package.resolved
+# (idiomatic Swift yaklaşımı: manifest'te aralık + resolved'da kilit). exactVersion DENENMEDİ:
+# Xcode 26 SwiftPM, Sentry 8.36.0'ı (trait bildirmiyor) exact pinleyince "disabled default traits
+# on package that declares no traits" hatası veriyor; `from:` daha yeni trait-aware Sentry'ye çözülüp
+# bunu aşıyor. Reproducibility için Package.resolved commit'le (bir Mac/CI üretince).
+packages:
+  NFCPassportReader:
+    url: https://github.com/AndyQ/NFCPassportReader
+    from: 2.1.0
+  SwiftCBOR:
+    url: https://github.com/valpackett/SwiftCBOR
+    from: 0.4.7
+  GRDB:
+    url: https://github.com/groue/GRDB.swift
+    from: 6.29.0
+  SwiftyDropbox:
+    url: https://github.com/dropbox/SwiftyDropbox
+    from: 10.0.0
+  GoogleSignIn:
+    # Aşama 5 yedekleme: yalnız OAuth (Drive işlemleri elle URLSession REST). AppAuth/
+    # GTMSessionFetcher/GTMAppAuth transitive gelir; ağır GoogleAPIClientForREST KULLANILMAZ.
+    url: https://github.com/google/GoogleSignIn-iOS
+    from: 7.1.0
+  Sentry:
+    url: https://github.com/getsentry/sentry-cocoa
+    from: 8.36.0
+
+targets:
+  VerifyBlind:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+      - path: Config
+        excludes:
+          - "*.xcconfig"
+      - path: Core
+      - path: Features
+      - path: Views
+      - path: NFC
+      - path: Camera
+      - path: OCR
+      - path: Backup
+      - path: Resources
+    # Info.plist statik dosya — App/Info.plist'i olduğu gibi kullan, regenerate yapma.
+    entitlements:
+      path: Config/VerifyBlind.entitlements
+      properties:
+        com.apple.developer.nfc.readersession.formats:
+          - TAG
+        com.apple.developer.devicecheck.appattest-environment: $(APP_ATTEST_ENVIRONMENT)
+        # APNs push notifications — distribution build (TestFlight + App Store) daima production.
+        # App Attest environment'dan bağımsız: dev CI de TestFlight'a yüklediği için production gerekir.
+        aps-environment: production
+        # Deep-link / Universal Links: SDK widget'ı app.verifyblind.com/request?nonce=... üretir
+        # (cdn-static/sdk/v1/verifyblind.js + QRPayloadParser). AASA: app.verifyblind.com/.well-known/.
+        com.apple.developer.associated-domains:
+          - applinks:app.verifyblind.com
+        # iCloud KASITLI OLARAK YOK (Aşama 5 kararı, ZKP): yedekleme yalnız Dropbox + Google Drive
+        # ile, uygulama kontrolünde. iCloud device backup + Keychain sync engellendi
+        # ([[project_ios_backup_zkp_hardening]]). iCloud entitlement EKLEME.
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(IOS_BUNDLE_ID)
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CURRENT_PROJECT_VERSION: $(BUILD_NUMBER)
+        MARKETING_VERSION: "1.0.1"  # demo-register: app_version sunucu fallback "1.0.0" ile çakışmasın (DEMO_PUBLISHED_APP 403)
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Manual
+        SWIFT_OBJC_BRIDGING_HEADER: ""
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: App/Info.plist
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "DEBUG"
+          GCC_PREPROCESSOR_DEFINITIONS: "DEBUG=1"
+        Release:
+          SWIFT_OPTIMIZATION_LEVEL: "-O"
+    configFiles:
+      Debug: Config/Debug.xcconfig
+      Release: Config/Release.xcconfig
+    dependencies:
+      - package: NFCPassportReader
+      - package: SwiftCBOR
+      - package: GRDB
+        product: GRDB
+      - package: SwiftyDropbox
+      - package: GoogleSignIn
+        product: GoogleSignIn
+      - package: Sentry
+        product: Sentry
+    scheme:
+      testTargets:
+        - VerifyBlindTests
+      gatherCoverageData: true
+
+  VerifyBlindTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - Tests/VerifyBlindTests
+    dependencies:
+      - target: VerifyBlind
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(IOS_BUNDLE_ID).tests
+        BUNDLE_LOADER: $(TEST_HOST)
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/VerifyBlind.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/VerifyBlind
+
+  VerifyBlindUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - Tests/VerifyBlindUITests
+    dependencies:
+      - target: VerifyBlind
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(IOS_BUNDLE_ID).uitests

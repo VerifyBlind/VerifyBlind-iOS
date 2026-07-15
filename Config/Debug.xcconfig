@@ -1,0 +1,18 @@
+// Debug.xcconfig — placeholder değerler (lokal/manuel build).
+// GitHub Actions build'lerinde scripts/ci/ios-build-upload.sh env vars'tan bu dosyayı üretir.
+//
+// Info.plist içindeki $(VAR) referansları bu değerleri build sırasında alır;
+// Config.swift de Bundle.main.object(forInfoDictionaryKey:) ile okur.
+//
+// NOT: xcconfig'te `//` yorum karakteri olduğu için URL'lerdeki `//` $()  ile bölünür.
+
+API_BASE_URL = https:/$()/api.verifyblind.com/api/verify/
+ENCLAVE_DEVELOPER_PUBLIC_KEY =
+APPLE_TEAM_ID =
+IOS_BUNDLE_ID = app.verifyblind.ios
+APP_ATTEST_ENVIRONMENT = development
+SENTRY_DSN =
+DROPBOX_IOS_APP_KEY =
+GOOGLE_IOS_CLIENT_ID =
+GOOGLE_IOS_REVERSED_CLIENT_ID =
+BUILD_NUMBER = 1
