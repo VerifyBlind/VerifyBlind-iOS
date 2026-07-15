@@ -3,8 +3,11 @@
 <!--
   Apple Privacy Manifest (App Store zorunlu, 2024-05'ten beri).
   VerifyBlind zero-knowledge: TCKN/kimlik verisi sunucuya gitmez, cihazda kalır.
-  Toplanan tek veri: Sentry üzerinden çökme (crash) teşhisi (kimliğe bağlı DEĞİL, takip DEĞİL).
-  Performans izleme KAPALI (enableAutoPerformanceTracing=false); beforeSend ile TCKN/MRZ/biyometrik redact.
+  Toplanan veri: Sentry üzerinden çökme (crash) + donma/app hang teşhisi (kimliğe bağlı DEĞİL,
+  takip DEĞİL). Apple "hang rate"i Performance Data sayar → CrashData'nın yanına PerformanceData
+  da beyan edilir. İşlem izleme (trace) KAPALI (enableAutoPerformanceTracing=false), ama app hang
+  takibi AÇIK (enableAppHangTracking) — ana thread bloklanmasının tek sinyali.
+  beforeSend ile TCKN/MRZ/biyometrik redact.
   Required-reason API: uygulama UserDefaults (AppPrefs) kullanır → CA92.1.
   3. parti SDK'ların (Sentry, GRDB, GoogleSignIn, SwiftyDropbox, NFCPassportReader) kendi
   manifest'leri kendi paketlerinde gelir; bu dosya yalnız uygulama binary'sini kapsar.
@@ -20,6 +23,18 @@
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeCrashData</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypePerformanceData</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
 			<false/>
 			<key>NSPrivacyCollectedDataTypeTracking</key>
