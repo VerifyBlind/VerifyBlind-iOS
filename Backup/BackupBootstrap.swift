@@ -3,19 +3,31 @@ import UIKit
 import SwiftyDropbox
 import GoogleSignIn
 
-/// Bulut yedekleme SDK'larının uygulama açılışında konfigürasyonu + OAuth redirect yönlendirmesi.
+/// Bulut yedekleme SDK'larının konfigürasyonu + OAuth redirect yönlendirmesi.
 /// `VerifyBlindApp.init()`'te `configure()`, `onOpenURL`'de `handleOpenURL(_:)` çağrılır.
+/// Dropbox kurulumu bilinçli olarak açılış dışında — bkz `ensureDropboxConfigured()`.
 enum BackupBootstrap {
 
-    static func configure() {
-        // Dropbox app key (SwiftyDropbox token'ları Keychain'de saklar; authorizedClient geri yüklenir).
+    /// SwiftyDropbox kurulumu — açılışta DEĞİL, ilk kullanımda. `setupWithAppKey` Keychain
+    /// erişilebilirlik migrasyonu yapar (`SecItemUpdate` → securityd'ye senkron XPC); açılış
+    /// yolunda çağrılınca Düşük Güç Modu'nda ana thread ilk frame'den önce 2sn+ bloklanıyordu.
+    /// `static let` = swift_once → tek sefer, thread-safe. Token'lar Keychain'de; kurulum
+    /// `authorizedClient`'ı geri yükler.
+    private static let dropboxSetup: Bool = {
         let dropboxKey = Config.dropboxAppKey
-        if !dropboxKey.isEmpty {
-            DropboxClientsManager.setupWithAppKey(dropboxKey)
-        } else {
+        guard !dropboxKey.isEmpty else {
             Log.info("BackupBootstrap: DROPBOX_IOS_APP_KEY boş — Dropbox devre dışı", category: .app)
+            return false
         }
+        DropboxClientsManager.setupWithAppKey(dropboxKey)
+        return true
+    }()
 
+    /// Dropbox SDK'sına dokunan her giriş noktası önce bunu çağırır. false = Dropbox devre dışı.
+    @discardableResult
+    static func ensureDropboxConfigured() -> Bool { dropboxSetup }
+
+    static func configure() {
         // Google Sign-In client id + önceki oturumu sessizce geri yükle.
         let googleClientID = Config.googleClientID
         if !googleClientID.isEmpty {

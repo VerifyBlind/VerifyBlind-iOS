@@ -8,7 +8,7 @@ struct VerifyBlindApp: App {
     init() {
         LogBootstrap.start()
         Log.info("Uygulama başlatıldı — version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] ?? "?") build \(Bundle.main.infoDictionary?["CFBundleVersion"] ?? "?")", category: .app)
-        BackupBootstrap.configure()   // Dropbox/Google SDK + önceki oturum + sağlayıcı kaydı (Aşama 5)
+        BackupBootstrap.configure()   // Google SDK + önceki oturum + sağlayıcı kaydı (Aşama 5; Dropbox lazy)
     }
 
     var body: some Scene {

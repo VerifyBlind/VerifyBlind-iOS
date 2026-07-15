@@ -184,6 +184,15 @@ enum LogBootstrap {
                 Log.info("Önceki oturum CRASH ile kapanmıştı — rapor Sentry'e iletildi (id: \(event.eventId.sentryIdString))", category: .app)
             }
 
+            // --- App Hang (donma) ---
+            // Ana thread bloklanmasının tek sinyali; açık tutulur (varsayılan 2sn eşiği).
+            // V2 (SDK 8.50+, 9.0'da default) tam bloklanma ile kısmi bloklanmayı ayırt eder.
+            // Kısmi olanlar KAPALI: birkaç frame render edilebildiği için stack trace'leri
+            // yanıltıcı olabiliyor (Sentry dokümanının kendi uyarısı) → gürültü.
+            options.enableAppHangTracking = true
+            options.enableAppHangTrackingV2 = true
+            options.enableReportNonFullyBlockingAppHangs = false
+
             options.beforeSend = { event in
                 Self.redactPII(in: event)
                 return event

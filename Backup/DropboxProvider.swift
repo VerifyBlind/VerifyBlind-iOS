@@ -4,7 +4,8 @@ import SwiftyDropbox
 
 /// Dropbox sağlayıcı — Android `backup/DropboxProvider.kt` (SDK PKCE OAuth) iOS portu (SwiftyDropbox).
 /// Dosya kök dizinde `/verifyblind_backup.json`, OVERWRITE. Token'lar SwiftyDropbox tarafından
-/// Keychain'de saklanır (cihaz-yerel). App key `Config.dropboxAppKey` → `BackupBootstrap.configure()`.
+/// Keychain'de saklanır (cihaz-yerel). App key `Config.dropboxAppKey` → SDK kurulumu ilk
+/// kullanımda `BackupBootstrap.ensureDropboxConfigured()` ile yapılır (açılışta değil).
 ///
 /// OAuth sonucu uygulamaya `db-<appkey>://` redirect ile döner; `BackupBootstrap`/`onOpenURL`
 /// `handleRedirect(_:)`'i çağırır → bekleyen `login()` continuation'ı tamamlanır (Android
@@ -18,13 +19,14 @@ final class DropboxProvider: CloudProvider {
     private var loginContinuation: CheckedContinuation<Void, Error>?
 
     func isLoggedIn() -> Bool {
-        DropboxClientsManager.authorizedClient != nil
+        BackupBootstrap.ensureDropboxConfigured()
+        return DropboxClientsManager.authorizedClient != nil
     }
 
     @MainActor
     func login() async throws {
-        // App key yoksa setupWithAppKey çağrılmamıştır → authorizeFromControllerV2 ÇÖKER. Önce kibarca hata ver.
-        guard !Config.dropboxAppKey.isEmpty else {
+        // Kurulum yapılmadan authorizeFromControllerV2 ÇÖKER; app key yoksa kibarca hata ver.
+        guard BackupBootstrap.ensureDropboxConfigured() else {
             throw CloudProviderError.message("Dropbox yapılandırılmamış (DROPBOX_IOS_APP_KEY eksik).")
         }
         guard let controller = UIApplication.topViewController() else {
@@ -52,6 +54,9 @@ final class DropboxProvider: CloudProvider {
     /// `onOpenURL`'den çağrılır. URL bu sağlayıcıya aitse işler ve true döner.
     static func handleRedirect(_ url: URL) -> Bool {
         guard url.scheme?.hasPrefix("db-") == true else { return false }
+        // Soğuk açılışta redirect kurulumdan önce gelebilir. Şema eşleştikten SONRA kurulum →
+        // Keychain maliyeti yalnız gerçek Dropbox redirect'inde ödenir.
+        guard BackupBootstrap.ensureDropboxConfigured() else { return false }
         // SwiftyDropbox 10.x: handleRedirectURL(_:completion:) overload'u YOK; foreground için
         // includeBackgroundClient zorunlu. Arka plan client kullanmıyoruz (setupWithAppKey default false).
         _ = DropboxClientsManager.handleRedirectURL(url, includeBackgroundClient: false) { result in
@@ -81,12 +86,14 @@ final class DropboxProvider: CloudProvider {
     }
 
     func logout() {
+        BackupBootstrap.ensureDropboxConfigured()
         DropboxClientsManager.unlinkClients()
     }
 
     // MARK: - Dosya işlemleri
 
     private func client() throws -> DropboxClient {
+        BackupBootstrap.ensureDropboxConfigured()
         guard let c = DropboxClientsManager.authorizedClient else {
             throw CloudProviderError.notAuthenticated
         }
