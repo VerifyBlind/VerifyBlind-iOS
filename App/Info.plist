@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>VerifyBlind</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<!-- Android light-mode-only paritesi: uygulama daima light görünür (sistem dark mode yok sayılır). -->
+	<key>UIUserInterfaceStyle</key>
+	<string>Light</string>
+	<!-- TR/EN lokalizasyon — bundle'da {tr,en}.lproj/Localizable.strings -->
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>tr</string>
+		<string>en</string>
+	</array>
+	<!-- Statik launch screen — splash (bg_dark #0F172A) ile aynı koyu zemin, böylece animasyonlu
+	     SplashView'a renk sıçraması olmadan geçilir (Android koyu splash paritesi). -->
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchBackground</string>
+	</dict>
+	<!-- UIRequiredDeviceCapabilities kaldırıldı: 'nfc' Mac/Vision Pro uyumsuzluk maillerine (ITMS-90863/90984)
+	     sebep oluyordu, 'armv7' iOS16 (arm64-only) için geçersizdi. NFC varlığı uygulama içinde
+	     NFCNDEFReaderSession.readingAvailable ile kontrol edilecek. -->
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>NFCReaderUsageDescription</key>
+	<string>Kimlik kartınızdaki çipi okumak için NFC erişimi gerekli.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>QR kodu ve kimlik fotoğrafını okumak için kamera erişimi gerekli.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Kimliğinizi güvenle saklamak için Face ID kullanılır.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Doğrulama belgesini cihaza kaydetmek için.</string>
+	<key>com.apple.developer.nfc.readersession.iso7816.select-identifiers</key>
+	<array>
+		<string>A0000002471001</string>
+	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.verifyblind.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>verifyblind</string>
+			</array>
+		</dict>
+		<!-- Dropbox OAuth redirect (Aşama 5): db-<appkey>. Build-time $(DROPBOX_IOS_APP_KEY) substitüsyonu. -->
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.verifyblind.dropbox</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>db-$(DROPBOX_IOS_APP_KEY)</string>
+			</array>
+		</dict>
+		<!-- Google Sign-In OAuth redirect (Aşama 5): reversed client id. -->
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.verifyblind.google</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>$(GOOGLE_IOS_REVERSED_CLIENT_ID)</string>
+			</array>
+		</dict>
+	</array>
+	<!-- SwiftyDropbox'ın yüklü Dropbox uygulamasını sorgulaması için (opsiyonel app-switch OAuth). -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>dbapi-2</string>
+		<string>dbapi-8-emm</string>
+	</array>
+	<!-- xcconfig'ten Info.plist'e enjekte edilen build-time config — Config.swift bunları okur -->
+	<key>API_BASE_URL</key>
+	<string>$(API_BASE_URL)</string>
+	<key>ENCLAVE_DEVELOPER_PUBLIC_KEY</key>
+	<string>$(ENCLAVE_DEVELOPER_PUBLIC_KEY)</string>
+	<key>APP_ATTEST_ENVIRONMENT</key>
+	<string>$(APP_ATTEST_ENVIRONMENT)</string>
+	<key>SENTRY_DSN</key>
+	<string>$(SENTRY_DSN)</string>
+	<key>DROPBOX_IOS_APP_KEY</key>
+	<string>$(DROPBOX_IOS_APP_KEY)</string>
+	<key>GOOGLE_IOS_CLIENT_ID</key>
+	<string>$(GOOGLE_IOS_CLIENT_ID)</string>
+	<key>GOOGLE_IOS_REVERSED_CLIENT_ID</key>
+	<string>$(GOOGLE_IOS_REVERSED_CLIENT_ID)</string>
+	<key>GIT_COMMIT</key>
+	<string>$(GIT_COMMIT)</string>
+</dict>
+</plist>

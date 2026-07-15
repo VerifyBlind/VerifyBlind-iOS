@@ -1,0 +1,29 @@
+{
+  "swift.path": "",
+  "swift.buildArguments": [],
+  "swift.diagnostics": true,
+  "files.associations": {
+    "*.xcconfig": "properties",
+    "Info.plist": "xml",
+    "*.entitlements": "xml"
+  },
+  "files.exclude": {
+    "**/.build": true,
+    "**/.swiftpm": true,
+    "**/DerivedData": true,
+    "**/build": true,
+    "**/*.xcodeproj": true
+  },
+  "[swift]": {
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true,
+    "editor.formatOnSave": false
+  },
+  "[yaml]": {
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true
+  },
+  "yaml.schemas": {
+    "https://json.schemastore.org/codemagic.json": "codemagic.yaml"
+  }
+}
