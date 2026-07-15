@@ -1,0 +1,12 @@
+// Release.xcconfig — placeholder; GitHub Actions (ios-build-upload.sh) env'den üretir.
+
+API_BASE_URL = https:/$()/api.verifyblind.com/api/verify/
+ENCLAVE_DEVELOPER_PUBLIC_KEY =
+APPLE_TEAM_ID =
+IOS_BUNDLE_ID = app.verifyblind.ios
+APP_ATTEST_ENVIRONMENT = production
+SENTRY_DSN =
+DROPBOX_IOS_APP_KEY =
+GOOGLE_IOS_CLIENT_ID =
+GOOGLE_IOS_REVERSED_CLIENT_ID =
+BUILD_NUMBER = 1
