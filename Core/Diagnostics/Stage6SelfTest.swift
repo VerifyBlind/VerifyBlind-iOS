@@ -26,6 +26,26 @@ enum Stage6SelfTest {
             return (hash == expected, hash == expected ? "ok" : "mismatch: \(hash)")
         })
 
+        // ── Payload bağlama golden vector — sunucu (AttestationBindingTests.cs) + Android
+        //    (AttestationBindingTest.kt) ile BİREBİR aynı değer. Ayraç/UTF-8/Base64 kayması burada
+        //    yakalanır; yakalanmazsa block-card sunucuda sessizce DEVICE_ATTESTATION_FAILED alır.
+        r.append(check("Attestation payload binding golden vector (sunucu+Android paritesi)") {
+            let fresh = "11111111-1111-1111-1111-111111111111"
+            let card = "CARD_TEST_0001"
+            let expected = "d8utuuasuOl65fOPE/J/rzOKudmIpbA+Ab2JA4BIdJQ="
+            let actual = AttestationBinding.requestHashBase64(fresh: fresh, cardId: card)
+            return (actual == expected, actual == expected ? "ok" : "mismatch: \(actual)")
+        })
+
+        // ── Bağlı clientDataHash, bağsız olandan FARKLI olmalı (bağlama gerçekten uygulanıyor) ──
+        r.append(check("Bağlı clientDataHash ≠ SHA256(challenge)") {
+            let challenge = "chal-xyz"
+            let bound = AttestationBinding.clientDataHash(challenge: challenge, cardId: "card-abc-123")
+            let unbound = Data(SHA256.hash(data: Data(challenge.utf8)))
+            let ok = bound != unbound && bound.count == 32
+            return (ok, ok ? "ok" : "binding uygulanmamış")
+        })
+
         // ── AppAttestToken: JSON → base64 → JSON round-trip (X-App-Attest başlığı parite) ──
         r.append(check("AppAttestToken zarf round-trip (base64 JSON)") {
             let token = AppAttestToken(keyId: "key-123", challenge: "chal-xyz", assertion: "YXNzZXJ0")

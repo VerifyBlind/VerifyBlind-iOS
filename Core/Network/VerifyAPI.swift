@@ -80,8 +80,11 @@ struct VerifyAPI {
         try await client.postNoContent("api/kvkk/consent/withdraw", body: request)
     }
 
+    /// Kart engelleme — attestation card_id'ye BAĞLI gönderilir. Assertion yalnız bu card_id için
+    /// geçerli olur; araya girip gövdedeki card_id'yi başkasınınkiyle takas etmek sunucuda RED alır.
     func blockCard(_ request: KvkkBlockCardRequest) async throws {
-        try await client.postNoContent("api/kvkk/block-card", body: request)
+        let headers = await AppAttestService.shared.attestationHeaders(boundTo: request.cardId)
+        try await client.postNoContent("api/kvkk/block-card", body: request, headers: headers)
     }
 
     /// Aydınlatma metni (consent ekranı "Aydınlatma Metnini Oku"). format=text → `{text}`.

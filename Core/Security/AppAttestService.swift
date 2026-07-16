@@ -21,7 +21,11 @@ actor AppAttestService {
     private let service = DCAppAttestService.shared
 
     /// Korunan çağrılara eklenecek başlıklar. Daima `X-Client-Platform: ios`; mümkünse `X-App-Attest`.
-    func attestationHeaders() async -> [String: String] {
+    ///
+    /// - Parameter cardId: Verilirse assertion bu card_id'ye BAĞLANIR
+    ///   (`clientDataHash = SHA256(challenge ‖ card_id)`); sunucu birebir aynısını hesaplar.
+    ///   `nil` → eski davranış (`SHA256(challenge)`), diğer tüm korunan uçlar bunu kullanır.
+    func attestationHeaders(boundTo cardId: String? = nil) async -> [String: String] {
         var headers = ["X-Client-Platform": "ios"]
         guard service.isSupported else {
             Log.info("App Attest desteklenmiyor (simülatör/eski cihaz) — token atlanıyor", category: .crypto)
@@ -30,7 +34,8 @@ actor AppAttestService {
         do {
             let keyId = try await ensureEnrolledKeyId()
             let challenge = try await fetchChallenge()
-            let hash = clientDataHash(challenge)
+            let hash = cardId.map { AttestationBinding.clientDataHash(challenge: challenge, cardId: $0) }
+                ?? clientDataHash(challenge)
             let assertion = try await service.generateAssertion(keyId, clientDataHash: hash)
             let token = AppAttestToken(keyId: keyId, challenge: challenge, assertion: assertion.base64EncodedString())
             if let json = try? JSONEncoder().encode(token) {
