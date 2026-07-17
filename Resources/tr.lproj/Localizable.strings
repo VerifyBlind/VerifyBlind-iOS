@@ -409,3 +409,18 @@
 "biometric_fail_cancel" = "İPTAL";
 "biometric_fail_id_label" = "Kimlik";
 "biometric_fail_selfie_label" = "Selfie";
+
+/* Yedek PIN'i (TCKN'siz kimlikler) */
+"pin_setup_title" = "Yedek PIN'inizi oluşturun";
+"pin_setup_desc" = "Kimlik kartınızda T.C. Kimlik No bulunmadığı için işlem geçmişiniz bu PIN ile şifrelenir.";
+"pin_enter_title" = "PIN kodunuzu girin";
+"pin_changed_reenter" = "PIN kodunuz değişmiş. Yeni PIN kodunu girin.";
+"pin_confirm_title" = "PIN kodunuzu doğrulayın";
+"pin_min_length" = "PIN en az 6 haneli olmalı";
+"pin_mismatch" = "PIN kodları eşleşmiyor";
+"pin_rate_limited" = "Çok fazla deneme yapıldı. Yarın tekrar deneyin.";
+"pin_wrong" = "Hatalı PIN. Lütfen tekrar deneyin.";
+"pin_warning_forgot" = "⚠️ PIN'inizi unutursanız işlem geçmişiniz KALICI OLARAK silinir. Kurtarma yolu yoktur.";
+"pin_change_title" = "Yedek PIN'ini değiştir";
+"pin_change_old" = "Mevcut PIN kodunuzu girin";
+"pin_change_new" = "Yeni PIN kodunuzu girin";

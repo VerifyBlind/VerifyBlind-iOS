@@ -409,3 +409,18 @@
 "biometric_fail_cancel" = "CANCEL";
 "biometric_fail_id_label" = "ID";
 "biometric_fail_selfie_label" = "Selfie";
+
+/* Backup PIN (identities without a TCKN) */
+"pin_setup_title" = "Create your backup PIN";
+"pin_setup_desc" = "Because your ID card has no national ID number, your activity history is encrypted with this PIN.";
+"pin_enter_title" = "Enter your PIN";
+"pin_changed_reenter" = "Your PIN has changed. Enter the new PIN.";
+"pin_confirm_title" = "Confirm your PIN";
+"pin_min_length" = "PIN must be at least 6 digits";
+"pin_mismatch" = "PINs do not match";
+"pin_rate_limited" = "Too many attempts. Try again tomorrow.";
+"pin_wrong" = "Wrong PIN. Please try again.";
+"pin_warning_forgot" = "⚠️ If you forget your PIN, your activity history is PERMANENTLY deleted. There is no recovery.";
+"pin_change_title" = "Change backup PIN";
+"pin_change_old" = "Enter your current PIN";
+"pin_change_new" = "Enter your new PIN";

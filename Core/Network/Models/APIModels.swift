@@ -349,6 +349,30 @@ struct AppConfigResponse: Codable {
     }
 }
 
+// MARK: - Backup PIN (TCKN'siz kimlikler)
+
+/// PIN + UUID → person_id (KEK = SHA256(person_id) ile sarılı DEK'i açar). Android `DerivePinRequest`
+/// paritesi. UUID sır değil — per-user salt.
+struct DerivePinRequest: Codable {
+    let pin: String
+    let uuid: String
+    /// iOS'ta App Attest header'dan gider; body'de null bırakılır (Android Play Integrity token'ı koyar).
+    var integrityToken: String?
+
+    enum CodingKeys: String, CodingKey {
+        case pin, uuid
+        case integrityToken = "integrity_token"
+    }
+}
+
+struct DerivePinResponse: Codable {
+    let personId: String
+
+    enum CodingKeys: String, CodingKey {
+        case personId = "person_id"
+    }
+}
+
 // MARK: - KVKK
 
 struct KvkkWithdrawRequest: Codable {

@@ -53,6 +53,15 @@ enum Stage5SelfTest {
             return (ok, ok ? "ok" : "sızan alanlar: \(keys)")
         })
 
+        // ── PinValidator kuralı Android ile aynı (>=6 hane, yalnız rakam, blocklist yok) ──
+        r.append(check("PinValidator kuralı Android paritesi") {
+            let ok = !PinValidator.isValid("12345")   // 5 hane
+                && PinValidator.isValid("123456")      // 6 hane
+                && !PinValidator.isValid("12345a")     // harf var
+                && PinValidator.isValid("000000")      // zayıf ama geçerli (blocklist yok)
+            return (ok, ok ? "ok" : "kural sapması")
+        })
+
         // ── AES-GCM(personId) round-trip (çapraz platform: Android aesGcmDecrypt ile aynı) ──
         r.append(check("AES-GCM(personId) encrypt→decrypt round-trip") {
             let pid = "pid-\(UUID().uuidString)"

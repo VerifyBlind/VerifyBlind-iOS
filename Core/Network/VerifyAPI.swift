@@ -74,6 +74,19 @@ struct VerifyAPI {
         try await client.get("api/public/app-config")
     }
 
+    // MARK: - Backup PIN (TCKN'siz kimlikler)
+
+    /// PIN + UUID → person_id. Android `deriveBackupPersonId` paritesi. Sunucu kota (10/gün/UUID)
+    /// ve attestation'a tabidir; 429 = kota, 403 = attestation. PIN/UUID saklanmaz.
+    func deriveBackupPersonId(_ request: DerivePinRequest) async throws -> DerivePinResponse {
+        try await client.post("api/Backup/derive-person-id", body: request)
+    }
+
+    /// İstemci sarılı DEK'i açınca çağırır → kota sıfırlanır. Android `resetBackupQuota` paritesi.
+    func resetBackupQuota(_ request: DerivePinRequest) async throws {
+        try await client.postNoContent("api/Backup/reset-quota", body: request)
+    }
+
     // MARK: - KVKK
 
     func withdrawConsent(_ request: KvkkWithdrawRequest) async throws {
