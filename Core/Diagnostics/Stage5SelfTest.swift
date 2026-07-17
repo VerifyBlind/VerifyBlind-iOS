@@ -13,6 +13,46 @@ enum Stage5SelfTest {
     static func runAll() -> [SelfTestResult] {
         var r: [SelfTestResult] = []
 
+        // ── GOLDEN VECTOR: KEK türetimi Android ile BAYT BAYT aynı olmalı ──
+        // Android BackupGoldenVectorTest.kekFromPersonId_goldenVector AYNI değeri doğrular.
+        // Drift olursa bir platformda alınan yedek diğerinde ÇÖZÜLEMEZ — ve bu ancak kullanıcı
+        // telefon değiştirince ortaya çıkar. Bağımsız doğrulama: printf 'golden-person' | sha256sum
+        r.append(check("GOLDEN: kekFromPersonId == Android vektörü") {
+            let hex = CryptoUtils.kekFromPersonId("golden-person").map { String(format: "%02x", $0) }.joined()
+            let expected = "8f791c987647845caa508343d3b5c8a846c72c86bae1cacc34cdbd705da3045a"
+            return (hex == expected, hex == expected ? "ok" : "DRIFT! \(hex)")
+        })
+
+        // ── GOLDEN: sabit DEK sar→aç round-trip (Android dekWrap_roundTrip_withGoldenDek paritesi) ──
+        r.append(check("GOLDEN: DEK wrap→unwrap round-trip") {
+            let goldenDek = Data((0..<32).map { UInt8($0) })
+            let wrap = try BackupFormat.wrapDek(goldenDek, personId: "golden-person", pinUuid: nil)
+            let out = BackupFormat.unwrapDeks([wrap], personIds: ["golden-person"])
+            let ok = out.count == 1 && out[0] == goldenDek
+            return (ok, ok ? "ok" : "round-trip bozuk")
+        })
+
+        // ── v2 sürüm işareti Android ile aynı sabit ──
+        r.append(check("GOLDEN: versionV2 == 2") {
+            (BackupFormat.versionV2 == 2, "\(BackupFormat.versionV2)")
+        })
+
+        // ── Yanlış personId DEK'i açamamalı (kimlik izolasyonu v2'de de korunur) ──
+        r.append(check("v2: yabancı wrap açılamaz") {
+            let wrap = try BackupFormat.wrapDek(CryptoUtils.generateDek(), personId: "kisi-A", pinUuid: nil)
+            let out = BackupFormat.unwrapDeks([wrap], personIds: ["kisi-B"])
+            return (out.isEmpty, out.isEmpty ? "reddedildi" : "yanlış KEK açtı!")
+        })
+
+        // ── v1 yazımı `v`/`wraps` alanlarını ATLAMALI (eski istemci uyumu — veri kaybı koruması) ──
+        // Bu bozulursa eski cihazlar dosyayı yanlış yorumlar; `wraps` düşerse DEK kalıcı kaybolur.
+        r.append(check("v1 yazımı v/wraps alanlarını atlar") {
+            let payload = CloudPayload(v: nil, wraps: nil, history: [], partnersEnc: nil)
+            let keys = try jsonKeys(payload)
+            let ok = !keys.contains("v") && !keys.contains("wraps")
+            return (ok, ok ? "ok" : "sızan alanlar: \(keys)")
+        })
+
         // ── AES-GCM(personId) round-trip (çapraz platform: Android aesGcmDecrypt ile aynı) ──
         r.append(check("AES-GCM(personId) encrypt→decrypt round-trip") {
             let pid = "pid-\(UUID().uuidString)"

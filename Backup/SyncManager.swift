@@ -14,7 +14,14 @@ struct SyncResult {
 
 /// Çift yönlü bulut senkron — Android `backup/SyncManager.kt` portu (birebir).
 /// Akış: indir → çöz → yerele eksikleri ekle → bulutta olmayan gönderilmişleri (tombstone) → hepsini
-/// `personId`-AES-GCM ile şifreleyip yükle. Çözülemeyen (başka kimliğe ait) öğeler aynen korunur.
+/// şifreleyip yükle. Çözülemeyen (başka kimliğe ait) öğeler aynen korunur.
+///
+/// Şifreleme iki formatı destekler:
+///   v1 (eski): geçmiş DOĞRUDAN `SHA256(personId)` ile şifreli.
+///   v2 (yeni): geçmiş rastgele DEK ile şifreli; DEK, KEK=`SHA256(personId)` ile sarılıp dosyadaki
+///              `wraps[]` içinde tutulur (bkz. `BackupFormat`).
+/// OKUMA her zaman iki formatı da destekler. YAZMA sunucu bayrağına bağlıdır
+/// (`AppConfigCache.isBackupFormatV2Enabled`) — bayrak ancak zorunlu güncelleme bitince açılır.
 ///
 /// Güvenlik kuralları (Android paritesi): indirme BAŞARISIZSA hiçbir şey silme; bulut dosyası YOKSA
 /// "her şey silindi" SAYMA (yereli koru, dosyayı yeniden oluştur). Şifreleme çapraz platform
@@ -25,6 +32,15 @@ actor SyncManager {
     private let filename = "verifyblind_backup.json"
     private var isSyncing = false
     private let repo = HistoryRepository.shared
+
+    /// Yüklenecek bloğu doğru formatla şifreler: `dek` varsa v2 (ham anahtar), yoksa v1 (personId).
+    /// Ayrı fonksiyon: guard-let içinde `try?`'li ternary Swift'te kırılgan ve okunmaz.
+    private func encryptForUpload(_ json: String, dek: Data?, personId: String) -> (ciphertext: String, iv: String)? {
+        if let dek {
+            return try? CryptoUtils.aesGcmEncryptRaw(json, key: dek)
+        }
+        return try? CryptoUtils.aesGcmEncrypt(json, personId: personId)
+    }
 
     func performSync(provider: CloudProvider) async -> SyncResult {
         guard !isSyncing else {
@@ -59,17 +75,41 @@ actor SyncManager {
         // Aynı koruma partnerler için: yerel anahtarla çözülemeyen şifreli partner girdileri.
         var foreignPartnerEntries: [EncPartner] = []
 
+        // Senkron boyunca kullanılacak DEK'ler (yalnız v2'de dolu).
+        var activeDeks: [Data] = []
+        // Yerel anahtarlarla AÇILAMAYAN wrap'ler (başka kimliğe ait) — yüklemede AYNEN geri yazılır,
+        // yoksa o kimliğin DEK'i kalıcı olarak kaybolur.
+        var foreignWraps: [DekWrap] = []
+        var cloudIsV2 = false
+
         if let json, let data = json.data(using: .utf8),
            let payload = try? JSONDecoder().decode(CloudPayload.self, from: data) {
-            // Partnerleri çöz: her şifreli girdiyi yerel personId'lerle dene; çözüleni keep-newer
-            // (lastUpdated) ile birleştir, çözülemeyeni (başka kimliğe ait) aynen koru.
+            cloudIsV2 = BackupFormat.isV2(payload)
+
+            if cloudIsV2 {
+                let allWraps = payload.wraps ?? []
+                activeDeks = BackupFormat.unwrapDeks(allWraps, personIds: localPersonIds)
+                for w in allWraps where BackupFormat.unwrapDeks([w], personIds: localPersonIds).isEmpty {
+                    foreignWraps.append(w)
+                }
+                // Açılan DEK'i yerel önbelleğe al — BULUT OTORİTEDİR: buradaki eski kopya (varsa)
+                // üzerine yazılır, böylece iki cihaz bağımsız DEK ürettiyse yakınsar.
+                if let dek = activeDeks.first, let pid = localPersonIds.first {
+                    SecureStore.saveDek(personId: pid, dekB64: dek.base64EncodedString())
+                }
+                Log.info("Bulut yedek v2: \(activeDeks.count) DEK açıldı, \(foreignWraps.count) yabancı wrap korunuyor", category: .flow)
+            } else {
+                Log.info("Bulut yedek v1 (eski format) — personId ile doğrudan çözülecek", category: .flow)
+            }
+
+            // Partnerleri çöz: çözüleni keep-newer (lastUpdated) ile birleştir,
+            // çözülemeyeni (başka kimliğe ait) aynen koru.
             for entry in payload.partnersEnc ?? [] {
                 var decrypted: BackupPartnerItem?
-                for pid in localPersonIds {
-                    guard let jsonStr = try? CryptoUtils.aesGcmDecrypt(ciphertextBase64: entry.enc, ivBase64: entry.iv, personId: pid),
-                          let obj = try? JSONDecoder().decode(BackupPartnerItem.self, from: Data(jsonStr.utf8)) else { continue }
+                if let jsonStr = BackupFormat.tryDecrypt(enc: entry.enc, iv: entry.iv, isV2: cloudIsV2,
+                                                         deks: activeDeks, personIds: localPersonIds),
+                   let obj = try? JSONDecoder().decode(BackupPartnerItem.self, from: Data(jsonStr.utf8)) {
                     decrypted = obj
-                    break
                 }
                 if let p = decrypted, !p.id.isEmpty {
                     let local = PartnerManager.get(p.id)
@@ -82,12 +122,14 @@ actor SyncManager {
             }
             for raw in payload.history ?? [] {
                 var decrypted: InnerPayload?
-                for pid in localPersonIds {
-                    guard let jsonStr = try? CryptoUtils.aesGcmDecrypt(ciphertextBase64: raw.enc, ivBase64: raw.iv, personId: pid),
-                          let obj = try? JSONDecoder().decode(InnerPayload.self, from: Data(jsonStr.utf8)),
-                          obj.personId == pid else { continue }
+                if let jsonStr = BackupFormat.tryDecrypt(enc: raw.enc, iv: raw.iv, isV2: cloudIsV2,
+                                                         deks: activeDeks, personIds: localPersonIds),
+                   let obj = try? JSONDecoder().decode(InnerPayload.self, from: Data(jsonStr.utf8)),
+                   // v1'de anahtar personId'den türediği için bu eşleşme ek doğrulamaydı. v2'de DEK
+                   // kimlikten bağımsız → personId'yi bilinenler arasında AYRICA doğrula ki başka
+                   // kimliğin öğesi yanlışlıkla benimsenmesin.
+                   !obj.personId.isEmpty, localPersonIds.contains(obj.personId) {
                     decrypted = obj
-                    break
                 }
                 if let d = decrypted {
                     let rec = HistoryRecord(
@@ -129,6 +171,41 @@ actor SyncManager {
         let allLocal = repo.getAllHistorySnapshot()   // çözülmüş, silinmemiş
         var uploadList: [CloudHistoryItem] = []
         var unsentNonces: [String] = []
+
+        // YAZMA formatı SUNUCU bayrağıyla kontrol edilir. Eski (v1-only) bir istemci v2 dosyasını
+        // `wraps` alanını DÜŞÜREREK geri yazar → DEK sonsuza dek kaybolur ve tüm geçmiş kurtarılamaz.
+        // Bu yüzden v2 yazma ancak zorunlu güncelleme bitince açılır.
+        let writeV2 = AppConfigCache.isBackupFormatV2Enabled()
+
+        // v2 yazacaksak DEK gerekli. Öncelik: (1) buluttan açılan (OTORİTE — iki cihaz bağımsız DEK
+        // ürettiyse buna yakınsar), (2) yerel önbellek, (3) yeni üret (ilk yedek).
+        // Wrap'i BURADA, öğeleri şifrelemeden ÖNCE üret. Sonra üretmek tehlikeli: sarma başarısız
+        // olursa öğeler DEK ile şifrelenmiş ama başlık v1 yazılmış olur → yedek okunamaz. Sarma
+        // başarısızsa DEK'i düşürüp tümüyle v1'e dönmek tek tutarlı davranış.
+        var writeDek: Data?
+        var outWraps: [DekWrap]?
+        if writeV2, let pid = localPersonIds.first {
+            let candidate: Data
+            if let d = activeDeks.first {
+                candidate = d
+            } else if let cached = SecureStore.getDek(personId: pid), let d = Data(base64Encoded: cached) {
+                candidate = d
+            } else {
+                candidate = CryptoUtils.generateDek()
+                Log.info("Yeni DEK üretildi (bulutta açılabilir wrap yok)", category: .flow)
+            }
+
+            if let mine = try? BackupFormat.wrapDek(candidate, personId: pid,
+                                                    pinUuid: SecureStore.getPinUuid(personId: pid)) {
+                writeDek = candidate
+                outWraps = [mine] + foreignWraps
+                SecureStore.saveDek(personId: pid, dekB64: candidate.base64EncodedString())
+            } else {
+                // Sarılamayan DEK'le v2 yazılamaz; v1'e düş (writeDek nil kalır → öğeler personId ile).
+                Log.error("DEK sarılamadı — bu senkron v1 formatında yazılacak", category: .flow)
+            }
+        }
+
         for item in allLocal where !item.personId.isEmpty {
             let inner = InnerPayload(
                 title: item.title, description: item.description, cardId: item.cardId,
@@ -138,7 +215,7 @@ actor SyncManager {
             )
             guard let innerData = try? JSONEncoder().encode(inner),
                   let innerJson = String(data: innerData, encoding: .utf8),
-                  let pair = try? CryptoUtils.aesGcmEncrypt(innerJson, personId: item.personId) else {
+                  let pair = encryptForUpload(innerJson, dek: writeDek, personId: item.personId) else {
                 Log.error("Eşitleme: öğe şifrelenemedi (\(item.nonce))", category: .flow)
                 continue
             }
@@ -173,7 +250,7 @@ actor SyncManager {
                 let backupItem = BackupPartnerItem(from: local)
                 guard let pData = try? JSONEncoder().encode(backupItem),
                       let pJson = String(data: pData, encoding: .utf8),
-                      let pair = try? CryptoUtils.aesGcmEncrypt(pJson, personId: personId) else {
+                      let pair = encryptForUpload(pJson, dek: writeDek, personId: personId) else {
                     Log.error("Eşitleme: partner şifrelenemedi (\(partnerId))", category: .flow)
                     continue
                 }
@@ -181,7 +258,14 @@ actor SyncManager {
             }
             partnersEnc.append(contentsOf: foreignPartnerEntries)
 
-            let cloudPayload = CloudPayload(history: uploadList, partnersEnc: partnersEnc.isEmpty ? nil : partnersEnc)
+            // outWraps yukarıda, öğeler şifrelenmeden ÖNCE üretildi → başlık ile öğe şifrelemesi
+            // her zaman tutarlı. v1 yazarken v/wraps nil → JSONEncoder bunları ATLAR → çıktı
+            // birebir eski v1 şeması olur (eski istemcilerle uyum).
+            let cloudPayload = CloudPayload(
+                v: outWraps != nil ? BackupFormat.versionV2 : nil,
+                wraps: outWraps,
+                history: uploadList,
+                partnersEnc: partnersEnc.isEmpty ? nil : partnersEnc)
             guard let payloadData = try? JSONEncoder().encode(cloudPayload),
                   let payloadJson = String(data: payloadData, encoding: .utf8) else {
                 return SyncResult(itemsAdded: itemsAdded, itemsDeleted: itemsDeleted, error: "Yük serileştirilemedi")

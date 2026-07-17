@@ -154,6 +154,62 @@ enum CryptoUtils {
         }
     }
 
+    // MARK: - AES-GCM (HAM anahtar — DEK/KEK sarma; Android `aesGcmEncryptRaw`/`aesGcmDecryptRaw`)
+    //
+    // Yukarıdaki personId'li varyantlar anahtarı SHA256(personId) ile TÜRETİR ve v1 bulut yedek
+    // formatı için AYNEN korunur. Aşağıdakiler ham 32 baytlık anahtar alır.
+    //
+    // Neden: yedek artık rastgele bir DEK ile şifrelenir; DEK ise personId'den türeyen KEK ile
+    // sarılıp dosyadaki `wraps[]` içinde tutulur. Aynı DEK birden çok KEK ile sarılabildiği için
+    // kimlik tabanı değişince (TCKN → PIN) yalnız yeni bir wrap eklenir, geçmiş yeniden
+    // şifrelenmez. DEK rastgeledir → türetilemez → ham anahtar alan varyant şart.
+
+    /// Android `kekFromPersonId` ile BİREBİR: SHA256(personId) ham baytları.
+    /// `deriveKeyFromPersonId` ile aynı baytı verir — v1→v2 geçişinde mevcut personId'ler
+    /// wrap'leri açabilsin diye kasıtlı.
+    static func kekFromPersonId(_ personId: String) -> Data {
+        sha256Bytes(personId)
+    }
+
+    /// Android `generateDek`: yeni rastgele DEK (32 bayt). Kimlikten bağımsız.
+    static func generateDek() -> Data {
+        var bytes = [UInt8](repeating: 0, count: 32)
+        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        return Data(bytes)
+    }
+
+    /// Android `aesGcmEncryptRaw`: ciphertext alanı = ciphertext‖tag, iv ayrı alan.
+    static func aesGcmEncryptRaw(_ data: String, key: Data) throws -> (ciphertext: String, iv: String) {
+        do {
+            let sealed = try AES.GCM.seal(Data(data.utf8), using: SymmetricKey(data: key))
+            var ctWithTag = Data(sealed.ciphertext)
+            ctWithTag.append(sealed.tag)
+            return (ctWithTag.base64EncodedString(), Data(sealed.nonce).base64EncodedString())
+        } catch {
+            Log.error("CryptoUtils.aesGcmEncryptRaw başarısız", error: error, category: .crypto)
+            throw CryptoError.encryptionFailed("\(error)")
+        }
+    }
+
+    /// Android `aesGcmDecryptRaw`: ciphertext = ct‖tag (son 16 byte = tag), iv ayrı, ham anahtar.
+    static func aesGcmDecryptRaw(ciphertextBase64: String, ivBase64: String, key: Data) throws -> String {
+        guard let ctWithTag = decodeBase64(ciphertextBase64), let ivData = decodeBase64(ivBase64) else {
+            throw CryptoError.invalidBase64
+        }
+        guard ctWithTag.count >= 16 else { throw CryptoError.decryptionFailed("ciphertext < 16 byte") }
+        let tag = ctWithTag.suffix(16)
+        let ct = ctWithTag.prefix(ctWithTag.count - 16)
+        do {
+            let nonce = try AES.GCM.Nonce(data: ivData)
+            let box = try AES.GCM.SealedBox(nonce: nonce, ciphertext: ct, tag: tag)
+            let plain = try AES.GCM.open(box, using: SymmetricKey(data: key))
+            return String(decoding: plain, as: UTF8.self)
+        } catch {
+            // Yanlış KEK (GCM tag uyumsuz) normal bir durum: çağıran tüm personId'leri dener.
+            throw CryptoError.decryptionFailed("\(error)")
+        }
+    }
+
     // MARK: - Hashing
 
     /// Android `sha256`: lowercase hex (64 karakter).

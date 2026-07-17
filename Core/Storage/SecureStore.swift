@@ -25,6 +25,25 @@ enum SecureStore {
     static func saveAppAttestKeyId(_ keyId: String) { set("appattest_key_id", keyId) }
     static func getAppAttestKeyId() -> String? { get("appattest_key_id") }
 
+    // MARK: - DEK (bulut yedek veri anahtarı) — Android `SecureStore.saveDek/getDek` paritesi
+    //
+    // DEK rastgeledir ve personId'den TÜRETİLEMEZ → yerelde saklanmak zorunda. Buradaki kopya
+    // yalnızca bir ÖNBELLEKTİR: DEK'in kalıcı evi bulut yedeğindeki KEK-sarılı wrap'tir ve
+    // senkronda BULUT OTORİTEDİR (açılabilen wrap varsa o DEK benimsenir, buradaki üzerine yazılır).
+    // Önbellek yalnız "bulutta henüz wrap yok" (ilk yedek) durumunda üretilen DEK'i iki senkron
+    // arasında yaşatmak için var.
+
+    static func saveDek(personId: String, dekB64: String) { set("dek_\(personId)", dekB64) }
+    static func getDek(personId: String) -> String? { get("dek_\(personId)") }
+
+    // MARK: - PIN UUID (TCKN'siz kimlikler)
+    //
+    // UUID sır DEĞİLDİR — yedek dosyasında düz metin durur. Görevi per-user salt: salt olmasaydı
+    // aynı PIN'i seçen iki kullanıcı aynı person_id'yi türetir ve birbirlerinin yedeğini çözebilirdi.
+
+    static func savePinUuid(personId: String, uuid: String) { set("pinuuid_\(personId)", uuid) }
+    static func getPinUuid(personId: String) -> String? { get("pinuuid_\(personId)") }
+
     /// Android `clear()` — kart silindiğinde / reset'te.
     static func clear() {
         for account in ["personId", "cardId", "fcm_token", "appattest_key_id"] { delete(account) }
