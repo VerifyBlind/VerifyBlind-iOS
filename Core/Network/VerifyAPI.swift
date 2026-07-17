@@ -82,11 +82,6 @@ struct VerifyAPI {
         try await client.post("api/Backup/derive-person-id", body: request)
     }
 
-    /// İstemci sarılı DEK'i açınca çağırır → kota sıfırlanır. Android `resetBackupQuota` paritesi.
-    func resetBackupQuota(_ request: DerivePinRequest) async throws {
-        try await client.postNoContent("api/Backup/reset-quota", body: request)
-    }
-
     // MARK: - KVKK
 
     func withdrawConsent(_ request: KvkkWithdrawRequest) async throws {
