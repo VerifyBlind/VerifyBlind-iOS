@@ -59,9 +59,6 @@ final class AppState: ObservableObject {
             let cfg = try await VerifyAPI.shared.appConfig()
             minimumIosVersion = cfg.minimumIosVersion
             storeUrl = cfg.storeUrl
-            // Yedek yazma formatı bayrağını kalıcı önbelleğe al: SyncManager arka planda
-            // (AppState'siz) çalıştığı için config'i buradan öğrenir.
-            AppConfigCache.setBackupFormatV2Enabled(cfg.backupFormatV2 ?? false)
             // Demo butonu: cihaz sürümü admin tanımlı iOS demo sürümüyle birebir eşleşirse görünür.
             let demoVersion = cfg.demoVersionIos ?? ""
             let current = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""

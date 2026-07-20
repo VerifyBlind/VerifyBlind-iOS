@@ -333,19 +333,12 @@ struct AppConfigResponse: Codable {
     let environment: String?
     /// Admin panelden tanımlanır; cihaz sürümü buna eşitse demo butonu görünür (şifre yok).
     let demoVersionIos: String?
-    /// Bulut yedek YAZMA formatı. false → v1 (eski), true → v2 (KEK/DEK).
-    /// Varsayılan false: sunucu bu alanı henüz döndürmüyorsa v1 yazılır (güvenli taraf).
-    /// Sunucu tarafında ancak v1+v2 OKUYAN sürüme zorunlu güncelleme bitince açılır — eski istemci
-    /// bir v2 dosyasını `wraps` alanını düşürerek geri yazar ve DEK kalıcı olarak kaybolur.
-    let backupFormatV2: Bool?
-
     enum CodingKeys: String, CodingKey {
         case minimumAndroidVersion = "minimum_android_version"
         case minimumIosVersion = "minimum_ios_version"
         case storeUrl = "store_url"
         case environment
         case demoVersionIos = "demo_version_ios"
-        case backupFormatV2 = "backup_format_v2"
     }
 }
 

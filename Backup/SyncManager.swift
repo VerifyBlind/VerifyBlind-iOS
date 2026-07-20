@@ -20,8 +20,9 @@ struct SyncResult {
 ///   v1 (eski): geçmiş DOĞRUDAN `SHA256(personId)` ile şifreli.
 ///   v2 (yeni): geçmiş rastgele DEK ile şifreli; DEK, KEK=`SHA256(personId)` ile sarılıp dosyadaki
 ///              `wraps[]` içinde tutulur (bkz. `BackupFormat`).
-/// OKUMA her zaman iki formatı da destekler. YAZMA sunucu bayrağına bağlıdır
-/// (`AppConfigCache.isBackupFormatV2Enabled`) — bayrak ancak zorunlu güncelleme bitince açılır.
+/// OKUMA her zaman iki formatı da destekler; YAZMA daima v2'dir. Göç için kullanılan sunucu
+/// bayrağı (backup_format_v2) KALDIRILDI — korunacak eski istemci kalmadı ve bayrak bir geri
+/// dönüş anahtarı değildi: v1'e dönmek `wraps`'ı (yabancı kimliklerin DEK'leri dahil) silerdi.
 ///
 /// Güvenlik kuralları (Android paritesi): indirme BAŞARISIZSA hiçbir şey silme; bulut dosyası YOKSA
 /// "her şey silindi" SAYMA (yereli koru, dosyayı yeniden oluştur). Şifreleme çapraz platform
@@ -172,19 +173,19 @@ actor SyncManager {
         var uploadList: [CloudHistoryItem] = []
         var unsentNonces: [String] = []
 
-        // YAZMA formatı SUNUCU bayrağıyla kontrol edilir. Eski (v1-only) bir istemci v2 dosyasını
-        // `wraps` alanını DÜŞÜREREK geri yazar → DEK sonsuza dek kaybolur ve tüm geçmiş kurtarılamaz.
-        // Bu yüzden v2 yazma ancak zorunlu güncelleme bitince açılır.
-        let writeV2 = AppConfigCache.isBackupFormatV2Enabled()
-
-        // v2 yazacaksak DEK gerekli. Öncelik: (1) buluttan açılan (OTORİTE — iki cihaz bağımsız DEK
-        // ürettiyse buna yakınsar), (2) yerel önbellek, (3) yeni üret (ilk yedek).
+        // DAİMA v2 yazılır. Sunucu bayrağı (backup_format_v2) KALDIRILDI: göç için vardı ve
+        // korunacak eski istemci kalmadı. Ayrıca bir "geri dönüş anahtarı" DEĞİLDİ — v1'e dönmek
+        // `wraps`'ı (yabancı kimliklerin DEK'leri dahil) silerdi, yani kurtarma değil yıkım olurdu.
+        // Okuma hâlâ v1+v2 destekler (bkz. BackupFormat.tryDecrypt).
+        //
+        // DEK önceliği: (1) buluttan açılan (OTORİTE — iki cihaz bağımsız DEK ürettiyse buna
+        // yakınsar), (2) yerel önbellek, (3) yeni üret (ilk yedek).
         // Wrap'i BURADA, öğeleri şifrelemeden ÖNCE üret. Sonra üretmek tehlikeli: sarma başarısız
         // olursa öğeler DEK ile şifrelenmiş ama başlık v1 yazılmış olur → yedek okunamaz. Sarma
         // başarısızsa DEK'i düşürüp tümüyle v1'e dönmek tek tutarlı davranış.
         var writeDek: Data?
         var outWraps: [DekWrap]?
-        if writeV2, let pid = localPersonIds.first {
+        if let pid = localPersonIds.first {
             let candidate: Data
             if let d = activeDeks.first {
                 candidate = d
