@@ -54,7 +54,7 @@ struct RootView: View {
                     )
                     .navigationBarHidden(true)
                 case .history:
-                    HistoryView(onBack: { popPath() })
+                    HistoryView(onBack: { popPath() }, onBackup: { path.append(.backup) })
                         .navigationBarHidden(true)
                 case .backup:
                     BackupSettingsView(onBack: { popPath() })

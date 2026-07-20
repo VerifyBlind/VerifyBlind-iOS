@@ -5,12 +5,16 @@ import UIKit
 /// Sola kaydır = sil, sağa kaydır = doğrulama iptali / rıza geri çekme.
 struct HistoryView: View {
     let onBack: () -> Void
+    /// Yedekleme banner'ı → bulut yedekleme ayarları. Android'de Settings'e `auto_open_backup`
+    /// bundle'ıyla gidilir; iOS'ta doğrudan `BackupSettingsView` push edilir.
+    let onBackup: () -> Void
 
     @EnvironmentObject var appState: AppState
     @StateObject private var vm = HistoryViewModel()
 
     @State private var pendingRevoke: HistoryRecord?
     @State private var authPassed = false
+    @State private var showBackupBanner = false
 
     var body: some View {
         ZStack {
@@ -20,7 +24,12 @@ struct HistoryView: View {
                 Theme.background.ignoresSafeArea()
             }
         }
-        .task { await authenticateOnAppear() }
+        // Yedekleme ekranından geri dönüldüğünde `task` yeniden koşar; kapı bir kez geçilmişse
+        // ikinci bir Face ID istemi çıkmamalı.
+        .task {
+            guard !authPassed else { return }
+            await authenticateOnAppear()
+        }
     }
 
     private func authenticateOnAppear() async {
@@ -39,16 +48,19 @@ struct HistoryView: View {
         VStack(spacing: 0) {
             NavTopBar(title: L.t("history_title"), titleColor: Theme.primary, onBack: onBack)
 
-            backupBanner
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
+            if showBackupBanner {
+                backupBanner
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+            }
 
             Text(L.t("history_swipe_hint"))
                 .font(.system(size: 12))
                 .foregroundColor(Theme.onSurfaceVariant)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 24)
-                .padding(.top, 8)
+                // Banner gizliyken ipucu üst çubuğa yapışmasın (Android `tvHint` padding ayarı).
+                .padding(.top, showBackupBanner ? 8 : 16)
 
             if vm.records.isEmpty {
                 emptyState
@@ -58,7 +70,11 @@ struct HistoryView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.background.ignoresSafeArea())
-        .onAppear { vm.load() }
+        // Android `onResume` paritesi: yedekleme ekranından dönüşte bağlantı durumu tazelenir.
+        .onAppear {
+            vm.load()
+            showBackupBanner = Self.shouldShowBackupBanner(CloudBackupManager.status())
+        }
         .confirmationDialog(revokeTitle, isPresented: Binding(get: { pendingRevoke != nil }, set: { if !$0 { pendingRevoke = nil } }), titleVisibility: .visible) {
             if let rec = pendingRevoke {
                 Button(L.t(rec.action == .registration ? "btn_withdraw" : "btn_revoke"), role: .destructive) {
@@ -92,7 +108,13 @@ struct HistoryView: View {
         L.t(pendingRevoke?.action == .registration ? "revoke_registration_message" : "revoke_verification_message")
     }
 
-    // MARK: - Backup banner (Aşama 5 işlevsiz)
+    // MARK: - Backup banner
+
+    /// Banner görünürlük kuralı — Android `HistoryFragment.checkBackupBanner`: bulut sağlayıcı
+    /// bağlıyken banner GİZLENİR. Saf kural; regresyon testi (`SmokeTests`) buradan sürer.
+    static func shouldShowBackupBanner(_ status: CloudBackupManager.Status) -> Bool {
+        !status.isConnected
+    }
 
     private var backupBanner: some View {
         CardSurface(padding: 12) {
@@ -103,7 +125,17 @@ struct HistoryView: View {
                     Text(L.t("history_backup_suggest")).font(.system(size: 11)).foregroundColor(Theme.onSurfaceVariant)
                 }
                 Spacer()
-                Text(L.t("history_backup_btn")).font(.system(size: 12, weight: .bold)).foregroundColor(Theme.secondary)
+                Button(action: onBackup) {
+                    Text(L.t("history_backup_btn"))
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(Theme.secondary)
+                        // 12sp metnin kendisi dokunulamayacak kadar küçük; Android TextButton'ın
+                        // min dokunma alanı karşılığı için padding + contentShape.
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
         }
     }

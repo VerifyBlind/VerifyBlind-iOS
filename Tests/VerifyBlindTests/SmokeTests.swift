@@ -27,4 +27,20 @@ final class SmokeTests: XCTestCase {
         XCTAssertEqual(deepLinkA, RootView.Flow.login(payload: urlA).id, "Aynı payload kararlı id vermeli")
         XCTAssertNotEqual(deepLinkA, RootView.Flow.register.id)
     }
+
+    /// Regresyon: işlem geçmişindeki yedekleme banner'ı, bulut sağlayıcı BAĞLIYKEN gizlenmeli
+    /// (Android `HistoryFragment.checkBackupBanner` paritesi). Banner koşulsuz çiziliyordu →
+    /// bağlantı kurulduktan sonra da "yedekleme yok" uyarısı ekranda kalıyordu.
+    func testBackupBannerHiddenWhenCloudConnected() {
+        let previous = AppPrefs.cloudProvider
+        defer { AppPrefs.cloudProvider = previous }
+
+        AppPrefs.cloudProvider = nil
+        XCTAssertTrue(HistoryView.shouldShowBackupBanner(CloudBackupManager.status()),
+                      "Bulut bağlı değilken banner görünmeli")
+
+        AppPrefs.cloudProvider = DropboxProvider.shared.id
+        XCTAssertFalse(HistoryView.shouldShowBackupBanner(CloudBackupManager.status()),
+                       "Bulut bağlıyken banner gizlenmeli")
+    }
 }
