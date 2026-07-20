@@ -1,0 +1,81 @@
+name: iOS Unit Tests
+
+# Çağrılabilir (reusable) workflow — ios-dev.yml / ios-prod.yml içindeki build job'ı BAŞARIYLA
+# bittikten sonra `needs:` ile çağrılır. Başarılıysa hiçbir şey yapmaz; başarısızsa job kırmızıya
+# döner ve run'ın tamamı fail olur (GitHub bildirimi buradan gelir).
+#
+# NEDEN `workflow_run` DEĞİL: workflow_run yalnız workflow dosyası VARSAYILAN branch'te (main)
+# duruyorsa ateşlenir. Aktif geliştirme döngüsü `dev`'de olduğu için oraya konan bir workflow_run
+# workflow'u sessizce hiç çalışmazdı; dosyayı main'e itmek ise ios-prod.yml'i (prod TestFlight
+# External) tetiklerdi. `workflow_call` çağıran ile AYNI commit'ten çözülür → dev'de de çalışır.
+
+on:
+  workflow_call:
+
+jobs:
+  unit-tests:
+    name: XCTest (VerifyBlindTests)
+    runs-on: macos-26
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: SPM cache
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: Install tools
+        run: brew install xcodegen
+
+      # Config/*.xcconfig repo'da placeholder değerlerle DURUYOR (API_BASE_URL, IOS_BUNDLE_ID,
+      # BUILD_NUMBER…). Simülatör testi için sır GEREKMEZ ve imzalama kapalı — bu yüzden bu job
+      # `environment: development` istemez, secret okumaz.
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Resolve SPM dependencies
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project VerifyBlind.xcodeproj \
+            -scheme VerifyBlind
+
+      - name: Run unit tests
+        run: |
+          set -euo pipefail
+          # Simülatör adı SABİTLENMEZ ("iPhone 17" gibi) — runner imajı yenilenince o cihaz
+          # kaybolur ve job, kodda hata olmadığı hâlde kırılır. Mevcut ilk iOS simülatörünü seç.
+          UDID=$(xcrun simctl list devices available -j \
+            | jq -r '.devices | to_entries
+                     | map(select(.key | test("SimRuntime\\.iOS")))
+                     | .[0].value | map(select(.isAvailable)) | .[0].udid')
+          if [ -z "$UDID" ] || [ "$UDID" = "null" ]; then
+            echo "::error::Kullanılabilir iOS simülatörü bulunamadı"
+            exit 1
+          fi
+          echo "Simulator UDID: $UDID"
+
+          # -only-testing: UI testleri KOŞMAZ (yavaş + kırılgan); yalnız VerifyBlindTests.
+          xcodebuild test \
+            -project VerifyBlind.xcodeproj \
+            -scheme VerifyBlind \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=$UDID" \
+            -only-testing:VerifyBlindTests \
+            -resultBundlePath TestResults.xcresult \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+      # Yalnız başarısızlıkta: hata mailini eyleme dönüştürülebilir kılar (hangi test, hangi satır).
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcresult-${{ github.run_number }}
+          path: TestResults.xcresult
+          if-no-files-found: warn
