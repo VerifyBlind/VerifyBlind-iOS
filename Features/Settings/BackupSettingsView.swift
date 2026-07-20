@@ -172,12 +172,25 @@ final class BackupSettingsViewModel: ObservableObject {
         isBusy = true
         Task {
             defer { isBusy = false }
+
+            // Biyometrik kapı (Android `SettingsFragment.performSync` paritesi): manuel eşitleme
+            // işlem geçmişini buluta yazar → önce cihaz sahibi doğrulanır.
+            do {
+                try await BiometricGate.authenticate(reason: L.t("biometric_subtitle_decrypt"))
+            } catch {
+                alertMessage = L.t("sync_auth_failed_prefix") + error.localizedDescription
+                return
+            }
+
             let result = await CloudBackupManager.syncNow()
             refresh()
             if let error = result.error {
                 alertMessage = L.t("sync_error_title") + "\n" + error
             } else if result.hasChanges {
+                // Sayaçlar Android paritesi: kullanıcı neyin değiştiğini görür ("tamamlandı" tek
+                // başına sessiz kalıyordu). SyncResult bu alanları zaten taşıyordu.
                 alertMessage = L.t("sync_complete_changes")
+                    + " (+\(result.itemsAdded) -\(result.itemsDeleted) ↑\(result.itemsUploaded))"
             } else {
                 alertMessage = L.t("sync_already_current")
             }

@@ -20,6 +20,9 @@ struct SettingsView: View {
     @State private var infoMessage: String?      // dil/blok/sıfırlama bilgi alert'i
     @State private var isWorking = false
     @State private var showFeedback = false       // "Bize Ulaşın" sheet'i
+    // Yedekleme satırının canlı durumu. Yedekleme ekranından geri dönüldüğünde `onAppear`
+    // tekrar tetiklenir → yeni bağlantı / eşitleme zamanı satıra anında yansır.
+    @State private var backupStatus = CloudBackupManager.status()
 
     // Android `cardBlockCard && false` → kalıcı GİZLİ. Kart bloke etmek geri alınamaz (gerçek kartı
     // kullanılamaz kılar); backend akışı hazır olana dek Android'de olduğu gibi kapalı tutulur.
@@ -50,8 +53,7 @@ struct SettingsView: View {
                         showFeedback = true
                     }
 
-                    navRow(icon: "lock.icloud", fill: Theme.blueSoft, tint: Theme.themePrimary,
-                           title: "settings_backup_title", desc: "settings_backup_desc", action: onBackup)
+                    backupRow
 
                     if blockCardVisible && appState.hasCard {
                         navRow(icon: "creditcard.trianglebadge.exclamationmark", fill: Theme.cyanSoft, tint: Theme.error,
@@ -78,6 +80,7 @@ struct SettingsView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.background.ignoresSafeArea())
         .disabled(isWorking)
+        .onAppear { backupStatus = CloudBackupManager.status() }
         .overlay { if isWorking { ProgressView().scaleEffect(1.2) } }
         .sheet(isPresented: $showFeedback) { FeedbackView() }
         // Dil seçimi
@@ -125,6 +128,32 @@ struct SettingsView: View {
             }
         }
     }
+
+    /// Yedekleme satırı — Android `SettingsFragment.updateCloudBackupStatus` paritesi.
+    /// Bağlıyken satır kendi durumunu söyler: başlıkta sağlayıcı, alt satırda son yedek zamanı
+    /// (camgöbeği). Statik açıklama, yedeğin ne zaman alındığını görünmez kılıyordu.
+    private var backupRow: some View {
+        navRow(icon: "lock.icloud", fill: Theme.blueSoft, tint: Theme.themePrimary,
+               title: "settings_backup_title", desc: "settings_backup_desc",
+               titleSuffix: backupStatus.provider.map { " (\($0.displayName))" },
+               descOverride: backupStatus.isConnected ? backupLastText : nil,
+               descTint: backupStatus.isConnected ? Theme.chipCyan : nil,
+               action: onBackup)
+    }
+
+    /// "Son yedek: …" veya henüz yedek alınmadıysa bunu açıkça söyleyen metin.
+    private var backupLastText: String {
+        guard backupStatus.lastBackupMs > 0 else { return L.t("backup_not_yet") }
+        let date = Date(timeIntervalSince1970: Double(backupStatus.lastBackupMs) / 1000)
+        return L.t("backup_last_prefix") + Self.backupDateFormatter.string(from: date)
+    }
+
+    private static let backupDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .short
+        return f
+    }()
 
     private var languageRow: some View {
         Button(action: { showLanguageDialog = true }) {
@@ -179,15 +208,22 @@ struct SettingsView: View {
     }
 
     /// Tıklanabilir kart satırı (ikon + başlık + açıklama + chevron).
+    ///
+    /// `titleSuffix` / `descOverride` / `descTint`: durumunu satırda gösteren satırlar için
+    /// (şimdilik yalnız yedekleme). Verilmezse satır `title`/`desc` anahtarlarını olduğu gibi
+    /// çözer — diğer tüm çağrılar değişmeden çalışır.
     private func navRow(icon: String, fill: Color, tint: Color, title: String, desc: String,
-                        action: @escaping () -> Void) -> some View {
+                        titleSuffix: String? = nil, descOverride: String? = nil,
+                        descTint: Color? = nil, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             CardSurface {
                 HStack(spacing: 16) {
                     IconCircle(systemName: icon, fill: fill, tint: tint)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(L.t(title)).font(.system(size: 14, weight: .bold)).foregroundColor(Theme.onSurface)
-                        Text(L.t(desc)).font(.system(size: 12)).foregroundColor(Theme.onSurfaceVariant)
+                        Text(L.t(title) + (titleSuffix ?? ""))
+                            .font(.system(size: 14, weight: .bold)).foregroundColor(Theme.onSurface)
+                        Text(descOverride ?? L.t(desc))
+                            .font(.system(size: 12)).foregroundColor(descTint ?? Theme.onSurfaceVariant)
                     }
                     Spacer()
                     Image(systemName: "chevron.right").font(.system(size: 14)).foregroundColor(Theme.onSurfaceVariant)
