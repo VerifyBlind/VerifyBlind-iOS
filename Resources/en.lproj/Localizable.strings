@@ -410,6 +410,11 @@
 "biometric_fail_id_label" = "ID";
 "biometric_fail_selfie_label" = "Selfie";
 
+/* Clear explanation when no device lock is set. On iOS the key uses `.userPresence`
+   (biometry OR passcode), so the message covers both. Android's scope is narrower (biometry only). */
+"biometric_required_title" = "Device Lock Required";
+"biometric_device_lock_required_message" = "Your identity is protected on this device with Face ID, Touch ID, or your device passcode. To continue, set a passcode or Face ID/Touch ID in Settings, then try again.";
+
 /* Also delete history when deleting the card. iOS confirmationDialog cannot host a checkbox →
    separate button (on Android the same key is the checkbox label, hence the shorter text here). */
 "delete_confirm_also_history" = "Delete Card and Activity History";

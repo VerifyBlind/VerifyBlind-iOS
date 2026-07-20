@@ -410,6 +410,11 @@
 "biometric_fail_id_label" = "Kimlik";
 "biometric_fail_selfie_label" = "Selfie";
 
+/* Cihaz kilidi yokken gösterilen net açıklama. iOS'ta anahtar `.userPresence` ile üretilir
+   (biyometri VEYA passcode) → mesaj ikisini de kapsar. Android'de kapsam dar (biyometri şart). */
+"biometric_required_title" = "Cihaz Kilidi Gerekli";
+"biometric_device_lock_required_message" = "Kimliğiniz cihazınızda Face ID, Touch ID veya cihaz şifrenizle korunur. Devam edebilmek için Ayarlar'dan bir cihaz şifresi ya da Face ID/Touch ID tanımlayın, sonra tekrar deneyin.";
+
 /* Kart silinirken geçmişi de silme. iOS'ta confirmationDialog checkbox alamaz → ayrı buton
    (Android'de aynı anahtar checkbox metnidir, o yüzden burada kısa buton metni kullanılır). */
 "delete_confirm_also_history" = "Kartı ve İşlem Geçmişini Sil";

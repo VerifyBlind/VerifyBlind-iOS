@@ -56,6 +56,15 @@ final class RegisterViewModel: ObservableObject {
         Task {
             // Hangi yoldan çıkarsak çıkalım (başarı/hata/erken return) butonu serbest bırak.
             defer { isStarting = false }
+            // Cihaz kilidi (biyometri/passcode) yoksa `.userPresence` anahtarı ÜRETİLEMEZ ve
+            // ensureUserKey errSecAuthFailed ile düşer. Önden kontrol edip NE YAPILACAĞINI söyleyen
+            // net mesaj göster — aksi halde kullanıcı jenerik "güvenlik hatası" görüyordu.
+            guard BiometricGate.isDeviceLockAvailable() else {
+                fail(title: L.t("biometric_required_title"),
+                     message: L.t("biometric_device_lock_required_message"),
+                     error: nil)
+                return
+            }
             do {
                 userPubKey = try KeychainKeyStore.ensureUserKey()
             } catch {
