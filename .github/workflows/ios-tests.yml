@@ -1,16 +1,25 @@
 name: iOS Unit Tests
 
-# Çağrılabilir (reusable) workflow — ios-dev.yml / ios-prod.yml içindeki build job'ı BAŞARIYLA
-# bittikten sonra `needs:` ile çağrılır. Başarılıysa hiçbir şey yapmaz; başarısızsa job kırmızıya
-# döner ve run'ın tamamı fail olur (GitHub bildirimi buradan gelir).
+# Testler build'den BAĞIMSIZ koşar: push anında, ios-dev.yml / ios-prod.yml ile AYNI ANDA başlar.
+# Başarılıysa hiçbir şey yapmaz; başarısızsa run kırmızıya döner (GitHub bildirimi buradan gelir).
+#
+# NEDEN build'e `needs:` ile bağlı DEĞİL: job'lar ayrı runner'da koştuğu için test job'ı build'in
+# çıktısını zaten devralamıyordu — kendi checkout'unu, kendi SPM çözümünü ve kendi derlemesini
+# baştan yapıyor. `needs:` yalnız SIRALAMA kuruyordu, veri paylaşımı değil. Bağı kaldırmak yapılan
+# işi değiştirmez, sadece bekleme kalkar: duvar saati ~20 dk yerine ~11 dk.
 #
 # NEDEN `workflow_run` DEĞİL: workflow_run yalnız workflow dosyası VARSAYILAN branch'te (main)
-# duruyorsa ateşlenir. Aktif geliştirme döngüsü `dev`'de olduğu için oraya konan bir workflow_run
-# workflow'u sessizce hiç çalışmazdı; dosyayı main'e itmek ise ios-prod.yml'i (prod TestFlight
-# External) tetiklerdi. `workflow_call` çağıran ile AYNI commit'ten çözülür → dev'de de çalışır.
+# duruyorsa ateşlenir. Aktif geliştirme döngüsü `dev`'de olduğu için sessizce hiç çalışmazdı.
+#
+# NEDEN `concurrency` YOK: bilinçli. ios-dev.yml'de `cancel-in-progress: true` var ve arka arkaya
+# push'larda önceki run'ı iptal ediyor — testler build'e bağlıyken bu, o commit'in testlerinin
+# `skipped` olup HİÇ koşmaması demekti (iptal edilen run için GitHub hata maili de göndermez).
+# Burada grup tanımlamayınca her commit kendi test run'ını alır; hiçbiri iptal edilmez.
 
 on:
-  workflow_call:
+  push:
+    branches: [dev, main]
+  workflow_dispatch:
 
 jobs:
   unit-tests:

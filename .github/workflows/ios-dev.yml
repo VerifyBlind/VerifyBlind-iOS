@@ -93,11 +93,3 @@ jobs:
           name: package-resolved-${{ github.run_number }}
           path: VerifyBlind.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
           if-no-files-found: warn
-
-  # Unit testler — build BAŞARILI bitince koşar. TestFlight yüklemesini BLOKLAMAZ (upload zaten
-  # bitmiştir); amaç testlerin sessizce ölü kalmasını önlemek. Geçerse hiçbir şey yapmaz,
-  # kalırsa run kırmızı olur.
-  tests:
-    name: Unit tests
-    needs: testflight
-    uses: ./.github/workflows/ios-tests.yml

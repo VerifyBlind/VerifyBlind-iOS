@@ -86,9 +86,3 @@ jobs:
           name: ipa-prod-${{ github.run_number }}
           path: build/ios/ipa/*.ipa
           if-no-files-found: warn
-
-  # Unit testler — build BAŞARILI bitince koşar (dev ile simetrik). Geçerse sessiz.
-  tests:
-    name: Unit tests
-    needs: testflight
-    uses: ./.github/workflows/ios-tests.yml
