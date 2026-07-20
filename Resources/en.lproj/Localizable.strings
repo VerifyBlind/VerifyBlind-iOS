@@ -108,7 +108,7 @@
 "nfc_connection_failed_status" = "Connection Failed";
 "nfc_connection_failed_title" = "CONNECTION FAILED";
 "nfc_connection_failed_message" = "NFC connection could not be established.";
-"nfc_read_error" = "Card could not be read. Move the card away and bring it close again.";
+"nfc_read_error" = "Card could not be read. Remove your phone case if you have one, then move the card away and bring it close again.";
 "nfc_can_required_title" = "CAN Code Required";
 "nfc_can_required_message" = "This identity card requires additional verification.\n\nEnter the 6-digit code (CAN) on the front of the card, then scan the card again.";
 "nfc_can_entered" = "CAN entered. Bring the card close again.";

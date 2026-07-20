@@ -108,7 +108,7 @@
 "nfc_connection_failed_status" = "Bağlantı Başarısız";
 "nfc_connection_failed_title" = "BAĞLANTI BAŞARISIZ";
 "nfc_connection_failed_message" = "NFC bağlantısı kurulamadı.";
-"nfc_read_error" = "Kart Okunamadı. Kartı uzaklaştırıp tekrar yaklaştırın.";
+"nfc_read_error" = "Kart Okunamadı. Varsa telefon kılıfını çıkarın, kartı uzaklaştırıp tekrar yaklaştırın.";
 "nfc_can_required_title" = "CAN Kodu Gerekli";
 "nfc_can_required_message" = "Bu kimlik kartı için ek doğrulama gerekiyor.\n\nKartın ön yüzündeki 6 haneli kodu (CAN) girin, ardından kartı tekrar okutun.";
 "nfc_can_entered" = "CAN girildi. Kartı tekrar yaklaştırın.";
