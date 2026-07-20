@@ -57,8 +57,17 @@ struct WalletView: View {
             let show = await NotificationPermission.shouldShowSoftAsk()
             withAnimation { showNotifSoftAsk = show }
         }
+        // Android'de bu bir onay ekranı + "geçmişi de sil" checkbox'ı. iOS confirmationDialog
+        // checkbox barındıramaz (yalnız buton) → aynı açık seçim iki ayrı destructive butonla
+        // sunulur. Varsayılan davranış (yalnız kartı sil) geçmişi KORUR; bulut restore modeli
+        // geçmişin kart yenilemesinden sağ çıkmasına dayanır.
         .confirmationDialog(L.t("delete_confirm_title"), isPresented: $showDeleteConfirm, titleVisibility: .visible) {
-            Button(L.t("btn_delete_confirm"), role: .destructive) { Task { await removeIdentity() } }
+            Button(L.t("btn_delete_confirm"), role: .destructive) {
+                Task { await removeIdentity(deleteHistory: false) }
+            }
+            Button(L.t("delete_confirm_also_history"), role: .destructive) {
+                Task { await removeIdentity(deleteHistory: true) }
+            }
             Button(L.t("btn_cancel_upper"), role: .cancel) {}
         } message: {
             Text(L.t("delete_confirm_desc"))
@@ -172,7 +181,13 @@ struct WalletView: View {
 
     // MARK: - Kimliği kaldır (Android deleteTicket)
 
-    private func removeIdentity() async {
+    /// Kartı kaldırır. [deleteHistory] true ise o karta ait TÜM işlem geçmişi de tombstone'lanır
+    /// (senkronla buluttan ve diğer cihazlardan da silinir).
+    ///
+    /// Neden seçenek: geçmiş normalde kart silinince DURUR — liste cardId ile filtrelendiği için
+    /// görünmez olur ve aynı kart tekrar eklenince geri gelir. Bilinçli tasarım (restore modeli
+    /// buna dayanır) ama silmek isteyen için "gizlendi ≠ silindi" yanılgısı yaratıyordu.
+    private func removeIdentity(deleteHistory: Bool) async {
         removing = true
         defer { removing = false }
         do {
@@ -187,13 +202,19 @@ struct WalletView: View {
         TicketStore.clear()
         SecureStore.clear()
         KeychainKeyStore.deleteUserKey()
-        HistoryRepository.shared.insert(
-            title: L.t("history_card_deleted_title"),
-            description: L.t("history_card_deleted_desc"),
-            status: 1,
-            actionType: .deletedCard,
-            cardId: cardId ?? ""
-        )
+        // "Geçmişi de sil" seçildiyse DELETED_CARD kaydı EKLENMEZ: aynı cardId ile geride kalır
+        // ve kart tekrar eklenince yeniden görünürdü — tam da kapatmak istediğimiz durum.
+        if deleteHistory, let cid = cardId, !cid.isEmpty {
+            HistoryRepository.shared.markDeletedByCardId(cid)
+        } else {
+            HistoryRepository.shared.insert(
+                title: L.t("history_card_deleted_title"),
+                description: L.t("history_card_deleted_desc"),
+                status: 1,
+                actionType: .deletedCard,
+                cardId: cardId ?? ""
+            )
+        }
         Log.info("Kimlik kaldırıldı", category: .flow)
         appState.refresh()
     }

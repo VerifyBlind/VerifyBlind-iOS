@@ -185,6 +185,19 @@ final class HistoryRepository {
         }
     }
 
+    /// Android `markAsDeletedByCardId`: bir karta ait TÜM geçmişi tombstone'lar (kart silinirken
+    /// "geçmişi de sil" seçilirse). Sert DELETE değil — tombstone senkronla buluta ve diğer
+    /// cihazlara yayılır; sert silme yalnız bu cihazda etki eder ve kayıt buluttan geri gelebilirdi.
+    func markDeletedByCardId(_ cardId: String) {
+        do {
+            try db.write { db in
+                try db.execute(sql: "UPDATE history SET isDeleted = 1, isSent = 0 WHERE cardId = ?", arguments: [cardId])
+            }
+        } catch {
+            Log.error("HistoryRepository.markDeletedByCardId başarısız", error: error, category: .flow)
+        }
+    }
+
     /// Android `cleanupSyncedTombstones`: hem silinmiş hem (silinmesi) buluta gönderilmiş kayıtları kalıcı sil.
     func cleanupSyncedTombstones() {
         do {

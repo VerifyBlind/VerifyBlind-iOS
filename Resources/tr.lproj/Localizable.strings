@@ -410,6 +410,10 @@
 "biometric_fail_id_label" = "Kimlik";
 "biometric_fail_selfie_label" = "Selfie";
 
+/* Kart silinirken geçmişi de silme. iOS'ta confirmationDialog checkbox alamaz → ayrı buton
+   (Android'de aynı anahtar checkbox metnidir, o yüzden burada kısa buton metni kullanılır). */
+"delete_confirm_also_history" = "Kartı ve İşlem Geçmişini Sil";
+
 /* Bulut yedeğini kalıcı silme (Drive'da appDataFolder görünmez → elle silinemez) */
 "backup_delete_cloud" = "Bulut Yedeğini Sil";
 "backup_delete_confirm_title" = "Bulut Yedeğini Sil";

@@ -410,6 +410,10 @@
 "biometric_fail_id_label" = "ID";
 "biometric_fail_selfie_label" = "Selfie";
 
+/* Also delete history when deleting the card. iOS confirmationDialog cannot host a checkbox →
+   separate button (on Android the same key is the checkbox label, hence the shorter text here). */
+"delete_confirm_also_history" = "Delete Card and Activity History";
+
 /* Permanently delete the cloud backup (Drive appDataFolder is invisible → cannot be deleted by hand) */
 "backup_delete_cloud" = "Delete Cloud Backup";
 "backup_delete_confirm_title" = "Delete Cloud Backup";
