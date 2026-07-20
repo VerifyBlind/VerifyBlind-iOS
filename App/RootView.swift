@@ -9,14 +9,33 @@ struct RootView: View {
     @State private var showDevMenu = false
 
     enum Route: Hashable { case settings, history, backup, help, faq, security }
-    enum Flow: Int, Identifiable { case register, registerDemo, login; var id: Int { rawValue } }
+
+    enum Flow: Hashable, Identifiable {
+        case register
+        case registerDemo
+        /// `payload` = deep-link URL; nil ise kullanıcı QR taramak için elle açtı.
+        case login(payload: String?)
+
+        /// Kimlik payload'u İÇERİR. Böylece yeni bir deep-link geldiğinde id DEĞİŞİR ve SwiftUI
+        /// cover içeriğini yeniden kurar. Sabit id (eski `rawValue`) ile `.login` zaten açıkken
+        /// gelen deep-link'te view kimliği korunuyor, `LoginFlowView`'un `@StateObject` vm'i
+        /// yeniden yaratılmıyor ve `initialPayload` sessizce düşüyordu → kamera açık kalıp
+        /// hiçbir şey olmuyordu.
+        var id: String {
+            switch self {
+            case .register:           return "register"
+            case .registerDemo:       return "registerDemo"
+            case .login(let payload): return "login:\(payload ?? "")"
+            }
+        }
+    }
 
     var body: some View {
         NavigationStack(path: $path) {
             WalletView(
                 onAddCard: { activeFlow = .register },
                 onDemo: { triggerDemo() },
-                onVerifyQr: { activeFlow = .login },
+                onVerifyQr: { activeFlow = .login(payload: nil) },
                 onSettings: { path.append(.settings) },
                 onHistory: { path.append(.history) },
                 onDevMenu: (Config.appAttestEnvironment == .development) ? { showDevMenu = true } : nil
@@ -59,11 +78,15 @@ struct RootView: View {
                 RegisterFlowView(isDemo: false, onFinish: { activeFlow = nil })
             case .registerDemo:
                 RegisterFlowView(isDemo: true, onFinish: { activeFlow = nil })
-            case .login:
+            case .login(let payload):
                 // Deep-link varsa QR taramayı atlayıp doğrudan o URL ile başla.
                 LoginFlowView(onFinish: { activeFlow = nil; appState.pendingVerifyURL = nil },
                               onToast: { appState.showToast($0) },
-                              initialPayload: appState.pendingVerifyURL)
+                              initialPayload: payload)
+                    // Payload değişince TAZE view kimliği (→ taze `@StateObject` vm). Cover'ın
+                    // kendi kimliği zaten değişiyor; bu, SwiftUI sunumu geri dönüştürse bile
+                    // eski kameranın/akışın devralınmamasını garantiler.
+                    .id(flow.id)
             }
         }
         .sheet(isPresented: $showDevMenu) { DevMenuView() }
@@ -75,17 +98,13 @@ struct RootView: View {
         .onChange(of: path) { _ in updateStatusBarStyle() }
         .onAppear { updateStatusBarStyle() }
         // Universal Link geldi → login'i aç. Başka bir akış (kayıt / QR kamera) açıksa deeplink onu
-        // PREEMPT eder (Item 3a): önce kapat, sonra yeni payload'la login'i yeniden aç.
+        // YERİNDE preempt eder (Item 3a — Android `handleIntent` paritesi): tek atama yeter, çünkü
+        // `Flow.login` kimliği payload'u içeriyor. Kapat-bekle-yeniden-aç YOK; eski view'ın
+        // `onDisappear`'ı kamerayı durdurur ve terminal olmayan nonce'u iptal eder
+        // (`LoginViewModel.onFlowDismissed` → Android `cancelQrNonce(prev)` karşılığı).
         .onChange(of: appState.pendingVerifyURL) { url in
-            guard url != nil else { return }
-            if activeFlow == nil {
-                activeFlow = .login
-            } else {
-                activeFlow = nil
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                    if appState.pendingVerifyURL != nil { activeFlow = .login }
-                }
-            }
+            guard let url else { return }
+            activeFlow = .login(payload: url)
         }
         // Zorunlu güncelleme: engelleyici tam-ekran overlay (Android ForceUpdate event paritesi).
         .overlay {
