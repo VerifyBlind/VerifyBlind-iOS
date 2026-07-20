@@ -63,11 +63,26 @@ enum CloudBackupManager {
         AppPrefs.clearCloud()
     }
 
-    /// Buluttaki yedek dosyasını sil, sonra bağlantıyı kes. Android `disconnectAndDelete`.
-    static func disconnectAndDelete() async {
-        if let provider = status().provider {
-            try? await provider.delete(filename: backupFilename)
+    /// Buluttaki yedek dosyasını siler; bağlantıyı YALNIZCA silme başarılıysa keser.
+    /// Android `disconnectAndDelete` paritesi.
+    ///
+    /// Hatayı YUTMAZ (eskiden `try?` ile yutuluyordu): gizlilik gerekçesiyle yedeğini silen
+    /// kullanıcıya "silindi" deyip dosyayı bulutta bırakmak sıradan bir hatadan daha kötüdür.
+    /// Başarısızlıkta bağlantı da korunur → kullanıcı yeniden yetkilendirmeden tekrar deneyebilir.
+    /// - Returns: silme başarılı mı.
+    @discardableResult
+    static func disconnectAndDelete() async -> Bool {
+        guard let provider = status().provider else {
+            disconnect()
+            return true
         }
-        disconnect()
+        do {
+            try await provider.delete(filename: backupFilename)
+            disconnect()
+            return true
+        } catch {
+            Log.error("Bulut yedeği silinemedi", error: error, category: .flow)
+            return false
+        }
     }
 }

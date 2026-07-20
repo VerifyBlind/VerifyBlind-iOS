@@ -410,6 +410,14 @@
 "biometric_fail_id_label" = "Kimlik";
 "biometric_fail_selfie_label" = "Selfie";
 
+/* Bulut yedeğini kalıcı silme (Drive'da appDataFolder görünmez → elle silinemez) */
+"backup_delete_cloud" = "Bulut Yedeğini Sil";
+"backup_delete_confirm_title" = "Bulut Yedeğini Sil";
+"backup_delete_confirm_message" = "Buluttaki yedek dosyanız KALICI OLARAK silinecek.\n\nİşlem geçmişiniz, hangi hizmet sağlayıcıyla ne zaman kimlik paylaştığınızın tek kaydıdır ve KVKK rızanızı geri çekme işlemini bu kayıtlar üzerinden yaparsınız.\n\nYedeğinizi silerseniz bu kayıtlar geri getirilemez ve uygulama üzerinden rızanızı geri çekme hakkınızı KULLANAMAZSINIZ. Bundan sonra rızanızı geri çekmenin tek yolu ilgili hizmet sağlayıcıya doğrudan başvurmak olacaktır.\n\nBu işlem geri alınamaz. Devam etmek istiyor musunuz?";
+"backup_delete_confirm_button" = "YEDEĞİ SİL";
+"backup_delete_success" = "Bulut yedeği silindi ve bağlantı kesildi.";
+"backup_delete_failed" = "Bulut yedeği silinemedi. İnternet bağlantınızı kontrol edip tekrar deneyin.";
+
 /* Yedek PIN'i (TCKN'siz kimlikler) */
 "pin_setup_title" = "Yedek PIN'inizi oluşturun";
 "pin_setup_desc" = "Kimlik kartınızda T.C. Kimlik No bulunmadığı için işlem geçmişiniz bu PIN ile şifrelenir.";

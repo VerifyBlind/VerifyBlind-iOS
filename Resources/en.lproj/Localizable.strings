@@ -410,6 +410,14 @@
 "biometric_fail_id_label" = "ID";
 "biometric_fail_selfie_label" = "Selfie";
 
+/* Permanently delete the cloud backup (Drive appDataFolder is invisible → cannot be deleted by hand) */
+"backup_delete_cloud" = "Delete Cloud Backup";
+"backup_delete_confirm_title" = "Delete Cloud Backup";
+"backup_delete_confirm_message" = "Your cloud backup file will be PERMANENTLY deleted.\n\nYour activity history is the only record of which service provider you shared your identity with and when, and you withdraw your data-protection consent through those records.\n\nIf you delete your backup these records cannot be recovered, and you will NOT be able to exercise your right to withdraw consent from within the app. The only remaining way to withdraw consent will be to contact the service provider directly.\n\nThis cannot be undone. Do you want to continue?";
+"backup_delete_confirm_button" = "DELETE BACKUP";
+"backup_delete_success" = "Cloud backup deleted and disconnected.";
+"backup_delete_failed" = "Could not delete the cloud backup. Check your connection and try again.";
+
 /* Backup PIN (identities without a TCKN) */
 "pin_setup_title" = "Create your backup PIN";
 "pin_setup_desc" = "Because your ID card has no national ID number, your activity history is encrypted with this PIN.";

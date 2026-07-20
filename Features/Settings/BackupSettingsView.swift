@@ -43,6 +43,15 @@ struct BackupSettingsView: View {
         } message: {
             Text(L.t("disconnect_confirm_message"))
         }
+        // Yedek silme onayı: rıza sonucunu açıkça söyler (geri çekme geçmiş kayıtları üzerinden
+        // yapılır; geçmiş silinirse tek yol hizmet sağlayıcıya doğrudan başvurmak). Varsayılan
+        // "Vazgeç" → kullanıcı uyarıyı görüp geri dönebilsin.
+        .alert(L.t("backup_delete_confirm_title"), isPresented: $vm.showDeleteBackupConfirm) {
+            Button(L.t("backup_delete_confirm_button"), role: .destructive) { vm.deleteCloudBackup() }
+            Button(L.t("btn_cancel"), role: .cancel) {}
+        } message: {
+            Text(L.t("backup_delete_confirm_message"))
+        }
         .alert(vm.alertMessage ?? "", isPresented: Binding(
             get: { vm.alertMessage != nil },
             set: { if !$0 { vm.alertMessage = nil } }
@@ -75,6 +84,13 @@ struct BackupSettingsView: View {
 
             DangerButton(title: L.t("backup_disconnect")) {
                 vm.showDisconnectConfirm = true
+            }
+
+            // Bulut yedeğini KALICI sil. Ayrı bir eylem: "Bağlantıyı Kes" dosyaya dokunmaz.
+            // Google Drive yedeği appDataFolder'da durur ve Drive arayüzünde GÖRÜNMEZ → bu eylem
+            // olmadan kullanıcı yedeğini hiçbir şekilde silemez (silme hakkı fiilen kullanılamaz).
+            DangerButton(title: L.t("backup_delete_cloud")) {
+                vm.showDeleteBackupConfirm = true
             }
         }
     }
@@ -118,6 +134,7 @@ final class BackupSettingsViewModel: ObservableObject {
     @Published var isBusy = false
     @Published var alertMessage: String?
     @Published var showDisconnectConfirm = false
+    @Published var showDeleteBackupConfirm = false
 
     var lastBackupText: String {
         guard status.lastBackupMs > 0 else { return L.t("backup_not_yet") }
@@ -171,6 +188,20 @@ final class BackupSettingsViewModel: ObservableObject {
         CloudBackupManager.disconnect()
         refresh()
         alertMessage = L.t("disconnected_toast")
+    }
+
+    /// Buluttaki yedek dosyasını KALICI siler, sonra bağlantıyı keser (Android
+    /// `CloudBackupManager.disconnectAndDelete` paritesi). Ağ gerektirir → isBusy ile korunur.
+    func deleteCloudBackup() {
+        guard !isBusy else { return }
+        isBusy = true
+        Task {
+            let deleted = await CloudBackupManager.disconnectAndDelete()
+            isBusy = false
+            refresh()
+            // Başarısızlıkta "silindi" DEME — dosya hâlâ bulutta ve bağlantı korundu, tekrar denenebilir.
+            alertMessage = deleted ? L.t("backup_delete_success") : L.t("backup_delete_failed")
+        }
     }
 
     private static let dateFormatter: DateFormatter = {
