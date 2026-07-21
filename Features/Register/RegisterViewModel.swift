@@ -125,19 +125,22 @@ final class RegisterViewModel: ObservableObject {
                 )
                 nfcAttempt = 0
 
-                // Hızlı-başarısızlık: desteklenmeyen belgeyi (JPEG2000 DG2 / AA-desteksiz pasaport)
-                // BURADA durdur. Aksi halde kullanıcı tüm liveness'i boşa yapıp en sonda enclave'in
-                // ERR_ACTIVE_AUTH'una çarpar; üstelik fotoğraf çözülemediğinde yüz eşleştirme sessizce
-                // atlanır (güvenlik boşluğu). PII yok — yalnız verdict + ihraç eden ülke loglanır.
+                // Hızlı-başarısızlık: desteklenmeyen belgeyi (TR dışı / pasaport / JPEG2000 DG2 /
+                // AA-desteksiz) BURADA durdur. Aksi halde kullanıcı tüm liveness'i boşa yapıp en
+                // sonda enclave reddine çarpar; üstelik fotoğraf çözülemediğinde yüz eşleştirme
+                // sessizce atlanır (güvenlik boşluğu). PII yok — yalnız verdict + ülke/belge kodu.
                 let verdict = DocumentSupport.evaluate(
+                    issuingState: result.issuingState, documentCode: result.documentType,
                     faceImage: result.faceImage, dg15: result.dg15, activeSig: result.activeAuthSignature)
                 if verdict != .supported {
-                    Log.warning("Desteklenmeyen belge: \(verdict) ihraçÜlke=\(result.issuingState)", category: .nfc)
+                    Log.warning("Desteklenmeyen belge: \(verdict) ihraçÜlke=\(result.issuingState) belgeKodu=\(result.documentType)", category: .nfc)
                     let message: String
                     switch verdict {
-                    case .unsupportedImage: message = L.t("doc_unsupported_image")
-                    case .noActiveAuth:     message = L.t("doc_unsupported_no_aa")
-                    default:                message = L.t("doc_unsupported_generic")
+                    case .unsupportedCountry: message = L.t("doc_unsupported_country")
+                    case .unsupportedDocType: message = L.t("doc_unsupported_doc_type")
+                    case .unsupportedImage:   message = L.t("doc_unsupported_image")
+                    case .noActiveAuth:       message = L.t("doc_unsupported_no_aa")
+                    default:                  message = L.t("doc_unsupported_generic")
                     }
                     scanned = nil  // güvenlik: desteklenmeyen veriyle akışa devam etme
                     fail(title: L.t("doc_unsupported_title"), message: message, error: nil)

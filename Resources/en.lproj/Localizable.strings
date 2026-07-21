@@ -122,9 +122,11 @@
 "nfc_id_card_instruction" = "Touch the chip of your identity card to the back of your phone";
 "nfc_passport_instruction" = "Touch the chip of your passport to the back of your phone";
 "doc_unsupported_title" = "Document Not Supported";
-"doc_unsupported_image" = "This document's chip photo is in a format we can't process yet (e.g. JPEG2000). VerifyBlind currently supports the Turkish ID card. Identity could not be created.";
-"doc_unsupported_no_aa" = "This document does not support chip authentication (Active Authentication), which VerifyBlind requires. VerifyBlind currently supports the Turkish ID card. Identity could not be created.";
-"doc_unsupported_generic" = "This document type is not supported yet. VerifyBlind currently supports the Turkish ID card. Identity could not be created.";
+"doc_unsupported_country" = "This document was not issued by the Republic of Türkiye. VerifyBlind currently supports the Turkish ID card only. Identity could not be created.";
+"doc_unsupported_doc_type" = "VerifyBlind currently supports the Turkish ID card only — passports are not accepted at this time. Please use your ID card. Identity could not be created.";
+"doc_unsupported_image" = "This document's chip photo is in a format we can't process yet (e.g. JPEG2000). VerifyBlind currently supports the Turkish ID card only. Identity could not be created.";
+"doc_unsupported_no_aa" = "This document does not support chip authentication (Active Authentication), which VerifyBlind requires. VerifyBlind currently supports the Turkish ID card only. Identity could not be created.";
+"doc_unsupported_generic" = "This document type is not supported yet. VerifyBlind currently supports the Turkish ID card only. Identity could not be created.";
 "server_connection_error" = "❌ Server Connection Error.";
 "connection_error_title" = "Connection Error";
 "connection_error_server" = "Connection Error: Could not reach server";

@@ -73,27 +73,61 @@ enum Stage2SelfTest {
         let dg15 = Data([0x6F, 0x10, 0x30, 0x0E])
         let sig = Data([0x01, 0x02, 0x03])
 
-        r.append(check("DocumentSupport: JPEG + AA → supported") {
-            let v = DocumentSupport.evaluate(faceImage: jpeg, dg15: dg15, activeSig: sig)
+        // TC kimlik kartı varsayılanı — her kontrol yalnız ilgilendiği alanı değiştirir.
+        func evalDoc(
+            _ issuingState: String? = "TUR",
+            _ documentCode: String? = "I",
+            _ faceImage: Data? = jpeg,
+            _ dg15Data: Data? = dg15,
+            _ activeSig: Data? = sig
+        ) -> DocumentSupport.Verdict {
+            DocumentSupport.evaluate(
+                issuingState: issuingState, documentCode: documentCode,
+                faceImage: faceImage, dg15: dg15Data, activeSig: activeSig)
+        }
+
+        r.append(check("DocumentSupport: TC kimlik + JPEG + AA → supported") {
+            let v1 = evalDoc()
+            let v2 = evalDoc("TUR", "ID")
+            return (v1 == .supported && v2 == .supported, "\(v1)/\(v2)")
+        })
+        r.append(check("DocumentSupport: MRZ dolgu/küçük harf normalize edilir") {
+            let v = evalDoc("tur", "i<")
             return (v == .supported, "\(v)")
         })
+        r.append(check("DocumentSupport: TR dışı belge → unsupportedCountry") {
+            let v1 = evalDoc("DEU")
+            let v2 = evalDoc(nil)
+            let v3 = evalDoc("")
+            return (v1 == .unsupportedCountry && v2 == .unsupportedCountry && v3 == .unsupportedCountry,
+                    "\(v1)/\(v2)/\(v3)")
+        })
+        r.append(check("DocumentSupport: Türk pasaportu → unsupportedDocType") {
+            let v1 = evalDoc("TUR", "P")
+            let v2 = evalDoc("TUR", nil)
+            return (v1 == .unsupportedDocType && v2 == .unsupportedDocType, "\(v1)/\(v2)")
+        })
+        r.append(check("DocumentSupport: ülke kontrolü belge tipinden önce gelir") {
+            let v = evalDoc("DEU", "P")
+            return (v == .unsupportedCountry, "\(v)")
+        })
         r.append(check("DocumentSupport: yüz yok/boş → noFaceImage") {
-            let v1 = DocumentSupport.evaluate(faceImage: nil, dg15: dg15, activeSig: sig)
-            let v2 = DocumentSupport.evaluate(faceImage: Data(), dg15: dg15, activeSig: sig)
+            let v1 = evalDoc("TUR", "I", nil)
+            let v2 = evalDoc("TUR", "I", Data())
             return (v1 == .noFaceImage && v2 == .noFaceImage, "\(v1)/\(v2)")
         })
         r.append(check("DocumentSupport: JPEG2000/J2K → unsupportedImage") {
-            let v1 = DocumentSupport.evaluate(faceImage: jp2, dg15: dg15, activeSig: sig)
-            let v2 = DocumentSupport.evaluate(faceImage: j2kRaw, dg15: dg15, activeSig: sig)
+            let v1 = evalDoc("TUR", "I", jp2)
+            let v2 = evalDoc("TUR", "I", j2kRaw)
             return (v1 == .unsupportedImage && v2 == .unsupportedImage, "\(v1)/\(v2)")
         })
         r.append(check("DocumentSupport: DG15/imza yok → noActiveAuth") {
-            let v1 = DocumentSupport.evaluate(faceImage: jpeg, dg15: nil, activeSig: sig)
-            let v2 = DocumentSupport.evaluate(faceImage: jpeg, dg15: dg15, activeSig: Data())
+            let v1 = evalDoc("TUR", "I", jpeg, nil, sig)
+            let v2 = evalDoc("TUR", "I", jpeg, dg15, Data())
             return (v1 == .noActiveAuth && v2 == .noActiveAuth, "\(v1)/\(v2)")
         })
         r.append(check("DocumentSupport: görüntü sorunu AA'dan önce raporlanır") {
-            let v = DocumentSupport.evaluate(faceImage: jp2, dg15: nil, activeSig: nil)
+            let v = evalDoc("TUR", "I", jp2, nil, nil)
             return (v == .unsupportedImage, "\(v)")
         })
         r.append(check("DocumentSupport.isJpeg: SOI işareti tespiti") {

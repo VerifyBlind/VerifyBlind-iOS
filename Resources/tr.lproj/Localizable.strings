@@ -122,9 +122,11 @@
 "nfc_id_card_instruction" = "Kimlik kartınızın çipini telefonunuzun arka yüzüne dokundurun";
 "nfc_passport_instruction" = "Pasaportunuzun çipini telefonunuzun arka yüzüne dokundurun";
 "doc_unsupported_title" = "Belge Desteklenmiyor";
-"doc_unsupported_image" = "Bu belgenin çip fotoğrafı henüz işleyemediğimiz bir biçimde (ör. JPEG2000). VerifyBlind şu an Türkiye Cumhuriyeti kimlik kartını destekliyor. Kimlik oluşturulamadı.";
-"doc_unsupported_no_aa" = "Bu belge, VerifyBlind'in zorunlu tuttuğu çip doğrulamasını (Active Authentication) desteklemiyor. VerifyBlind şu an Türkiye Cumhuriyeti kimlik kartını destekliyor. Kimlik oluşturulamadı.";
-"doc_unsupported_generic" = "Bu belge türü henüz desteklenmiyor. VerifyBlind şu an Türkiye Cumhuriyeti kimlik kartını destekliyor. Kimlik oluşturulamadı.";
+"doc_unsupported_country" = "Bu belge Türkiye Cumhuriyeti tarafından verilmemiş. VerifyBlind şu an yalnızca Türkiye Cumhuriyeti kimlik kartını destekliyor. Kimlik oluşturulamadı.";
+"doc_unsupported_doc_type" = "VerifyBlind şu an yalnızca Türkiye Cumhuriyeti kimlik kartını destekliyor — pasaportlar şimdilik kabul edilmiyor. Lütfen kimlik kartınızı kullanın. Kimlik oluşturulamadı.";
+"doc_unsupported_image" = "Bu belgenin çip fotoğrafı henüz işleyemediğimiz bir biçimde (ör. JPEG2000). VerifyBlind şu an yalnızca Türkiye Cumhuriyeti kimlik kartını destekliyor. Kimlik oluşturulamadı.";
+"doc_unsupported_no_aa" = "Bu belge, VerifyBlind'in zorunlu tuttuğu çip doğrulamasını (Active Authentication) desteklemiyor. VerifyBlind şu an yalnızca Türkiye Cumhuriyeti kimlik kartını destekliyor. Kimlik oluşturulamadı.";
+"doc_unsupported_generic" = "Bu belge türü henüz desteklenmiyor. VerifyBlind şu an yalnızca Türkiye Cumhuriyeti kimlik kartını destekliyor. Kimlik oluşturulamadı.";
 "server_connection_error" = "❌ Sunucu Bağlantı Hatası.";
 "connection_error_title" = "Bağlantı Hatası";
 "connection_error_server" = "Bağlantı Hatası: Sunucuya ulaşılamadı";
