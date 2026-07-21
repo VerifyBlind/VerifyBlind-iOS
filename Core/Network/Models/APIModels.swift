@@ -345,15 +345,24 @@ struct AppConfigResponse: Codable {
 // MARK: - Backup PIN (TCKN'siz kimlikler)
 
 /// PIN + UUID → person_id (KEK = SHA256(person_id) ile sarılı DEK'i açar). Android `DerivePinRequest`
-/// paritesi. UUID sır değil — per-user salt.
+/// paritesi.
+///
+/// PIN düz metin GÖNDERİLMEZ: kayıt akışındaki hibrit kalıpla enclave public key'ine şifrelenir
+/// (bkz. `BackupPinPayload.build`) → relay PIN'i göremez. Zarfı yalnız enclave açar.
 struct DerivePinRequest: Codable {
-    let pin: String
+    /// Enclave public key'ine RSA-OAEP-SHA256 ile sarılmış AES anahtarı (base64).
+    let encKey: String
+    /// AES-GCM gövde (nonce‖ciphertext‖tag, base64). Çözülünce `{ pin, uuid }`.
+    let blob: String
+    /// Kota anahtarı — sır DEĞİL, yedek dosyasında da düz durur. Türetim zarfın İÇİNDEKİ uuid ile
+    /// yapılır; bu alan yalnız sunucunun rate limit sayacı içindir.
     let uuid: String
     /// iOS'ta App Attest header'dan gider; body'de null bırakılır (Android Play Integrity token'ı koyar).
     var integrityToken: String?
 
     enum CodingKeys: String, CodingKey {
-        case pin, uuid
+        case encKey = "enc_key"
+        case blob, uuid
         case integrityToken = "integrity_token"
     }
 }

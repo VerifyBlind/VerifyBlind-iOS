@@ -47,16 +47,18 @@ struct DekWrap: Codable {
     var pinUuid: String?
 }
 
-/// Şifreli partner girdisi — Android `SyncManager.EncPartner`. `enc` = AES-GCM(personId)( BackupPartnerItem
-/// JSON ), `iv` ayrı. Çözülünce elde edilen düz metin = `BackupPartnerItem` (id/name/logoUrl/logoBase64/
-/// lastUpdated) — Android `PartnerItem` alan adlarıyla birebir (çapraz platform).
+/// Şifreli partner girdisi — Android `SyncManager.EncPartner`. `enc` = AES-GCM( BackupPartnerItem JSON ),
+/// `iv` ayrı; anahtar geçmiş öğeleriyle AYNI (v2'de DEK, v1'de `SHA256(personId)`). Çözülünce elde
+/// edilen düz metin = `BackupPartnerItem` (id/name/logoUrl/logoBase64/lastUpdated) — Android
+/// `PartnerItem` alan adlarıyla birebir (çapraz platform).
 struct EncPartner: Codable {
     let enc: String
     let iv: String
 }
 
-/// Şifreli bulut geçmiş öğesi. `enc` = AES-GCM(personId) ciphertext‖tag (base64), `iv` ayrı.
-/// (Android `SyncManager.CloudHistoryItem`.)
+/// Şifreli bulut geçmiş öğesi. `enc` = ciphertext‖tag (base64), `iv` ayrı.
+/// **Anahtar formata göre değişir:** v2'de `wraps[]`'ten açılan ham DEK, v1'de `SHA256(personId)`
+/// (bkz. `CloudPayload` şema notu). (Android `SyncManager.CloudHistoryItem`.)
 struct CloudHistoryItem: Codable {
     let enc: String
     let iv: String
