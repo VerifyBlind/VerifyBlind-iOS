@@ -230,6 +230,21 @@ final class HistoryRepository {
         }
     }
 
+    /// `.vfbackup` geri-yüklemesinden gelen kaydı ekler (Android `insertBackupRecord`). Düz metin
+    /// title/description/deviceName yerel history key ile YENİDEN şifrelenir; yeni id. Çağıran
+    /// (BackupManager) nonce tekilleştirmesini önceden yapmış olmalı.
+    func insertBackupRecord(_ record: BackupRecord) {
+        do {
+            var rec = BackupMapper.toEntity(record)
+            rec.title = try encryptString(rec.title)
+            rec.description = try encryptString(rec.description)
+            rec.deviceName = rec.deviceName.isEmpty ? "" : try encryptString(rec.deviceName)
+            try db.write { db in try rec.insert(db) }
+        } catch {
+            Log.error("HistoryRepository.insertBackupRecord başarısız", error: error, category: .flow)
+        }
+    }
+
     // MARK: - Şifreleme (Android encryptString/decryptString)
 
     private func encryptString(_ plain: String) throws -> String {
