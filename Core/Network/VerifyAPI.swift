@@ -74,14 +74,6 @@ struct VerifyAPI {
         try await client.get("api/public/app-config")
     }
 
-    // MARK: - Backup PIN (TCKN'siz kimlikler)
-
-    /// PIN + UUID → person_id. Android `deriveBackupPersonId` paritesi. Sunucu kota (10/gün/UUID)
-    /// ve attestation'a tabidir; 429 = kota, 403 = attestation. PIN/UUID saklanmaz.
-    func deriveBackupPersonId(_ request: DerivePinRequest) async throws -> DerivePinResponse {
-        try await client.post("api/Backup/derive-person-id", body: request)
-    }
-
     // MARK: - KVKK
 
     func withdrawConsent(_ request: KvkkWithdrawRequest) async throws {
