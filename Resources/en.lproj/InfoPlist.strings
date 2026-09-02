@@ -1,0 +1,5 @@
+/* Permission usage descriptions — localized so the system prompt matches the app's language (App Review Guideline 4). */
+"NFCReaderUsageDescription" = "NFC access is needed to read the chip on your ID card.";
+"NSCameraUsageDescription" = "Camera access is needed to scan the QR code and your ID photo.";
+"NSFaceIDUsageDescription" = "Face ID is used to securely protect your identity.";
+"NSPhotoLibraryAddUsageDescription" = "Used to save the verification document to your device.";

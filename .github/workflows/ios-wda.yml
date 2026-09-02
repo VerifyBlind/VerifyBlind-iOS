@@ -1,0 +1,84 @@
+name: WebDriverAgent (test pilotu için)
+
+# Windows'taki test pilotunun iPhone'u sürebilmesi için WDA'yı imzalayıp .ipa üretir.
+#
+# NEDEN YALNIZ KENDİ DOSYALARI DEĞİŞİNCE KOŞUYOR: çıktı uygulamanın kendisiyle
+# birlikte değişmiyor. WDA yalnız iki durumda yeniden üretilir — yeni bir cihaz
+# eklendiğinde ya da profil süresi dolduğunda. Her push'ta koşturmak macOS runner
+# dakikalarını boşa harcar.
+#
+# NEDEN `dev`'DE (main'de DEĞİL): GitHub `workflow_dispatch`'i yalnızca VARSAYILAN
+# branch'te tanıyor, yani elle tetikleme için dosyanın main'de olması gerekirdi.
+# Ama main'e yapılan HER push ios-prod.yml'i tetikliyor ve o TestFlight'a sürüm
+# çıkarıyor — bir CI dosyası eklemek için sürüm çıkarmak kabul edilemez. Bu yüzden
+# tetikleyici `dev` + `paths`: yalnız bu iki dosya değiştiğinde koşar.
+#
+# UDID SECRET'TA, variable'da DEĞİL: depo public; variable'lar okunabilir olur.
+# Cihaz kimliği felaket bir sızıntı değil ama kullanıcının telefonuna ait.
+#
+# ÇIKTI artifact olarak iner; Windows'a indirilip cihaza kurulur:
+#   pymobiledevice3 apps install WebDriverAgentRunner.ipa
+#
+# ⚠️ Development profilleri BİR YIL geçerli. Süre dolunca WDA cihazda açılmaz ve
+# pilot sebebi görünmeyen bir bağlantı hatası verir. O noktada bu iş akışını
+# yeniden koşmak yeterli.
+
+on:
+  push:
+    branches: [dev]
+    paths:
+      - .github/workflows/ios-wda.yml
+      - scripts/ci/wda-build.sh
+  workflow_dispatch:
+    inputs:
+      device_udid:
+        description: "Pilotun süreceği iPhone'un UDID'si (boş bırakılırsa PILOT_DEVICE_UDID secret'ı)"
+        required: false
+        type: string
+
+jobs:
+  wda:
+    name: WDA derle ve imzala
+    runs-on: macos-26
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    # Sırlar buradan geliyor — ios-dev.yml ile AYNI ortam, ayrı bir sır kümesi yok.
+    environment: development
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Araçlar
+        run: pip3 install --break-system-packages codemagic-cli-tools
+
+      - name: WDA derle ve imzala
+        env:
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_IDENTIFIER }}
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # push olayinda `inputs` bos gelir; o zaman secret kullanilir.
+          DEVICE_UDID: ${{ inputs.device_udid || secrets.PILOT_DEVICE_UDID }}
+        run: |
+          chmod +x scripts/ci/wda-build.sh
+          ./scripts/ci/wda-build.sh
+
+      - name: .ipa yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: WebDriverAgentRunner
+          path: build/wda/WebDriverAgentRunner.ipa
+          if-no-files-found: error
+          retention-days: 90
+
+      # Başarısızlıkta derleme günlüğü olmadan teşhis edilemiyor: imzalama
+      # hataları xcodebuild çıktısının derinlerinde geçiyor.
+      - name: Hata durumunda günlükler
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wda-logs-${{ github.run_number }}
+          path: |
+            build/wda/DerivedData/Logs
+          if-no-files-found: warn

@@ -1,0 +1,21 @@
+// ⚠️ CocoaPods (ML Kit) taban config'i — BU SATIR SİLİNMEMELİ.
+// Target'ta özel bir xcconfig varsa CocoaPods kendi base configuration'ını KURMAZ
+// ("did not set the base configuration ... your project already has a custom config set")
+// ve framework/header search path'leri sessizce eksik kalır → link hatası. `#include?`
+// (soru işaretli) opsiyoneldir: `pod install` koşmamışsa build kırılmaz, sadece atlanır.
+// AYNI SATIR scripts/ci/ios-build-upload.sh içindeki xcconfig_body() içinde de VAR —
+// o script bu dosyayı CI'da sıfırdan ÜRETİYOR, ikisi birlikte güncellenmeli.
+#include? "../Pods/Target Support Files/Pods-VerifyBlind/Pods-VerifyBlind.release.xcconfig"
+
+// Release.xcconfig — placeholder; GitHub Actions (ios-build-upload.sh) env'den üretir.
+
+API_BASE_URL = https:/$()/api.verifyblind.com/api/verify/
+ENCLAVE_DEVELOPER_PUBLIC_KEY =
+APPLE_TEAM_ID =
+IOS_BUNDLE_ID = app.verifyblind.ios
+APP_ATTEST_ENVIRONMENT = production
+SENTRY_DSN =
+DROPBOX_IOS_APP_KEY =
+GOOGLE_IOS_CLIENT_ID =
+GOOGLE_IOS_REVERSED_CLIENT_ID =
+BUILD_NUMBER = 1

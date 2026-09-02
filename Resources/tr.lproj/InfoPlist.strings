@@ -1,0 +1,5 @@
+/* İzin açıklamaları — sistem prompt'unun uygulama diliyle eşleşmesi için yerelleştirildi (App Review Guideline 4). */
+"NFCReaderUsageDescription" = "Kimlik kartınızdaki çipi okumak için NFC erişimi gerekli.";
+"NSCameraUsageDescription" = "QR kodu ve kimlik fotoğrafını okumak için kamera erişimi gerekli.";
+"NSFaceIDUsageDescription" = "Kimliğinizi güvenle saklamak için Face ID kullanılır.";
+"NSPhotoLibraryAddUsageDescription" = "Doğrulama belgesini cihaza kaydetmek için.";

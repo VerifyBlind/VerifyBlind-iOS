@@ -1,0 +1,3 @@
+# Kabuk betikleri macOS runner'inda kosuyor: CRLF ile checkout edilirlerse
+# bash satir sonlarini komutun parcasi sayar ve sebebi gorunmeyen hatalar verir.
+*.sh text eol=lf
