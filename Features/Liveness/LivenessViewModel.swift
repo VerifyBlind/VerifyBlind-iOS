@@ -244,6 +244,10 @@ final class LivenessViewModel: ObservableObject {
     var enclaveApprovedMetrics: DeviceFrameMetrics? { streamer?.approvedMetrics }
     /// 1. adayın ölçüleri — RegisterViewModel ölçüm satırını bununla yazar.
     var bestCandidateMetrics: DeviceFrameMetrics? { bestFrameMetrics }
+    /// Adayların KAYNAK KARE numaraları — final satırı ile onu üreten streaming satırını
+    /// birleştirir (iki aday farklı karelerken skorları elle eşleştirmek çalışmaz).
+    var bestSourceSeq: Int? { streamer?.lastSentSeq }
+    var approvedSourceSeq: Int? { streamer?.approvedSeq }
 
     init(challenges: [Int], chipPhotoData: Data?, isDemo: Bool = false, flowNonce: String? = nil,
          flowId: String? = nil, enclavePubKey: String? = nil, dg2Raw: Data? = nil) {
@@ -296,9 +300,13 @@ final class LivenessViewModel: ObservableObject {
         invalidateTimer()
         camera.stop()
         feedback.deactivate()
-        // Akış nasıl biterse bitsin (vazgeçme, hata, başarı) enclave RAM'indeki gömme vektörü
-        // bırakılır. Tekrar çağrılması zararsız: sunucu tarafı idempotent ve TTL zaten toplar.
-        streamer?.release()
+        // Akış nasıl biterse bitsin gömme vektörü bırakılır. Başarı ve hata yollarında zaten
+        // çağrıldı; burası SESSİZ çıkışı yakalar (geri, uygulamanın kapatılması). Streamer ilk
+        // sebebi tuttuğu için buradaki "abandoned" ancak hiçbir sebep bildirilmediyse kazanır.
+        //
+        // 🔴 Aradığımız vaka tam olarak bu: enclave skoru eşiği geçerken "abandoned" ile biten
+        // akış, cihazdaki ön eleme yüzünden kaybettiğimiz kullanıcıdır.
+        streamer?.release(outcome: "abandoned")
     }
 
     func retry() {
@@ -739,8 +747,9 @@ final class LivenessViewModel: ObservableObject {
             Log.info("Liveness başarı: score=\(Int(score * 100))% verified=\(verified) " +
                      "[\(metrics ?? "kare ölçüsü yok")]", category: .liveness)
             self.feedback.play(.done)
-            // Akış bitti — enclave RAM'indeki gömme vektörünü serbest bırak (TTL zaten toplar).
-            self.streamer?.release()
+            // Akış bitti — gömme vektörünü serbest bırak ve akışın NASIL bittiğini bildir.
+            // "submitted": kullanıcı canlılığı geçti ve kayıt gönderiliyor.
+            self.streamer?.release(outcome: "submitted")
             self.phase = .success
         }
     }
@@ -810,6 +819,10 @@ final class LivenessViewModel: ObservableObject {
             self.diagnosticsSummary = summary
             Log.warning("Liveness başarısız (\(reason)) — bestScore=\(Int(score * 100))% yanlış=\(wrongs) " +
                         "[\(metrics ?? "kare ölçüsü yok")] \(diag)", category: .liveness)
+            // Ölçüm tablosuna GERÇEK sebep gider: "match_failed" ile biten bir akışın streaming
+            // satırlarında enclave skoru eşiği geçiyorsa, o kullanıcıyı cihaz kapısı yüzünden
+            // kaybetmişiz demektir. stop()'taki "abandoned" bunu ezemez (ilk sebep kazanır).
+            self.streamer?.release(outcome: reason.rawValue)
             self.phase = .failure(reason)
         }
     }

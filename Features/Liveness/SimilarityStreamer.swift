@@ -44,6 +44,18 @@ final class SimilarityStreamer: @unchecked Sendable {
     private let lock = NSLock()
 
     private var seq = 0
+
+    /// Oran freni yüzünden gönderilmeden elenen iyileşme sayısı — bir sonraki gönderimde
+    /// raporlanıp sıfırlanır.
+    ///
+    /// Neden sayaç da kare değil: elenen karenin kendisini göndermek veriyi kareyle büyütürdü ve
+    /// özelliğin amacı zaten trafik değil ölçüm.
+    private var skippedSinceLastSend = 0
+
+    /// Bitiş bildirimi akış başına TEK: ilk (gerçek) sebep kazanır — ekran hem başarı hem
+    /// kapanış yolundan çağırıyor ve ikincisi onu "abandoned" ile ezerdi.
+    private var releaseSent = false
+
     private var prepared = false
     /// Bir kez kapandıysa bir daha denenmez: her karede tekrar denemek, düşen bir sunucuyu döver.
     private var disabled = false
@@ -62,10 +74,16 @@ final class SimilarityStreamer: @unchecked Sendable {
     private var _approvedSelfie: Data?
     private var _approvedCrop: Data?
     private var _approvedMetrics: DeviceFrameMetrics?
+    /// Onaylanan karenin gönderildiği `seq` — final yükte 2. adayın `source_seq`'i olur.
+    private var _approvedSeq: Int?
+    /// En son GÖNDERİLEN karenin seq'i — 1. adayın `source_seq`'i (o kare de gönderilmişse).
+    private var _lastSentSeq: Int?
 
     var approvedSelfie: Data? { lock.withLock { _approvedSelfie } }
     var approvedCrop: Data? { lock.withLock { _approvedCrop } }
     var approvedMetrics: DeviceFrameMetrics? { lock.withLock { _approvedMetrics } }
+    var approvedSeq: Int? { lock.withLock { _approvedSeq } }
+    var lastSentSeq: Int? { lock.withLock { _lastSentSeq } }
 
     /// Enclave en az bir kareyi benzerlikten geçirdi mi (submit'in ikinci yolu).
     var hasEnclaveApproval: Bool { lock.withLock { _approvedSelfie != nil } }
@@ -126,17 +144,28 @@ final class SimilarityStreamer: @unchecked Sendable {
     func submitFrame(selfie: Data, crop: Data?, metrics: DeviceFrameMetrics) {
         let now = Date().timeIntervalSince1970 * 1000
 
-        let mySeq: Int? = lock.withLock {
-            guard !disabled, prepared, !inFlight else { return nil }
-            guard now - lastSentAt >= Self.minIntervalMs else { return nil }
+        // ⚠️ Elenen iyileşmeler SAYILIR: bu karenin skoru bir öncekinden iyiydi ama fren yüzünden
+        // gönderilmedi. Saymazsak topladığımız dağılımın ne kadar yanlı olduğunu bilemeyiz.
+        let sendPlan: (seq: Int, skipped: Int)? = lock.withLock {
+            guard !disabled, prepared else { return nil }
+            if inFlight || now - lastSentAt < Self.minIntervalMs {
+                skippedSinceLastSend += 1
+                return nil
+            }
+            // Tavan aşıldıysa artık ölçmüyoruz; saymak da yanıltıcı olurdu (sonsuza kadar artar).
             guard seq < Self.maxFrames else { return nil }
             inFlight = true
             lastSentAt = now
             let s = seq
             seq += 1
-            return s
+            _lastSentSeq = s
+            // Sayaç gönderim ANINDA sıfırlanır: bu istek, o ana kadar elenenleri raporluyor.
+            let skipped = skippedSinceLastSend
+            skippedSinceLastSend = 0
+            return (s, skipped)
         }
-        guard let mySeq else { return }
+        guard let sendPlan else { return }
+        let mySeq = sendPlan.seq
 
         Task { [weak self] in
             guard let self else { return }
@@ -153,7 +182,11 @@ final class SimilarityStreamer: @unchecked Sendable {
                 let response = try await VerifyAPI.shared.streamingCheck(
                     StreamingCheckRequest(
                         flowId: self.flowId, encryptedKey: encKey, aesBlob: aesBlob,
-                        seq: mySeq, deviceMetrics: metrics))
+                        seq: mySeq, deviceMetrics: {
+                            var m = metrics
+                            m.skippedCount = sendPlan.skipped
+                            return m
+                        }()))
 
                 self.lock.withLock {
                     self._lastEnclaveScore = response.matchScore
@@ -165,6 +198,7 @@ final class SimilarityStreamer: @unchecked Sendable {
                         self._approvedSelfie = selfie
                         self._approvedCrop = crop
                         self._approvedMetrics = metrics
+                        self._approvedSeq = mySeq
                     }
                 }
             } catch APIClientError.rateLimited {
@@ -182,12 +216,29 @@ final class SimilarityStreamer: @unchecked Sendable {
     ///
     /// Best-effort: çağrılmasa da TTL (15 dk) girdiyi toplar. Yine de çağrılır, çünkü enclave'de
     /// gereksiz duran her girdi tavana yaklaştırır.
-    func release() {
-        guard lock.withLock({ prepared }) else { return }
+    /// Akış bitti — enclave RAM'indeki gömme vektörünü sil ve akışın NASIL bittiğini bildir.
+    ///
+    /// - Parameter outcome: sabit küme — submitted | abandoned | timeout_gesture |
+    ///   timeout_session | too_many_errors | match_failed | no_selfie.
+    ///
+    /// 🔴 `outcome` bu işin varlık sebebi olan vakayı görünür kılar: bir akış `abandoned` ya da
+    /// `match_failed` ile biterken streaming satırlarında enclave skoru eşiği GEÇİYORSA, o
+    /// kullanıcıyı cihazdaki ön eleme yüzünden kaybettik demektir.
+    ///
+    /// Yalnız BİR kez gönderilir (Android paritesi): ilk — gerçek — sebep kazanır.
+    func release(outcome: String? = nil) {
+        let shouldSend: Bool = lock.withLock {
+            guard prepared, !releaseSent else { return false }
+            releaseSent = true
+            return true
+        }
+        guard shouldSend else { return }
+
         let id = flowId
         Task {
             // Temizlik başarısızlığı hiçbir şeyi bozmaz.
-            try? await VerifyAPI.shared.streamingRelease(StreamingReleaseRequest(flowId: id))
+            try? await VerifyAPI.shared.streamingRelease(
+                StreamingReleaseRequest(flowId: id, flowOutcome: outcome))
         }
     }
 

@@ -96,11 +96,18 @@ struct LivenessView: View {
                 //
                 // Ayrı bir geri çağrı olmasının sebebi: `onSuccess` imzasını genişletmek tüm
                 // çağrı yerlerini kırardı ve bu veri yalnız ölçüm içindir — akış kararına girmez.
+                // Ölçü ve KAYNAK KARE numarası birlikte taşınır: final satırı ile onu üreten
+                // streaming satırını ancak bu numara birleştirir.
+                func withSeq(_ m: DeviceFrameMetrics?, _ seq: Int?) -> DeviceFrameMetrics? {
+                    guard var m else { return nil }
+                    m.sourceSeq = seq
+                    return m
+                }
                 onCandidates?(LivenessCandidates(
-                    bestMetrics: viewModel.bestCandidateMetrics,
+                    bestMetrics: withSeq(viewModel.bestCandidateMetrics, viewModel.bestSourceSeq),
                     approvedSelfie: viewModel.enclaveApprovedSelfie,
                     approvedCrop: viewModel.enclaveApprovedCrop,
-                    approvedMetrics: viewModel.enclaveApprovedMetrics))
+                    approvedMetrics: withSeq(viewModel.enclaveApprovedMetrics, viewModel.approvedSourceSeq)))
                 onSuccess(jpeg, viewModel.antiSpoofCropJPEG, viewModel.finalMatchScore, diagnostics)
             }
             if case .failure(let reason) = phase { onFailure?(reason, viewModel.diagnosticJPEG, diagnostics) }

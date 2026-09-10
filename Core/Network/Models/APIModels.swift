@@ -166,6 +166,13 @@ struct DeviceFrameMetrics: Codable {
     var gestureCount: Int?
     var wrongGestureCount: Int?
     var elapsedMs: Int?
+    /// Bu gönderimden önce, oran freni (700ms / uçuştaki istek) yüzünden GÖNDERİLMEDEN elenen
+    /// iyileşme sayısı. Elenen karenin KENDİSİNİ göndermek veriyi kareyle büyütürdü; bu sayaç,
+    /// topladığımız dağılımın ne kadar yanlı olduğunu ölçmenin ucuz yolu.
+    var skippedCount: Int?
+    /// Yalnız final aday: bu karenin streaming'de gönderildiği `seq`. Hiç gönderilmediyse nil.
+    /// İki aday farklı karelerken "hangi kare hangi karara yol açtı" ancak bununla yanıtlanır.
+    var sourceSeq: Int?
     var platform: String = "ios"
     var appVersion: String?
     var deviceModel: String?
@@ -177,6 +184,8 @@ struct DeviceFrameMetrics: Codable {
         case gestureCount = "gesture_count"
         case wrongGestureCount = "wrong_gesture_count"
         case elapsedMs = "elapsed_ms"
+        case skippedCount = "skipped_count"
+        case sourceSeq = "source_seq"
         case platform
         case appVersion = "app_version"
         case deviceModel = "device_model"
@@ -255,11 +264,20 @@ struct StreamingCheckResponse: Codable {
     }
 }
 
+/// Akış bitiş bildirimi.
+///
+/// 🔴 `flowOutcome` bu işin varlık sebebi olan vakayı görünür kılar: "enclave geçirirdi ama
+/// kullanıcı pes etti". Streaming satırları yazılıyordu ama akışın NASIL bittiği hiçbir yerde
+/// yoktu.
 struct StreamingReleaseRequest: Codable {
     var flowId: String
+    /// Sabit küme (sunucu bilinmeyeni düşürür): submitted | abandoned | timeout_gesture |
+    /// timeout_session | too_many_errors | match_failed | no_selfie.
+    var flowOutcome: String?
 
     enum CodingKeys: String, CodingKey {
         case flowId = "flow_id"
+        case flowOutcome = "flow_outcome"
     }
 }
 
