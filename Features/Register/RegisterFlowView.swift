@@ -39,12 +39,19 @@ struct RegisterFlowView: View {
                         challenges: vm.isDemo ? [1, 2, 3] : vm.challenges,
                         chipPhotoData: vm.isDemo ? nil : vm.chipPhoto,
                         isDemo: vm.isDemo,
-                        flowNonce: vm.flowNonce),
+                        flowNonce: vm.flowNonce,
+                        // Canlı benzerlik akışı girdileri — üçü de varsa canlılık sürerken
+                        // enclave'e kare gönderilir. Yoksa ekran bugünkü gibi (yalnız cihaz
+                        // kapısı) çalışır ve kullanıcı hiçbir şey kaybetmez.
+                        flowId: vm.flowId,
+                        enclavePubKey: vm.enclavePubKeyForStreaming,
+                        dg2Raw: vm.dg2RawForStreaming),
                     onSuccess: { selfie, crop, score, diag in
                         vm.onLiveness(selfie: selfie, antiSpoofCrop: crop, score: score, diagnostics: diag)
                     },
                     onCancel: leaveLiveness,
-                    onFailure: { vm.onLivenessFailed($0, photo: $1, diagnostics: $2) }
+                    onFailure: { vm.onLivenessFailed($0, photo: $1, diagnostics: $2) },
+                    onCandidates: { vm.onLivenessCandidates($0) }
                 )
             case .processing:
                 ProcessingStepView(showFlowSteps: true)

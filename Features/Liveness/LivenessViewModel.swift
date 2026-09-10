@@ -222,13 +222,54 @@ final class LivenessViewModel: ObservableObject {
     /// Android'de karşılığı `LivenessActivity`'nin `flow_nonce` intent extra'sı.
     private let flowNonce: String?
 
-    init(challenges: [Int], chipPhotoData: Data?, isDemo: Bool = false, flowNonce: String? = nil) {
+    /// Canlı benzerlik akışı — canlılık sürerken enclave'e kare gönderir (Android
+    /// `LivenessActivity.streamer` paritesi).
+    ///
+    /// ⚠️ Ekrandaki 0.65 göstergesi ve renk geri bildirimi BUNDAN ETKİLENMEZ. Kullanıcı anlık
+    /// skorunu görüp ortamı düzeltmeli, gözlüğünü çıkarmalı; o baskı ürünün kalitesini koruyor.
+    /// Enclave onayı yalnızca İKİNCİ bir submit yolu açar.
+    ///
+    /// nil = streaming yok (demo, çip yok ya da enclave anahtarı elde değil) → bugünkü davranış.
+    private let streamer: SimilarityStreamer?
+
+    /// Oturum başlangıcı — kare ölçüsündeki `elapsed_ms` bundan hesaplanır.
+    private var sessionStartedAt: TimeInterval = 0
+
+    /// Kaydedilen en iyi karenin ölçüleri — submit'te **1. adayın** ölçüm satırı olur.
+    ///
+    /// Neden ekranda tutuluyor: bu sayılar O KAREYE ait ve submit anında yeniden ölçülemezler
+    /// (kamera çoktan kapanmış olur).
+    private var bestFrameMetrics: DeviceFrameMetrics?
+
+    /// Enclave'in onayladığı kare — submit'te **2. aday**. Yalnız 1. adaydan FARKLIYSA gönderilir.
+    var enclaveApprovedSelfie: Data? { streamer?.approvedSelfie }
+    var enclaveApprovedCrop: Data? { streamer?.approvedCrop }
+    var enclaveApprovedMetrics: DeviceFrameMetrics? { streamer?.approvedMetrics }
+    /// 1. adayın ölçüleri — RegisterViewModel ölçüm satırını bununla yazar.
+    var bestCandidateMetrics: DeviceFrameMetrics? { bestFrameMetrics }
+
+    init(challenges: [Int], chipPhotoData: Data?, isDemo: Bool = false, flowNonce: String? = nil,
+         flowId: String? = nil, enclavePubKey: String? = nil, dg2Raw: Data? = nil) {
         let input = challenges.map(LivenessAction.fromInt).filter { $0 != .none }
         self.effectiveSessionTimeout = Self.sessionTimeout(challengeCount: input.count)
         self.challengesInput = challenges.map(LivenessAction.fromInt).filter { $0 != .none }
         self.chipPhotoData = chipPhotoData
         self.isDemo = isDemo
         self.flowNonce = flowNonce
+
+        // Canlı benzerlik akışı: yalnız gerçek akışta ve yalnız üç girdi de varken.
+        // Demo huniyi ve ölçümü kirletmez.
+        //
+        // ⚠️ HAM DG2 gönderilir, chipPhotoData DEĞİL: enclave benzerlik referansını
+        // SOD-doğrulanmış ham DG2'den çıkarır (register ile AYNI boru hattı). Farklı bir kaynak
+        // kullanmak, streaming'in "geçti" dediği kareyi register'ın reddetmesine yol açardı.
+        if !isDemo, let flowId, let enclavePubKey, let dg2Raw, !dg2Raw.isEmpty {
+            let st = SimilarityStreamer(flowId: flowId, enclavePubKey: enclavePubKey)
+            st.prepare(dg2Raw: dg2Raw)
+            self.streamer = st
+        } else {
+            self.streamer = nil
+        }
     }
 
     // MARK: - Yaşam döngüsü (ana kuyruk)
@@ -258,6 +299,9 @@ final class LivenessViewModel: ObservableObject {
         invalidateTimer()
         camera.stop()
         feedback.deactivate()
+        // Akış nasıl biterse bitsin (vazgeçme, hata, başarı) enclave RAM'indeki gömme vektörü
+        // bırakılır. Tekrar çağrılması zararsız: sunucu tarafı idempotent ve TTL zaten toplar.
+        streamer?.release()
     }
 
     func retry() {
@@ -305,6 +349,8 @@ final class LivenessViewModel: ObservableObject {
         isIdentityVerified = false
         selfieJPEG = nil
         antiSpoofCropJPEGLogic = nil
+        sessionStartedAt = Date().timeIntervalSince1970
+        bestFrameMetrics = nil
         lastActionTime = 0
         lastCaptureTime = 0
         wrongAttempts = 0
@@ -613,6 +659,31 @@ final class LivenessViewModel: ObservableObject {
             bestSavedQualityScore = effQuality
             if currentMatch > bestMatchScore { bestMatchScore = currentMatch }
             if currentMatch > Self.matchThreshold { isIdentityVerified = true }
+
+            // Kaydedilen kare değişti → 1. adayın ölçüleri de bu karenin ölçüleri.
+            // Submit anında yeniden ölçülemezler (kamera kapalı).
+            let frameMetrics = SimilarityStreamer.metricsOf(
+                deviceMatchScore: min(max(Int(currentMatch * 100), 0), 100),
+                luma: Int(lastLuma),
+                sharpness: Int(sharpness),
+                quality: Int(effQuality),
+                yaw: Int(frame.signals.yaw),
+                pitch: Int(frame.signals.pitch),
+                roll: Int(frame.signals.roll),
+                faceWidthRatio: Int(faceFrac * 100),
+                gestureCount: index,
+                wrongGestureCount: wrongAttempts,
+                elapsedMs: sessionStartedAt > 0
+                    ? Int((Date().timeIntervalSince1970 - sessionStartedAt) * 1000) : nil)
+            bestFrameMetrics = frameMetrics
+
+            // Canlı benzerlik akışı: en iyi kare YENİLENDİĞİNDE enclave'e gönderilir. Kare akışı
+            // DEĞİL — yalnız iyileşen kare; enclave'in gördüğü, cihazın o ana kadarki en iyi
+            // hükmüdür. Selfie ve kırpma AYNI kareden gelir (aksi bir açık olurdu: benzerlik
+            // gerçek yüzden, canlılık başka kareden).
+            if let selfie = selfieJPEG {
+                streamer?.submitFrame(selfie: selfie, crop: antiSpoofCropJPEGLogic, metrics: frameMetrics)
+            }
         }
 
         let scorePercent = Int(bestMatchScore * 100)
@@ -633,7 +704,16 @@ final class LivenessViewModel: ObservableObject {
         // "canlılık geçti ama kayıt düştü" vakasında elimizdeki tek kare ölçüsü bu.
         let summary = makeDiagnosticsSummary(reason: nil)
         let hasSelfie = selfieJPEG != nil
-        let verified = isIdentityVerified
+        // ⚠️ SUBMIT'İN İKİ YOLU VAR (canlı benzerlik akışı):
+        //   (1) cihaz skoru 0.65'i geçti  → isIdentityVerified
+        //   (2) enclave "benzerlik geçti" dedi → streamer.hasEnclaveApproval
+        //
+        // İkincisi bir güvenlik gevşemesi DEĞİLDİR: cihazdaki 0.65 hiçbir zaman güvenlik
+        // kontrolü değildi (yerel bir boolean, yamalanabilir) ve gerçek karar hep enclave'de.
+        // Burada olan şey, enclave'in ZATEN onayladığı bir kareyi cihazın kendi ön elemesiyle
+        // çöpe atmasını engellemek. Diğer koşullar (jestler, selfie varlığı) aynen aranır.
+        // Android `LivenessActivity.finishSuccess` paritesi.
+        let verified = isIdentityVerified || (streamer?.hasEnclaveApproval == true)
         let hasChip = chipEmbedding != nil
         let score = bestMatchScore
         let jpeg = selfieJPEG
@@ -660,6 +740,8 @@ final class LivenessViewModel: ObservableObject {
             Log.info("Liveness başarı: score=\(Int(score * 100))% verified=\(verified) " +
                      "[\(metrics ?? "kare ölçüsü yok")]", category: .liveness)
             self.feedback.play(.done)
+            // Akış bitti — enclave RAM'indeki gömme vektörünü serbest bırak (TTL zaten toplar).
+            self.streamer?.release()
             self.phase = .success
         }
     }

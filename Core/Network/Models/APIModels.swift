@@ -82,7 +82,19 @@ struct SecurePayload: Codable {
     /// 2.7x geniş yüz crop, 80x80 JPEG Base64 — enclave MiniFASNetV2 pasif liveness (Android `AntiSpoofCrop` paritesi).
     var antiSpoofCrop: String = ""
 
+    /// En fazla İKİ aday kare (canlı benzerlik akışı). Doluysa enclave `userSelfie` /
+    /// `antiSpoofCrop` yerine bunları değerlendirir.
+    ///
+    /// Sıra: 1 = cihazın en iyi seçtiği kare, 2 = enclave'in canlılık sırasında onayladığı kare
+    /// (yalnız 1'den FARKLIYSA eklenir). Enclave her adayı normal kapıdan geçirir ve ilk GEÇEN
+    /// kazanır — "önceden onaylanmış" diye bir kavram yoktur.
+    ///
+    /// Her aday KENDİ selfie'si + KENDİ kırpmasıyla bir bütün olarak değerlendirilir: benzerliği
+    /// bir kareden, canlılığı başkasından almak gerçek bir açıktır (Android `Candidates` paritesi).
+    var candidates: [RegistrationCandidate]? = nil
+
     enum CodingKeys: String, CodingKey {
+        case candidates = "Candidates"
         case sod = "SOD"
         case dg1 = "DG1"
         case dg2 = "DG2"
@@ -105,11 +117,149 @@ struct RegistrationRequest: Codable {
     var encryptedKey: String
     var aesBlob: String
     var countryIsoCode: String = ""
+    /// Ölçüm satırlarını canlılık sırasındaki karelerle birleştiren izleme numarası.
+    /// Şifreli yükün DIŞINDA: relay'in görmesi gerekir, enclave'in bilmesine gerek yok.
+    /// Kimlikle bağ taşımaz.
+    var flowId: String? = nil
+    /// Adayların cihaz ölçüleri (rank sırasına göre) — canlılık ekranında O KARE için ölçülmüş
+    /// değerler. Fotoğrafların KENDİSİ şifreli yükün içinde; relay yalnız sayıları görür ve
+    /// onlara güvenmez (aralık kontrolünden geçirir).
+    var candidateMetrics: [DeviceFrameMetrics]? = nil
 
     enum CodingKeys: String, CodingKey {
         case encryptedKey = "encrypted_key"
         case aesBlob = "aes_blob"
         case countryIsoCode = "country_iso_code"
+        case flowId = "flow_id"
+        case candidateMetrics = "candidate_metrics"
+    }
+}
+
+/// Final register yükündeki tek aday — kendi selfie'si + kendi 2,7× anti-spoof kırpması.
+/// İkisi de AYNI kareden gelmelidir (Android `RegistrationCandidate` paritesi).
+struct RegistrationCandidate: Codable {
+    var rank: Int
+    var userSelfie: String
+    var antiSpoofCrop: String
+
+    enum CodingKeys: String, CodingKey {
+        case rank = "Rank"
+        case userSelfie = "UserSelfie"
+        case antiSpoofCrop = "AntiSpoofCrop"
+    }
+}
+
+/// Cihazın kare başına ölçtüğü sinyaller — zaten hesaplanıyorlardı ama hiçbir yere
+/// gönderilmiyorlardı.
+///
+/// ⚠️ Sunucu bu sayılara GÜVENMEZ: aralık kontrolünden geçirir, geçersizse sessizce düşürür.
+/// Telemetri asla akışı bozmaz.
+struct DeviceFrameMetrics: Codable {
+    var deviceMatchScore: Int?
+    var luma: Int?
+    var sharpness: Int?
+    var quality: Int?
+    var yaw: Int?
+    var pitch: Int?
+    var roll: Int?
+    var faceWidthRatio: Int?
+    var gestureCount: Int?
+    var wrongGestureCount: Int?
+    var elapsedMs: Int?
+    var platform: String = "ios"
+    var appVersion: String?
+    var deviceModel: String?
+
+    enum CodingKeys: String, CodingKey {
+        case deviceMatchScore = "device_match_score"
+        case luma, sharpness, quality, yaw, pitch, roll
+        case faceWidthRatio = "face_width_ratio"
+        case gestureCount = "gesture_count"
+        case wrongGestureCount = "wrong_gesture_count"
+        case elapsedMs = "elapsed_ms"
+        case platform
+        case appVersion = "app_version"
+        case deviceModel = "device_model"
+    }
+}
+
+// MARK: - Canlı benzerlik akışı (streaming)
+//
+// Amaç: cihazdaki 0.65 kapısında düşen deneme bugün enclave'e HİÇ ulaşmıyor, dolayısıyla kaç
+// meşru kullanıcıyı hatalı reddettiğimiz ölçülemiyor. Canlılık sürerken enclave'e kare
+// göndermek (a) cihaz skoru düşük kalsa bile enclave onayıyla submit açılmasını, (b) her
+// denemenin ölçülebilir bir veri noktasına dönüşmesini sağlar.
+
+/// Akış başı: DG2'nin gömme vektörünü enclave RAM'ine aldırır (şifreli — relay göremez).
+struct StreamingPrepareRequest: Codable {
+    var flowId: String
+    var encryptedKey: String
+    var aesBlob: String
+
+    enum CodingKeys: String, CodingKey {
+        case flowId = "flow_id"
+        case encryptedKey = "encrypted_key"
+        case aesBlob = "aes_blob"
+    }
+}
+
+/// Şifreli prepare yükü — çipten okunan ham DG2.
+struct StreamingPreparePayload: Codable {
+    var dg2: String
+
+    enum CodingKeys: String, CodingKey {
+        case dg2 = "DG2"
+    }
+}
+
+/// Tek kare: selfie + AYNI karenin 2,7× kırpması.
+struct StreamingCheckRequest: Codable {
+    var flowId: String
+    var encryptedKey: String
+    var aesBlob: String
+    var seq: Int
+    var deviceMetrics: DeviceFrameMetrics?
+
+    enum CodingKeys: String, CodingKey {
+        case flowId = "flow_id"
+        case encryptedKey = "encrypted_key"
+        case aesBlob = "aes_blob"
+        case seq
+        case deviceMetrics = "device_metrics"
+    }
+}
+
+/// Şifreli kare yükü — selfie ve kırpma açıkta gitmez.
+struct StreamingCheckPayload: Codable {
+    var userSelfie: String
+    var antiSpoofCrop: String
+
+    enum CodingKeys: String, CodingKey {
+        case userSelfie = "UserSelfie"
+        case antiSpoofCrop = "AntiSpoofCrop"
+    }
+}
+
+/// Kare sonucu. İstemci yalnız `similarityPassed` üzerine karar verir; skorlar teşhis içindir.
+struct StreamingCheckResponse: Codable {
+    var similarityPassed: Bool
+    var matchScore: Double?
+    var pLive: Double?
+    var outcome: String?
+
+    enum CodingKeys: String, CodingKey {
+        case similarityPassed = "similarity_passed"
+        case matchScore = "match_score"
+        case pLive = "p_live"
+        case outcome
+    }
+}
+
+struct StreamingReleaseRequest: Codable {
+    var flowId: String
+
+    enum CodingKeys: String, CodingKey {
+        case flowId = "flow_id"
     }
 }
 

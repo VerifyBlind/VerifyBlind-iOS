@@ -45,6 +45,33 @@ struct VerifyAPI {
         try await client.post("api/Verify/demo-register", body: request)
     }
 
+    // MARK: - Canlı benzerlik akışı (streaming)
+    //
+    // Best-effort ÖLÇÜM yolu: hepsi düşse de kayıt akışı aynen çalışır (cihaz kendi 0.65
+    // kapısıyla devam eder). X-Flow-Id başlığı oran sınırını AKIŞ başına böler — paylaşılan
+    // bir IP'deki meşru kullanıcılar birbirinin kovasını tüketmesin.
+
+    /// Akış başı: çipten okunan DG2'nin gömme vektörünü enclave RAM'ine aldırır.
+    func streamingPrepare(_ request: StreamingPrepareRequest) async throws {
+        try await client.postNoContent(
+            "api/Verify/streaming-prepare", body: request,
+            headers: ["X-Flow-Id": request.flowId])
+    }
+
+    /// Canlılık sürerken tek kare: benzerlik + canlılık ölçümü.
+    func streamingCheck(_ request: StreamingCheckRequest) async throws -> StreamingCheckResponse {
+        try await client.post(
+            "api/Verify/streaming-check", body: request,
+            headers: ["X-Flow-Id": request.flowId])
+    }
+
+    /// Akış bitti — enclave RAM'indeki gömme vektörünü sil (TTL zaten toplar).
+    func streamingRelease(_ request: StreamingReleaseRequest) async throws {
+        try await client.postNoContent(
+            "api/Verify/streaming-release", body: request,
+            headers: ["X-Flow-Id": request.flowId])
+    }
+
     // MARK: - Login / Revoke
 
     /// Relay /login MOBİLE'a başarıda `{}` döner (encrypted_response partner callback'ine gider,

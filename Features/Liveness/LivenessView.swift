@@ -29,6 +29,10 @@ struct LivenessView: View {
     /// kullanıcı işaretlerse eke koyar. Üçüncüsü teşhis paketi (çip kırpımı + skaler ölçüler).
     var onFailure: ((LivenessViewModel.FailureReason, Data?, LivenessDiagnostics) -> Void)?
 
+    /// Canlı benzerlik akışının çıktısı — ölçüm ve 2. aday. `onSuccess`'ten AYRI tutulur:
+    /// akış kararına girmez, yalnız ölçüm satırlarını ve final yükün ikinci adayını besler.
+    var onCandidates: ((LivenessCandidates) -> Void)?
+
     // Liveness boyunca ekran parlaklığını sonuna kadar açıp çıkışta eski değere döndürmek için
     // saklanan orijinal parlaklık (Android `originalBrightness` paritesi). iOS'ta yalnız değer
     // yedeklenip geri yüklenir (oto-parlaklık aç/kapa durumunu sorgulayan public API yok).
@@ -41,8 +45,10 @@ struct LivenessView: View {
     init(viewModel: LivenessViewModel,
          onSuccess: @escaping (Data, Data?, Float, LivenessDiagnostics) -> Void,
          onCancel: @escaping () -> Void,
-         onFailure: ((LivenessViewModel.FailureReason, Data?, LivenessDiagnostics) -> Void)? = nil) {
+         onFailure: ((LivenessViewModel.FailureReason, Data?, LivenessDiagnostics) -> Void)? = nil,
+         onCandidates: ((LivenessCandidates) -> Void)? = nil) {
         self.onFailure = onFailure
+        self.onCandidates = onCandidates
         _viewModel = StateObject(wrappedValue: viewModel)
         _camera = ObservedObject(wrappedValue: viewModel.camera)
         self.onSuccess = onSuccess
@@ -84,6 +90,17 @@ struct LivenessView: View {
                                                   summary: viewModel.diagnosticsSummary,
                                                   matchScorePercent: Int(viewModel.finalMatchScore * 100))
             if phase == .success, let jpeg = viewModel.alignedSelfieJPEG {
+                // ⚠️ SIRA ÖNEMLİ: adaylar `onSuccess`ten ÖNCE verilir. `onSuccess` register
+                // gönderimini hemen başlatıyor; adaylar sonra verilseydi final yük onlar
+                // eklenmeden çıkabilirdi (2. aday ve ölçüm satırları sessizce kaybolurdu).
+                //
+                // Ayrı bir geri çağrı olmasının sebebi: `onSuccess` imzasını genişletmek tüm
+                // çağrı yerlerini kırardı ve bu veri yalnız ölçüm içindir — akış kararına girmez.
+                onCandidates?(LivenessCandidates(
+                    bestMetrics: viewModel.bestCandidateMetrics,
+                    approvedSelfie: viewModel.enclaveApprovedSelfie,
+                    approvedCrop: viewModel.enclaveApprovedCrop,
+                    approvedMetrics: viewModel.enclaveApprovedMetrics))
                 onSuccess(jpeg, viewModel.antiSpoofCropJPEG, viewModel.finalMatchScore, diagnostics)
             }
             if case .failure(let reason) = phase { onFailure?(reason, viewModel.diagnosticJPEG, diagnostics) }
@@ -341,4 +358,19 @@ struct LivenessView: View {
             Text(label).font(.caption).foregroundStyle(.secondary)
         }
     }
+}
+
+
+/// Canlı benzerlik akışının canlılık ekranından taşıdığı ölçüm çıktısı.
+///
+/// ⚠️ `approvedSelfie` bir "önceden onaylanmış" kare DEĞİLDİR: enclave register'da her adayı
+/// normal kapıdan yeniden geçirir ve streaming'de neyi onayladığını bilmez. Buradaki tek işlevi,
+/// cihazın kendi ön elemesiyle çöpe atacağı bir kareyi final yüke İKİNCİ aday olarak taşımak.
+struct LivenessCandidates {
+    /// 1. adayın (cihazın en iyi seçtiği kare) ölçüleri.
+    let bestMetrics: DeviceFrameMetrics?
+    /// Enclave'in onayladığı kare — yalnız 1. adaydan FARKLIYSA gönderilir.
+    let approvedSelfie: Data?
+    let approvedCrop: Data?
+    let approvedMetrics: DeviceFrameMetrics?
 }

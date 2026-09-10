@@ -91,6 +91,28 @@ final class RegisterViewModel: ObservableObject {
         Task { await FlowTelemetry.shared.reached(step, nonce: nonce) }
     }
     var chipPhoto: Data? { scanned?.faceImage }
+
+    // MARK: - Canlı benzerlik akışı (streaming)
+
+    /// Enclave public key'i — canlılık ekranı kareleri bununla şifreler (relay göremez).
+    /// El sıkışma tamamlanmadıysa nil → streaming açılmaz, akış bugünkü gibi çalışır.
+    var enclavePubKeyForStreaming: String? { session?.enclavePubKey }
+
+    /// ⚠️ HAM DG2 — `chipPhoto` DEĞİL. Enclave benzerlik referansını SOD-doğrulanmış ham DG2'den
+    /// çıkarır (register ile AYNI boru hattı); farklı bir kaynak kullanmak streaming'in "geçti"
+    /// dediği kareyi register'ın reddetmesine yol açardı.
+    var dg2RawForStreaming: Data? { scanned?.dg2Raw }
+
+    /// Enclave'in canlılık sırasında onayladığı kare — final yükte **2. aday**.
+    ///
+    /// ⚠️ "Önceden onaylanmış" bir kare DEĞİLDİR: enclave register'da her adayı normal kapıdan
+    /// yeniden geçirir ve streaming'de neyi onayladığını bilmez.
+    private var approvedSelfieData: Data?
+    private var approvedCropData: Data?
+
+    /// Adayların KARE ölçüleri (rank sırasına göre) — canlılık ekranında ölçüldüğü hâliyle.
+    /// Submit anında yeniden ölçülemezler (kamera kapalı) ve iki aday farklı karelerdir.
+    private var candidateMetricsList: [DeviceFrameMetrics] = []
     /// MRZ'den tespit edilen belge tipi ("ID" | "PASSPORT") — NFC talimat metnini belirler (Android paritesi).
     var documentType: String { mrz?.documentType ?? "ID" }
 
@@ -325,6 +347,14 @@ final class RegisterViewModel: ObservableObject {
 
     // MARK: - Liveness
 
+    /// Canlı benzerlik akışının çıktısını devralır — `onLiveness`'ten ÖNCE çağrılır (o, register
+    /// gönderimini hemen başlatıyor).
+    func onLivenessCandidates(_ candidates: LivenessCandidates) {
+        approvedSelfieData = candidates.approvedSelfie
+        approvedCropData = candidates.approvedCrop
+        candidateMetricsList = [candidates.bestMetrics, candidates.approvedMetrics].compactMap { $0 }
+    }
+
     func onLiveness(selfie: Data, antiSpoofCrop: Data?, score: Float, diagnostics: LivenessDiagnostics?) {
         selfieData = selfie
         antiSpoofCropData = antiSpoofCrop
@@ -402,6 +432,34 @@ final class RegisterViewModel: ObservableObject {
             )
             if let selfieData { payload.userSelfie = selfieData.base64EncodedString() }
             if let antiSpoofCropData { payload.antiSpoofCrop = antiSpoofCropData.base64EncodedString() }
+
+            // ── Aday listesi (canlı benzerlik akışı) ────────────────────────────
+            //
+            // En fazla İKİ aday:
+            //   1. aday = cihazın en iyi seçtiği kare
+            //   2. aday = enclave'in canlılık sırasında onayladığı kare — yalnız FARKLIYSA
+            //
+            // Sıra gerekçesi VERİ KALİTESİ: hep sınırdaki kareyi önce göndersek loglar "herkes
+            // kıl payı geçiyor" gibi görünür ve eşik kararlarını bozuk bir dağılıma bakarak
+            // veririz. Her aday KENDİ selfie'si + KENDİ kırpmasıyla gider — benzerliği bir
+            // kareden, canlılığı başkasından almak gerçek bir açıktır.
+            // (Android `MainViewModel` aday kurulumu paritesi.)
+            var candidates: [RegistrationCandidate] = []
+            if let selfieData {
+                candidates.append(RegistrationCandidate(
+                    rank: 1,
+                    userSelfie: selfieData.base64EncodedString(),
+                    antiSpoofCrop: antiSpoofCropData?.base64EncodedString() ?? ""))
+
+                // AYNI kareyse ikinci kez gönderme — tek fotoğraf gider.
+                if let approvedSelfieData, approvedSelfieData != selfieData {
+                    candidates.append(RegistrationCandidate(
+                        rank: 2,
+                        userSelfie: approvedSelfieData.base64EncodedString(),
+                        antiSpoofCrop: approvedCropData?.base64EncodedString() ?? ""))
+                }
+            }
+            payload.candidates = candidates.isEmpty ? nil : candidates
             // iOS App Attest (Aşama 6) relay'de el sıkışmada doğrulanır; register enclave'e proxy'lenir
             // ve el sıkışma nonce'una bağlıdır → şifreli IntegrityToken iOS'ta BOŞ bırakılır (Android'de
             // bu alan Play Integrity taşır). Bkz. AppAttestService + sunucu ClientAttestationGate.
@@ -409,7 +467,14 @@ final class RegisterViewModel: ObservableObject {
             let json = try encodeToString(payload)
             let (aesBlob, aesKey) = try CryptoUtils.aesEncrypt(json)
             let encKey = try CryptoUtils.rsaEncrypt(aesKey, publicKeyBase64: session.enclavePubKey)
-            let req = RegistrationRequest(encryptedKey: encKey, aesBlob: aesBlob, countryIsoCode: scanned.issuingState)
+            let req = RegistrationRequest(
+                encryptedKey: encKey, aesBlob: aesBlob, countryIsoCode: scanned.issuingState,
+                // Ölçüm satırlarını canlılık sırasındaki karelerle birleştiren izleme numarası.
+                // Şifreli yükün DIŞINDA: relay'in görmesi gerekir, enclave'in bilmesine gerek yok.
+                flowId: flowId,
+                // Adayların cihaz ölçüleri. Fotoğrafların KENDİSİ şifreli yükün içinde —
+                // relay onları göremez, yalnız sayıları görür ve onlara güvenmez.
+                candidateMetrics: candidateMetricsList.isEmpty ? nil : candidateMetricsList)
 
             track(.submit)
             let resp = try await VerifyAPI.shared.register(req)
@@ -419,6 +484,27 @@ final class RegisterViewModel: ObservableObject {
             step = .success
         } catch {
             if failIfCancelled(error) { return }
+
+            // ⚠️ BİYOMETRİK RED AKIŞI BİTİRMEZ: kullanıcı CANLILIK TESTİNİN BAŞINA döner, kayıt
+            // akışının en başına değil (Android `LivenessRetryRequired` paritesi). MRZ ve çip
+            // okuması GEÇERLİ; düzeltilmesi gereken tek şey kareye ait (ışık, gözlük, açı).
+            // Kullanıcıyı kartını yeniden okutmaya zorlamak, düzeltmesi kolay bir sorunu
+            // vazgeçme sebebine çevirirdi.
+            if case APIError.http(_, let body) = error,
+               (body?.errorCode ?? body?.code) == "ERR_BIOMETRIC_MISMATCH" {
+                // Önceki denemenin adayları temizlenir: yeni turda yeniden üretilecekler ve
+                // eskisini taşımak, ölçüm satırını yanlış kareye bağlardı.
+                approvedSelfieData = nil
+                approvedCropData = nil
+                candidateMetricsList = []
+                selfieData = nil
+                antiSpoofCropData = nil
+                // Rıza ekranı TEKRAR GÖSTERİLMEZ: kullanıcı biyometrik rızayı bu akışta zaten
+                // verdi ve aynı akış içinde ikinci kez sormak onay değil, sürtünme olurdu.
+                step = .liveness
+                return
+            }
+
             // 5xx'te akış başlığı ("Kayıt Başarısız") kullanıcıya kendi yaptığı bir şeyin bozulduğunu
             // düşündürüyor; sorun bizdeyken bunu söyle (Android `error_server_unavailable_title`).
             // Uçak modundayken de "sunucu hatası" DENMEZ: bu dal eskiden ham sistem metnini ya da
