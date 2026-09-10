@@ -174,7 +174,39 @@ IwLz3/Y=
         var cfErr: CFError?
         if SecTrustEvaluateWithError(trust, &cfErr) { return (true, "OK") }
         let desc = cfErr.map { CFErrorCopyDescription($0) as String } ?? "Doğrulama hatası"
-        return (false, desc)
+
+        // ZİNCİRİN TAMAMINI HATAYA YAZ.
+        //
+        // ⚠️ `SecTrustEvaluateWithError` zincirin NERESİ patlarsa patlasın mesajda LEAF'in
+        // CN'ini yazıyor. Yani "…enc….aws certificate is expired" leaf'in öldüğü anlamına
+        // GELMEZ — 2026-08-31'de ölen bir ara sertifikaydı ve teşhis tam bu yüzden saatler
+        // aldı; 2026-09-10 tekrarında da hangi halkanın öldüğünü sunucudan geriye dönük
+        // ispatlayamadık, çünkü o belge artık hiçbir yerde durmuyordu.
+        //
+        // Halkaların ömürleri birbirinden çok farklı (leaf 3sa · instance CA 24sa · zonal
+        // ~6g · bölgesel ~20g), dolayısıyla "hangisi" sorusu teşhisin tamamı. Bu özet,
+        // hata anındaki zinciri olayın İÇİNE koyar ve bir daha çıkarım gerekmez.
+        let ozet = certs.map { c -> String in
+            let cn = (SecCertificateCopySubjectSummary(c) as String?) ?? "?"
+            return "\(cn)|\(notAfterText(of: c))"
+        }.joined(separator: " · ")
+        return (false, "\(desc) [zincir: \(ozet)]")
+    }
+
+    /// Sertifikanın `notAfter` değeri, okunamazsa "?".
+    ///
+    /// `SecCertificateCopyValues` bir CFDictionary döner ve tarih `kSecPropertyKeyValue`
+    /// altında CFNumber (referans tarihinden saniye) olarak durur — Date'e çevrilmeden
+    /// yazılırsa okunamaz bir sayı olur.
+    private static func notAfterText(of cert: SecCertificate) -> String {
+        guard let values = SecCertificateCopyValues(cert, [kSecOIDX509V1ValidityNotAfter] as CFArray, nil) as? [String: Any],
+              let entry = values[kSecOIDX509V1ValidityNotAfter as String] as? [String: Any],
+              let seconds = entry[kSecPropertyKeyValue as String] as? Double else {
+            return "?"
+        }
+        let f = ISO8601DateFormatter()
+        f.timeZone = TimeZone(identifier: "UTC")
+        return f.string(from: Date(timeIntervalSinceReferenceDate: seconds))
     }
 
     private static func loadAwsRootCert() -> SecCertificate? {

@@ -69,28 +69,78 @@ actor HandshakeService {
     /// Throw ETMEYEN attestation sondası — launch-gate + Security ekranı ortak kullanır.
     /// Yalnız GERÇEK doğrulama hatasında `.failed` döner; ağ/HTTP hatasında `.unreachable` (fail-open,
     /// onaylı karar: erişilemezlik BLOKLAMAZ). Başarıda `last_*` teşhis prefs'ini de tazeler.
+    /// `.integrity` hatasında kaç kez yeniden denenir ve aralarda ne kadar beklenir.
+    ///
+    /// NEDEN VAR (2026-09-10, `VERIFYBLIND-IOS-46`, üçüncü tekrar): enclave'in attestation
+    /// belgesindeki leaf sertifika 3 saat ömürlü ve AWS onu ancak vadesine ~15 dk kala
+    /// döndürüyor. O dar pencereye denk gelen açılış, sunucu tamamen sağlıklıyken bile
+    /// süresi dolmuş bir zincir görüp uygulamayı bloke ediyordu; kullanıcının tek çaresi
+    /// "Yeniden Dene"ye basmaktı ve basınca DÜZELİYORDU — yani kurtarma zaten çalışıyordu,
+    /// yalnızca elle tetikleniyordu. Kullanıcıya kendi kendine düzelecek bir hatayı
+    /// göstermek gereksiz.
+    ///
+    /// Yeniden deneme İŞE YARAR, çünkü sonda her seferinde TAZE bir `loginHandshake`
+    /// çağırıyor: istemcide saklanan bir belge yok, dolayısıyla "eskiyi sil" diye bir adım
+    /// da gerekmiyor — ikinci çağrı sunucudan yeni mint edilmiş belgeyi alır.
+    ///
+    /// ⚠️ GÜVENLİK DENGESİ: bu, gerçek bir kurcalama/MITM denemesini de 2 kez tekrar eder
+    /// ve kullanıcıya ~6 sn geç bildirir. Kabul edildi (kullanıcı kararı, 2026-09-11) çünkü
+    /// blok NİHAYETİNDE korunuyor — yeniden denemeler tükenince fail-closed davranış aynen
+    /// sürüyor. Karşılığında, kendi kendine düzelen bir arıza kullanıcıya hiç yansımıyor.
+    /// Hangi hatanın tekrarla düzeldiği Sentry'de görünür (aşağıdaki `Log.warning`).
+    private static let integrityRetryCount = 2
+    private static let integrityRetryDelay: UInt64 = 3_000_000_000   // 3 sn
+
     func probeAttestation() async -> AttestOutcome {
-        do {
-            let resp = try await VerifyAPI.shared.loginHandshake()
-            let result = AttestationVerifier.verify(
-                attestationBase64: resp.attestationDocument ?? "",
-                pcr0Signature: resp.pcr0Signature)
-            if result.isValid {
-                recordAttestationDiagnostics(result: result)
-                return .verified(pcr0: result.pcr0 ?? "N/A")
+        var lastFailure: (kind: AttestFailureKind, reason: String)?
+
+        for attempt in 0...Self.integrityRetryCount {
+            do {
+                let resp = try await VerifyAPI.shared.loginHandshake()
+                let result = AttestationVerifier.verify(
+                    attestationBase64: resp.attestationDocument ?? "",
+                    pcr0Signature: resp.pcr0Signature)
+                if result.isValid {
+                    if attempt > 0 {
+                        // GEÇİCİ OLDUĞUNU KAYDET. Bu satır olmadan yeniden deneme, arızayı
+                        // düzeltmek yerine GİZLER: sunucu tarafında gerçekten bozulan bir şey
+                        // varsa hiçbir iz kalmaz ve sorun ancak kalıcı hâle gelince fark edilir.
+                        Log.warning("Attestation \(attempt). denemede DÜZELDİ (ilk hata: \(lastFailure?.reason ?? "?")) — geçici arıza",
+                                    category: .flow)
+                    }
+                    recordAttestationDiagnostics(result: result)
+                    return .verified(pcr0: result.pcr0 ?? "N/A")
+                }
+
+                let kind = result.failureKind ?? .integrity
+                let reason = result.failReason ?? "sebep yok"
+                lastFailure = (kind, reason)
+
+                // `.authorization` YENİDEN DENENMEZ: PCR0 imzasının yokluğu ya da
+                // eşleşmemesi bir deploy/sürüm boşluğudur (bkz. pcr0_signatures.json) ve
+                // saniyeler içinde kendiliğinden düzelmez — beklemek yalnız kullanıcıyı
+                // oyalar. Yeniden denenen tek tür, geçici olabilen `.integrity`.
+                if kind != .integrity || attempt == Self.integrityRetryCount { break }
+
+                Log.warning("Attestation REDDETTİ (\(kind)): \(reason) — yeniden deneniyor (\(attempt + 1)/\(Self.integrityRetryCount))",
+                            category: .flow)
+                try? await Task.sleep(nanoseconds: Self.integrityRetryDelay)
+            } catch {
+                // Ağ/HTTP hatası: onaylı karar gereği BLOKLAMAZ ve burada yeniden de
+                // denenmez — `APIClient` kendi yeniden denemesini zaten yapıyor.
+                Log.warning("Attestation sondası ağ hatası (bloklanmıyor)", error: error, category: .flow)
+                return .unreachable
             }
-            let kind = result.failureKind ?? .integrity
-            // SEBEBİ KAYDET. Kullanıcı yalnız yerelleştirilmiş genel mesajı görüyor ("güvenli
-            // bağlantı doğrulanamadı"); hangi adımın düştüğü — COSE imzası mı, CA zinciri mi,
-            // PCR0 mı — yalnız `failReason` içinde. Bu satır olmadığı için 2026-08-26'da sunucu
-            // taze ve geçerli belge servis ederken uygulama açılmadı ve elimizde tek bir iz yoktu.
-            Log.error("Attestation sondası REDDETTİ (\(kind)): \(result.failReason ?? "sebep yok")",
-                      category: .flow)
-            return .failed(kind: kind, message: kind.userMessage)
-        } catch {
-            Log.warning("Attestation sondası ağ hatası (bloklanmıyor)", error: error, category: .flow)
-            return .unreachable
         }
+
+        guard let failure = lastFailure else { return .unreachable }
+        // SEBEBİ KAYDET. Kullanıcı yalnız yerelleştirilmiş genel mesajı görüyor ("güvenli
+        // bağlantı doğrulanamadı"); hangi adımın düştüğü — COSE imzası mı, CA zinciri mi,
+        // PCR0 mı — yalnız `failReason` içinde. Bu satır olmadığı için 2026-08-26'da sunucu
+        // taze ve geçerli belge servis ederken uygulama açılmadı ve elimizde tek bir iz yoktu.
+        Log.error("Attestation sondası REDDETTİ (\(failure.kind)) — \(Self.integrityRetryCount) yeniden denemeye rağmen: \(failure.reason)",
+                  category: .flow)
+        return .failed(kind: failure.kind, message: failure.kind.userMessage)
     }
 
     /// Attestation belgesini doğrular; başarılıysa enclave public key'i döner.
