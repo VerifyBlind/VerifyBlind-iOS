@@ -187,6 +187,7 @@
 "login_face_subtitle" = "Bir an için kameraya bakın. Doğrulamayı yalnız kimliğin sahibi tamamlayabilir.";
 "login_face_status_looking" = "Yüzünüz aranıyor…";
 "login_face_status_hold" = "Sabit durun…";
+"login_face_status_adjust" = "Gözlüğünüz varsa çıkarın ve yüzünüzü ışığa dönün";
 "login_face_warn_blur" = "Görüntü bulanık — telefonu sabit tutun";
 "login_face_warn_pose" = "Doğrudan kameraya bakın";
 "login_face_cancelled_title" = "Doğrulama tamamlanmadı";

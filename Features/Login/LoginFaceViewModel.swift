@@ -29,17 +29,24 @@ final class LoginFaceViewModel: ObservableObject {
     /// `LivenessViewModel.blurWarnThreshold` ile aynı ölçek.
     private static let minSharpness: Float = 45
 
-    /// Kare toplama üst sınırı. Dolduğunda elde kabul edilebilir kare varsa o gönderilir, yoksa
-    /// ekran hata ile kapanır ve giriş REDDEDİLİR ("kare alamadık" asla "geçti" değildir).
-    private static let captureTimeout: TimeInterval = 20
+    /// Kare toplama üst sınırı — kullanıcıya tanınan AZAMİ fırsat süresi.
+    ///
+    /// Eşiği geçemeyen kullanıcı bu süre boyunca gözlüğünü çıkarabilir, ışığa dönebilir.
+    /// Dolduğunda eldeki EN İYİ kare yine gönderilir: cihaz skoru enclave kararı DEĞİLDİR
+    /// (farklı model, farklı eşik) ve burada reddetmek enclave'in geçireceği kullanıcıyı kapıda
+    /// durdurmak olurdu. Hiç kare yoksa giriş iptal (fail-closed).
+    private static let captureTimeout: TimeInterval = 30
 
-    /// İlk iyi kareden sonra iyileşme için beklenen süre. Anında dönmek en iyi kareyi değil İLK
-    /// kabul edilebilir kareyi seçerdi.
-    private static let settleSeconds: TimeInterval = 1.2
+    /// Benzerlik eşiği geçildikten SONRA beklenen süre — bu 1 saniyede daha iyi kare gelirse o gider.
+    private static let settleSeconds: TimeInterval = 1.0
 
     /**
-     * Ekrandaki yüzdenin yeşile döndüğü sınır — YALNIZ RENK. Hiçbir şeyi engellemez,
-     * hiçbir kapıyı temsil etmez; kayıt ekranındaki 0.65 ile aynı hissi vermek için.
+     * "Yeterince benziyor" sınırı: ekrandaki yüzdenin yeşile döndüğü VE ekranın erken bitebildiği
+     * eşik. Kayıt akışındaki 0.65 ile aynı sayı.
+     *
+     * ⚠️ Bu bir KAPI DEĞİLDİR. Altında kalmak submit'i engellemez; yalnızca ekranın hemen
+     * kapanmasını engeller, yani kullanıcıya düzeltme fırsatı verir. Süre dolunca eldeki en iyi
+     * kare koşulsuz gider ve kararı enclave verir (ArcFace, eşik 0.20 — bu sayıyla KIYASLANAMAZ).
      */
     private static let scoreHintGood: Float = 0.65
 
@@ -83,7 +90,8 @@ final class LoginFaceViewModel: ObservableObject {
     private var lastCaptureTime: TimeInterval = 0
     private var lastLuma: Float = 0
     private var startedAt = Date()
-    private var firstGoodFrameAt: Date?
+    /// "Yeterince benziyor + kalite tamam" durumunun başladığı an; nil = henüz değil.
+    private var goodSince: Date?
     private var finished = false
     private var timeoutTask: Task<Void, Never>?
 
@@ -199,9 +207,15 @@ final class LoginFaceViewModel: ObservableObject {
         let showScore = refEmbedding != nil
         let percent = Int(bestMatchScore * 100)
         let isGood = bestMatchScore >= Self.scoreHintGood
+        // Durum metni ne BEKLEDİĞİMİZİ söylemeli: kalite tamamken skor düşükse sorun kadraj
+        // değil benzerliktir, "sabit dur" demek yanıltıcı olurdu.
+        let statusText: String
+        if warnText != nil { statusText = "login_face_status_looking" }
+        else if showScore && !isGood { statusText = "login_face_status_adjust" }
+        else { statusText = "login_face_status_hold" }
         DispatchQueue.main.async { [weak self] in
             self?.warning = warnText
-            self?.statusKey = warnText == nil ? "login_face_status_hold" : "login_face_status_looking"
+            self?.statusKey = statusText
             self?.matchPercent = showScore ? percent : nil
             self?.matchIsGood = isGood
         }
@@ -210,15 +224,22 @@ final class LoginFaceViewModel: ObservableObject {
         // karenin enclave'e gideceğini seçer.
         let quality = (sharpness > 0 ? sharpness : 0) + (poseOK ? 50 : 0)
 
-        // ⚠️ SIRA KRİTİK: "iyi kare gördük" işareti ve settle kontrolü, kalite kapısının ÖNÜNDE
-        // olmak zorunda. Kullanıcı sabitlenince kalite ARTMAYI BIRAKIR; kontroller kapının
-        // arkasında kalırsa her kare erken döner, settle hiç değerlendirilmez ve ekran zaman
-        // aşımına kadar bekler. Android'de cihazda yaşandı (giriş ~30 sn); aynı kusur burada da
-        // vardı, parite gereği birlikte düzeltildi.
-        if firstGoodFrameAt == nil, poseOK, sharpness > Self.minSharpness {
-            firstGoodFrameAt = Date()
+        // ÇIKIŞ KOŞULU: "yeterince benziyor" + 1 sn.
+        //
+        // Eskiden yalnız kalite (netlik+poz) yeterliydi ve ekran tatmin olur olmaz kareyi
+        // gönderiyordu — kullanıcıya benzerliğini DÜZELTME fırsatı tanımadan. Gözlüğünü
+        // çıkaramadan kare gidiyor, enclave reddedince kullanıcı ne yapacağını bilmiyordu.
+        //
+        // Referans yoksa (% hesaplanamıyorsa) eski davranışa düşülür: kalite yeterliyse gönder.
+        // ⚠️ Kapı değil: eşik geçilemezse captureTimeout dolunca en iyi kare yine gider.
+        let qualityOK = poseOK && sharpness > Self.minSharpness
+        let readyToFinish = refEmbedding != nil ? bestMatchScore >= Self.scoreHintGood : qualityOK
+        if goodSince == nil, qualityOK, readyToFinish {
+            goodSince = Date()
+        } else if !readyToFinish {
+            goodSince = nil   // skor düştü → sayaç sıfırlanır, acele edilmez
         }
-        let settled = firstGoodFrameAt.map { Date().timeIntervalSince($0) >= Self.settleSeconds } ?? false
+        let settled = goodSince.map { Date().timeIntervalSince($0) >= Self.settleSeconds } ?? false
 
         // Kalite iyileşmiyorsa yeni kare YAZILMAZ — ama elde geçerli kare varsa ve settle
         // dolduysa gönderilir.
