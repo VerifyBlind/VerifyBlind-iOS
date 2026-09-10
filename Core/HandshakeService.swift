@@ -66,9 +66,6 @@ actor HandshakeService {
         return verifiedPub
     }
 
-    /// Throw ETMEYEN attestation sondası — launch-gate + Security ekranı ortak kullanır.
-    /// Yalnız GERÇEK doğrulama hatasında `.failed` döner; ağ/HTTP hatasında `.unreachable` (fail-open,
-    /// onaylı karar: erişilemezlik BLOKLAMAZ). Başarıda `last_*` teşhis prefs'ini de tazeler.
     /// `.integrity` hatasında kaç kez yeniden denenir ve aralarda ne kadar beklenir.
     ///
     /// NEDEN VAR (2026-09-10, `VERIFYBLIND-IOS-46`, üçüncü tekrar): enclave'in attestation
@@ -88,9 +85,26 @@ actor HandshakeService {
     /// blok NİHAYETİNDE korunuyor — yeniden denemeler tükenince fail-closed davranış aynen
     /// sürüyor. Karşılığında, kendi kendine düzelen bir arıza kullanıcıya hiç yansımıyor.
     /// Hangi hatanın tekrarla düzeldiği Sentry'de görünür (aşağıdaki `Log.warning`).
-    private static let integrityRetryCount = 2
+    static let integrityRetryCount = 2
     private static let integrityRetryDelay: UInt64 = 3_000_000_000   // 3 sn
 
+    /// Bu hata bir kez daha denenmeli mi?
+    ///
+    /// Saf fonksiyon — cihaz, ağ ve zamanlayıcı olmadan test edilebilsin diye ayrıldı:
+    /// yeniden denemenin DOĞRU türde çalıştığı, asıl güvenlik sözleşmesi.
+    static func shouldRetry(kind: AttestFailureKind, attempt: Int) -> Bool {
+        // `.authorization` YENİDEN DENENMEZ: PCR0 imzasının yokluğu ya da eşleşmemesi bir
+        // deploy/sürüm boşluğudur (bkz. pcr0_signatures.json) ve saniyeler içinde
+        // kendiliğinden düzelmez — beklemek yalnız kullanıcıyı oyalar. Yeniden denenen
+        // tek tür, geçici olabilen `.integrity`.
+        guard kind == .integrity else { return false }
+        return attempt < integrityRetryCount
+    }
+
+    /// Throw ETMEYEN attestation sondası — launch-gate + Security ekranı ortak kullanır.
+    /// Yalnız GERÇEK doğrulama hatasında `.failed` döner; ağ/HTTP hatasında `.unreachable`
+    /// (fail-open, onaylı karar: erişilemezlik BLOKLAMAZ). Başarıda `last_*` teşhis
+    /// prefs'ini de tazeler. `.integrity` hataları önce yeniden denenir (bkz. shouldRetry).
     func probeAttestation() async -> AttestOutcome {
         var lastFailure: (kind: AttestFailureKind, reason: String)?
 
@@ -116,11 +130,7 @@ actor HandshakeService {
                 let reason = result.failReason ?? "sebep yok"
                 lastFailure = (kind, reason)
 
-                // `.authorization` YENİDEN DENENMEZ: PCR0 imzasının yokluğu ya da
-                // eşleşmemesi bir deploy/sürüm boşluğudur (bkz. pcr0_signatures.json) ve
-                // saniyeler içinde kendiliğinden düzelmez — beklemek yalnız kullanıcıyı
-                // oyalar. Yeniden denenen tek tür, geçici olabilen `.integrity`.
-                if kind != .integrity || attempt == Self.integrityRetryCount { break }
+                if !Self.shouldRetry(kind: kind, attempt: attempt) { break }
 
                 Log.warning("Attestation REDDETTİ (\(kind)): \(reason) — yeniden deneniyor (\(attempt + 1)/\(Self.integrityRetryCount))",
                             category: .flow)
