@@ -224,7 +224,10 @@ final class SimilarityStreamer: @unchecked Sendable {
             elapsedMs: elapsedMs,
             platform: "ios",
             appVersion: Self.appVersionWithBuild,
-            deviceModel: UIDevice.current.model)
+            // ⚠️ UIDevice.current.model DEĞİL: o her iPhone için sabit "iPhone" döner (model
+            // SINIFI, model ADI değil) — ölçümde her cihaz aynı görünürdü. DeviceInfo utsname
+            // kimliğini pazarlama adına çevirir ("iPhone 12"); Android tarafıyla da bu paritede.
+            deviceModel: DeviceInfo.marketingName())
     }
 }
 
