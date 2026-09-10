@@ -88,9 +88,9 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CURRENT_PROJECT_VERSION: $(BUILD_NUMBER)
         # Onaylanan her sürümden sonra artmalı: App Store'da onaylanan sürümün "train"i yeni
-        # build kabul etmez (altool 90062 + 90186) → 1.0.1 ve 1.0.2 kapandı.
+        # build kabul etmez (altool 90062 + 90186) → 1.0.1, 1.0.2 ve 1.0.3 kapandı.
         # Ayrıca demo-register: app_version sunucu fallback "1.0.0" ile çakışmasın (DEMO_PUBLISHED_APP 403).
-        MARKETING_VERSION: "1.0.3"
+        MARKETING_VERSION: "1.0.4"
         TARGETED_DEVICE_FAMILY: "1"  # iPhone-only: iPad'de NFC kimlik okuma donanımı yok → çekirdek işlev (NFC kimlik) çalışmaz; universal bırakmak iPad'de red riski + gereksiz iPad asset şartı
         CODE_SIGN_STYLE: Manual
         SWIFT_OBJC_BRIDGING_HEADER: ""
