@@ -186,27 +186,18 @@ IwLz3/Y=
         // Halkaların ömürleri birbirinden çok farklı (leaf 3sa · instance CA 24sa · zonal
         // ~6g · bölgesel ~20g), dolayısıyla "hangisi" sorusu teşhisin tamamı. Bu özet,
         // hata anındaki zinciri olayın İÇİNE koyar ve bir daha çıkarım gerekmez.
-        let ozet = certs.map { c -> String in
-            let cn = (SecCertificateCopySubjectSummary(c) as String?) ?? "?"
-            return "\(cn)|\(notAfterText(of: c))"
-        }.joined(separator: " · ")
+        // ⚠️ TARİH YAZILMIYOR, bilerek: `SecCertificateCopyValues` (ve X.509 OID sabitleri)
+        // macOS'a özel, iOS SDK'sında YOK — ilk deneme tam bu yüzden derlenmedi. DER'i elle
+        // ayrıştırmak ise teşhis uğruna taşınacak bir kırılganlık olurdu.
+        //
+        // CN TEK BAŞINA YETİYOR: halkalar adlarından ayırt ediliyor (leaf `…-enc….aws`,
+        // instance CA `i-….nitro-enclaves`, zonal `….zonal.…`, bölgesel, root) ve her birinin
+        // ömrü belirgin biçimde farklı (3sa · 24sa · ~6g · ~20g). Sunucu tarafı zaten tam
+        // tarihi `AttestationKeepFresh` günlüğüne yazıyor; eksik olan, cihazın O ANDA hangi
+        // zinciri gördüğüydü.
+        let ozet = certs.map { (SecCertificateCopySubjectSummary($0) as String?) ?? "?" }
+                        .joined(separator: " · ")
         return (false, "\(desc) [zincir: \(ozet)]")
-    }
-
-    /// Sertifikanın `notAfter` değeri, okunamazsa "?".
-    ///
-    /// `SecCertificateCopyValues` bir CFDictionary döner ve tarih `kSecPropertyKeyValue`
-    /// altında CFNumber (referans tarihinden saniye) olarak durur — Date'e çevrilmeden
-    /// yazılırsa okunamaz bir sayı olur.
-    private static func notAfterText(of cert: SecCertificate) -> String {
-        guard let values = SecCertificateCopyValues(cert, [kSecOIDX509V1ValidityNotAfter] as CFArray, nil) as? [String: Any],
-              let entry = values[kSecOIDX509V1ValidityNotAfter as String] as? [String: Any],
-              let seconds = entry[kSecPropertyKeyValue as String] as? Double else {
-            return "?"
-        }
-        let f = ISO8601DateFormatter()
-        f.timeZone = TimeZone(identifier: "UTC")
-        return f.string(from: Date(timeIntervalSinceReferenceDate: seconds))
     }
 
     private static func loadAwsRootCert() -> SecCertificate? {
