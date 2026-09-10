@@ -176,6 +176,17 @@
 "liveness_quality_dark" = "Too dark — move to a brighter spot";
 "liveness_quality_bright" = "Too much light / backlit — face the light source";
 "liveness_quality_blur" = "Camera is not sharp — wipe the lens and hold still";
+
+/* Girişteki canlı yüz adımı (LoginFaceView). Jest YOK: ekran ~2 saniyede bitmeli,
+   yoksa 2FA/step-up kullanım alanı ölür. Android values/strings.xml ile birebir. */
+"login_face_title" = "Confirm it is you";
+"login_face_subtitle" = "Look at the camera for a moment. Only the ID owner can complete a verification.";
+"login_face_status_looking" = "Looking for your face…";
+"login_face_status_hold" = "Hold still…";
+"login_face_warn_blur" = "Image is blurry — hold the phone steady";
+"login_face_warn_pose" = "Look straight at the camera";
+"login_face_cancelled_title" = "Verification not completed";
+"login_face_cancelled_message" = "We could not capture your face, so the verification was cancelled. Please try again in a well-lit spot.";
 "btn_retry" = "Try Again";
 "liveness_face_smile_relax" = "Relax your face 😐";
 "liveness_face_smile_relax_hint" = "You will be asked to smile next";

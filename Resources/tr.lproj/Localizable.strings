@@ -176,6 +176,17 @@
 "liveness_quality_dark" = "Ortam çok karanlık — daha aydınlık bir yere geçin";
 "liveness_quality_bright" = "Çok fazla ışık / arkadan ışık var — yüzünüzü ışığa dönün";
 "liveness_quality_blur" = "Kamera net değil — lensi silip sabit tutun";
+
+/* Girişteki canlı yüz adımı (LoginFaceView). Jest YOK: ekran ~2 saniyede bitmeli,
+   yoksa 2FA/step-up kullanım alanı ölür. Android values-tr/strings.xml ile birebir. */
+"login_face_title" = "Sizin olduğunuzu doğrulayalım";
+"login_face_subtitle" = "Bir an için kameraya bakın. Doğrulamayı yalnız kimliğin sahibi tamamlayabilir.";
+"login_face_status_looking" = "Yüzünüz aranıyor…";
+"login_face_status_hold" = "Sabit durun…";
+"login_face_warn_blur" = "Görüntü bulanık — telefonu sabit tutun";
+"login_face_warn_pose" = "Doğrudan kameraya bakın";
+"login_face_cancelled_title" = "Doğrulama tamamlanmadı";
+"login_face_cancelled_message" = "Yüzünüzü yakalayamadık, bu yüzden doğrulama iptal edildi. Lütfen aydınlık bir yerde tekrar deneyin.";
 "btn_retry" = "Tekrar Dene";
 "liveness_face_smile_relax" = "Yüzünüzü gevşetin 😐";
 "liveness_face_smile_relax_hint" = "Sırada gülümsemeniz istenecek";

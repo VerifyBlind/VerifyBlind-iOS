@@ -149,6 +149,28 @@ struct RegistrationCandidate: Codable {
     }
 }
 
+/// Girişte tazeliği kanıtlayan tek kare — Android `LoginFaceProof` paritesi.
+///
+/// ⚠️ LoginRequest gövdesine DÜZ konmaz: `encr_signed_ticket` sarmalının İÇİNE girer
+/// (bkz. `LoginWrapperBuilder`) ve enclave public key ile şifrelenir → relay biyometrik
+/// görüntüyü GÖRMEZ. Kayıt akışı da selfie'yi aynı sebeple aes_blob içinde taşıyor.
+///
+/// 🔴 K6: `userSelfie` ve `antiSpoofCrop` AYNI KAREDEN gelmek zorundadır.
+struct LoginFaceProof: Codable {
+    /// Hizalanmış 112×112 selfie (Base64 PNG).
+    let userSelfie: String
+    /// AYNI karenin 2,7× geniş anti-spoof kırpması (Base64 JPEG 80×80).
+    let antiSpoofCrop: String
+    /// Cihaz ölçüleri — DOĞRULANMAZ, yalnız teşhis satırına yazılır.
+    let deviceMetrics: DeviceFrameMetrics?
+
+    enum CodingKeys: String, CodingKey {
+        case userSelfie = "user_selfie"
+        case antiSpoofCrop = "anti_spoof_crop"
+        case deviceMetrics = "device_metrics"
+    }
+}
+
 /// Cihazın kare başına ölçtüğü sinyaller — zaten hesaplanıyorlardı ama hiçbir yere
 /// gönderilmiyorlardı.
 ///

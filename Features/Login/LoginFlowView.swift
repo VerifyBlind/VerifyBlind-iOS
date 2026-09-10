@@ -25,6 +25,15 @@ struct LoginFlowView: View {
                 ProcessingStepView()
             case .consent:
                 consentOverlay
+            case .faceCapture:
+                // Canlı yüz adımı — yalnız bilet FaceRefJpegB64 taşıyorsa gelir (demo değilse).
+                // Kare alınamazsa giriş GÖNDERİLMEZ: `faceCaptureCancelled` nonce'u iptal edip
+                // hata ekranına düşer (fail-closed).
+                LoginFaceView(
+                    onSuccess: { png, crop, metrics in
+                        vm.faceCaptured(selfiePNG: png, cropJPEG: crop, metrics: metrics)
+                    },
+                    onCancel: { vm.faceCaptureCancelled() })
             case .success:
                 // Ayrı "Başarılı" ekranı yok (Android paritesi): partnere geri dön (deeplink) + toast + kapat.
                 Color.clear.onAppear {

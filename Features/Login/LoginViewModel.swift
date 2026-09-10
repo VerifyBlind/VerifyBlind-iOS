@@ -12,6 +12,9 @@ final class LoginViewModel: ObservableObject {
         case scanning
         case loadingPartner
         case consent
+        /// Canlı yüz karesi toplanıyor — bilet FaceRefJpegB64 taşıyorsa (yani demo değilse)
+        /// `processing`'den ÖNCE gelir. Girişte jest yoktur, ekran ~2 saniyede kapanır.
+        case faceCapture
         case processing
         case success
         case rejected
@@ -140,9 +143,43 @@ final class LoginViewModel: ObservableObject {
 
     // MARK: - Login finalize
 
+    /// Canlı yüz adımı bittiğinde `completeLogin` bu kareyle devam eder. nil = adım hiç
+    /// gerekmedi (demo bileti) — kare toplanamadıysa akış buraya HİÇ dönmez, iptal edilir.
+    private var pendingFaceProof: LoginFaceProof?
+    /// Yüz adımına girerken saklanan kripto çıktıları: ikinci bir biyometrik prompt açmamak için.
+    private var pendingTicketJson: String?
+    private var pendingUserSig: String?
+    private var pendingSigTs: Int64 = 0
+
+    /// Canlı yüz ekranı kareyi verdi → giriş gönderilebilir.
+    func faceCaptured(selfiePNG: Data, cropJPEG: Data, metrics: DeviceFrameMetrics?) {
+        pendingFaceProof = LoginFaceProof(
+            userSelfie: selfiePNG.base64EncodedString(),
+            antiSpoofCrop: cropJPEG.base64EncodedString(),
+            deviceMetrics: metrics)
+        step = .processing
+        Task { await sendLogin() }
+    }
+
+    /// Kare alınamadı veya kullanıcı vazgeçti → giriş GÖNDERİLMEZ (fail-closed: "ölçemedik" asla
+    /// "geçti" değildir). Nonce açıkça iptal edilir ki partner "lütfen bekleyiniz"de asılı kalmasın.
+    func faceCaptureCancelled() {
+        clearPendingLoginState()
+        Task { await cancelPop() }
+        fail(title: L.t("login_face_cancelled_title"),
+             message: L.t("login_face_cancelled_message"),
+             error: nil)
+    }
+
+    private func clearPendingLoginState() {
+        pendingFaceProof = nil
+        pendingTicketJson = nil
+        pendingUserSig = nil
+        pendingSigTs = 0
+    }
+
     private func completeLogin() async {
         do {
-            let enclavePubKey = try await HandshakeService.shared.ensureLoginHandshake()
             // Holder-of-key (Y-4): bu login'e özgü mesaj — enclave UserPubKey ile doğrular.
             // Kanonik form Android/enclave ile BYTE-BYTE aynı olmalı: "VBLOK1|{nonce}|{pk_hash}|{ts}".
             let sigTs = Int64(Date().timeIntervalSince1970)
@@ -150,7 +187,39 @@ final class LoginViewModel: ObservableObject {
             // TEK biyometrik promptla decrypt + imza.
             let (signedTicketJson, userSig) = try await TicketStore.decryptSignedTicketAndSign(
                 message: hokMessage, reason: L.t("biometric_subtitle_decrypt"))
-            let wrapper = try LoginWrapperBuilder.build(signedTicketJson: signedTicketJson, nonce: nonce, pkHash: pkHash)
+
+            pendingTicketJson = signedTicketJson
+            pendingUserSig = userSig
+            pendingSigTs = sigTs
+
+            // CANLI YÜZ ADIMI. Buraya kadarki her şey TELEFONUN meşru olduğunu kanıtlar (bilet,
+            // holder-of-key imzası, cihaz kilidi) — hiçbiri telefonu TUTAN kişiyi kanıtlamaz.
+            // Karar biletin kendi FaceRefJpegB64 alanına bakar; demo biletlerin referansı yapısal
+            // olarak boş olduğu için demo akışı kamerayı hiç görmez ve UI test pilotu çalışır.
+            if LoginWrapperBuilder.needsLiveFace(signedTicketJson: signedTicketJson) {
+                step = .faceCapture   // devamı `faceCaptured` / `faceCaptureCancelled`
+                return
+            }
+            await sendLogin()
+        } catch {
+            handleLoginError(error)
+        }
+    }
+
+    /// Kripto hazır (+ gerekiyorsa canlı yüz karesi de) → isteği gönder.
+    private func sendLogin() async {
+        do {
+            guard let signedTicketJson = pendingTicketJson,
+                  let userSig = pendingUserSig else {
+                fail(title: L.t("login_failed_title"),
+                     message: L.t("login_failed_title"), error: nil)
+                return
+            }
+            let sigTs = pendingSigTs
+            let enclavePubKey = try await HandshakeService.shared.ensureLoginHandshake()
+            let wrapper = try LoginWrapperBuilder.build(
+                signedTicketJson: signedTicketJson, nonce: nonce, pkHash: pkHash,
+                faceProof: pendingFaceProof)
 
             let (aesBlob, aesKey) = try CryptoUtils.aesEncrypt(wrapper)
             let encKey = try CryptoUtils.rsaEncrypt(aesKey, publicKeyBase64: enclavePubKey)
@@ -162,42 +231,50 @@ final class LoginViewModel: ObservableObject {
 
             recordHistory()
             terminal = true
+            clearPendingLoginState()
             step = .success
         } catch {
-            if BiometricErrorClass.isCancellation(error) {
-                // Kullanıcı Face ID/Touch ID promptunu kapattı → arıza değil. Partner'ı "lütfen
-                // bekleyiniz"de bırakmamak için nonce'u AÇIKÇA iptal et: `fail` terminal=true yapar,
-                // dolayısıyla `onFlowDismissed` artık iptal etmez (Android `cancelQrNonce` paritesi).
-                await cancelPop()
-                fail(title: L.t("biometric_cancelled_title"),
-                     message: L.t("biometric_cancelled_message"),
-                     error: error)
-                return
-            }
-            if case let APIClientError.http(_, body) = error, body?.errorCode == "ERR_TICKET_REVOKED" {
-                // Ticket sunucu tarafında iptal edildi → yerel kaydı sil. Akış kapanınca RootView'in
-                // onDismiss'i AppState.refresh() çağırır → kayıtsız (kimlik ekleme) durumuna dönülür.
-                TicketStore.clear()
-                fail(title: L.t("ticket_revoked_title"),
-                     message: body?.error ?? L.t("ticket_revoked_message"),
-                     error: nil)
-                return
-            }
-            // Cihazdaki anahtar/ticket okunamıyorsa jenerik "Giriş başarısız" kullanıcıyı döngüde
-            // bırakıyordu: her deneme aynı hatayla bitiyor, tek çıkış yolu olan "Verilerimi Sil"i
-            // kendisi bulmak zorunda kalıyordu. Android bu durumda doğrudan silmeyi öneriyor.
-            if isUnrecoverableKeyMaterial(error) {
-                Log.warning("Kart verisi okunamıyor → temizleme öneriliyor: \(error)", category: .flow)
-                fail(title: L.t("security_error_title"),
-                     message: L.t("keystore_error_message"),
-                     error: nil,
-                     offersReset: true)
-                return
-            }
-            fail(title: L.t(titleKey(for: error, fallback: "login_failed_title")),
-                 message: UserFacingError.message(for: error),
-                 error: error)
+            await handleLoginError(error)
         }
+    }
+
+    /// İki giriş aşamasının (kripto hazırlığı + gönderim) ORTAK hata yolu. Ayrı tutulmalı: aşama
+    /// bölünmesi hata davranışını değiştirmemeli — kullanıcı hangi adımda düştüğünü bilmez.
+    private func handleLoginError(_ error: Error) async {
+        clearPendingLoginState()
+        if BiometricErrorClass.isCancellation(error) {
+            // Kullanıcı Face ID/Touch ID promptunu kapattı → arıza değil. Partner'ı "lütfen
+            // bekleyiniz"de bırakmamak için nonce'u AÇIKÇA iptal et: `fail` terminal=true yapar,
+            // dolayısıyla `onFlowDismissed` artık iptal etmez (Android `cancelQrNonce` paritesi).
+            await cancelPop()
+            fail(title: L.t("biometric_cancelled_title"),
+                 message: L.t("biometric_cancelled_message"),
+                 error: error)
+            return
+        }
+        if case let APIClientError.http(_, body) = error, body?.errorCode == "ERR_TICKET_REVOKED" {
+            // Ticket sunucu tarafında iptal edildi → yerel kaydı sil. Akış kapanınca RootView'in
+            // onDismiss'i AppState.refresh() çağırır → kayıtsız (kimlik ekleme) durumuna dönülür.
+            TicketStore.clear()
+            fail(title: L.t("ticket_revoked_title"),
+                 message: body?.error ?? L.t("ticket_revoked_message"),
+                 error: nil)
+            return
+        }
+        // Cihazdaki anahtar/ticket okunamıyorsa jenerik "Giriş başarısız" kullanıcıyı döngüde
+        // bırakıyordu: her deneme aynı hatayla bitiyor, tek çıkış yolu olan "Verilerimi Sil"i
+        // kendisi bulmak zorunda kalıyordu. Android bu durumda doğrudan silmeyi öneriyor.
+        if isUnrecoverableKeyMaterial(error) {
+            Log.warning("Kart verisi okunamıyor → temizleme öneriliyor: \(error)", category: .flow)
+            fail(title: L.t("security_error_title"),
+                 message: L.t("keystore_error_message"),
+                 error: nil,
+                 offersReset: true)
+            return
+        }
+        fail(title: L.t(titleKey(for: error, fallback: "login_failed_title")),
+             message: UserFacingError.message(for: error),
+             error: error)
     }
 
     /// Cihazdaki kripto materyali kalıcı olarak kullanılamaz mı — yani tekrar denemek çare olmaz mı?
