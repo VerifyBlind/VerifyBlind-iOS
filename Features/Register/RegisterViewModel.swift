@@ -239,6 +239,19 @@ final class RegisterViewModel: ObservableObject {
                 )
                 nfcAttempt = 0
 
+                // Yaş kapısı DocumentSupport'tan ÖNCE: 15 yaşını doldurmamış birinin kartı zaten
+                // fotoğrafsız düzenlenir. Önce fotoğrafa bakılırsa kullanıcı "çipte fotoğraf yok"
+                // mesajını alır ve fotoğraflı kart çıkartınca çözüleceğini sanar — çözülmez, engel
+                // yaştır. PII yok: yalnız verdict loglanır, doğum tarihi ASLA loglanmaz.
+                if AgePolicy.evaluate(mrzDateOfBirth: mrz.dateOfBirth) == .underMinimumAge {
+                    Log.warning("Kayıt reddedildi: asgari yaş sınırı karşılanmıyor", category: .nfc)
+                    scanned = nil
+                    reportNfcFailure("age_below_minimum")
+                    fail(title: L.t("doc_age_below_minimum_title"),
+                         message: L.t("doc_age_below_minimum"), error: nil)
+                    return
+                }
+
                 // Hızlı-başarısızlık: desteklenmeyen belgeyi (TR dışı / pasaport / JPEG2000 DG2 /
                 // AA-desteksiz) BURADA durdur. Aksi halde kullanıcı tüm liveness'i boşa yapıp en
                 // sonda enclave reddine çarpar; üstelik fotoğraf çözülemediğinde yüz eşleştirme
@@ -272,13 +285,21 @@ final class RegisterViewModel: ObservableObject {
                     switch verdict {
                     case .unsupportedCountry: message = L.t("doc_unsupported_country")
                     case .unsupportedDocType: message = L.t("doc_unsupported_doc_type")
+                    case .noFaceImage:        message = L.t("doc_no_face")
                     case .unsupportedImage:   message = L.t("doc_unsupported_image")
                     case .noActiveAuth:       message = L.t("doc_unsupported_no_aa")
                     default:                  message = L.t("doc_unsupported_generic")
                     }
+                    // Fotoğrafsız kart bir "desteklenmeyen belge" değil, geçerli bir TC kimlik
+                    // kartıdır — başlık da mesaj da bunu yansıtmalı, aksi halde kullanıcı elindeki
+                    // kartın sahte/yanlış olduğunu sanır.
+                    let title = verdict == .noFaceImage
+                        ? L.t("doc_no_face_title") : L.t("doc_unsupported_title")
                     scanned = nil  // güvenlik: desteklenmeyen veriyle akışa devam etme
-                    reportNfcFailure("doc_unsupported")
-                    fail(title: L.t("doc_unsupported_title"), message: message, error: nil)
+                    // Alt sebep ayrı etiketlenir: fotoğrafsız kart oranını ölçebilmek için
+                    // (15-20 yaş bandındaki fotoğrafsız kart kuyruğu — 15 altı kartlar 5 yıl geçerli).
+                    reportNfcFailure(verdict == .noFaceImage ? "doc_no_face" : "doc_unsupported")
+                    fail(title: title, message: message, error: nil)
                     return
                 }
 

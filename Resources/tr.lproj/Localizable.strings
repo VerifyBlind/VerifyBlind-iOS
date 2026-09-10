@@ -123,6 +123,10 @@
 "doc_chip_unreadable" = "Çip verisi eksik okundu. Kimliğinizi telefona düz yaslayıp ikisini de hareket ettirmeden tekrar okutun.";
 "doc_chip_unreadable_retry" = "Çip hâlâ okunamıyor. Telefon kılıfını ve arkasındaki kart/aksesuarları çıkarın, kimliği telefonun arka üst kısmına yaslayıp hareket ettirmeden bekleyin.";
 "doc_unsupported_generic" = "Bu belge türü henüz desteklenmiyor. VerifyBlind şu an yalnızca Türkiye Cumhuriyeti kimlik kartını destekliyor. Kimlik oluşturulamadı.";
+"doc_age_below_minimum_title" = "Yaş Koşulu Sağlanmıyor";
+"doc_age_below_minimum" = "VerifyBlind 15 yaşını doldurmamış kullanıcılara açık değildir.";
+"doc_no_face_title" = "Kimlik Kartında Fotoğraf Yok";
+"doc_no_face" = "VerifyBlind fotoğrafsız kimlik kartları ile kullanılamaz.";
 "server_connection_error" = "❌ Sunucu Bağlantı Hatası.";
 "connection_error_title" = "Bağlantı Hatası";
 "connection_error_server" = "Bağlantı Hatası: Sunucuya ulaşılamadı";
