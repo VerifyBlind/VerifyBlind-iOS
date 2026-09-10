@@ -202,7 +202,7 @@ final class LoginViewModel: ObservableObject {
             }
             await sendLogin()
         } catch {
-            handleLoginError(error)
+            await handleLoginError(error)
         }
     }
 
