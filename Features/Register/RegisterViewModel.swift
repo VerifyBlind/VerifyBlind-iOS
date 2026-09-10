@@ -490,7 +490,7 @@ final class RegisterViewModel: ObservableObject {
             // okuması GEÇERLİ; düzeltilmesi gereken tek şey kareye ait (ışık, gözlük, açı).
             // Kullanıcıyı kartını yeniden okutmaya zorlamak, düzeltmesi kolay bir sorunu
             // vazgeçme sebebine çevirirdi.
-            if case APIError.http(_, let body) = error,
+            if case APIClientError.http(_, let body) = error,
                (body?.errorCode ?? body?.code) == "ERR_BIOMETRIC_MISMATCH" {
                 // Önceki denemenin adayları temizlenir: yeni turda yeniden üretilecekler ve
                 // eskisini taşımak, ölçüm satırını yanlış kareye bağlardı.

@@ -167,7 +167,7 @@ final class SimilarityStreamer: @unchecked Sendable {
                         self._approvedMetrics = metrics
                     }
                 }
-            } catch APIError.rateLimited {
+            } catch APIClientError.rateLimited {
                 // Oran sınırına takıldık — akışın geri kalanında susmak, 429 yağdırmaktan iyi.
                 self.lock.withLock { self.disabled = true }
                 Log.info("Canlı benzerlik oran sınırına takıldı — kapatıldı", category: .liveness)

@@ -232,9 +232,6 @@ final class LivenessViewModel: ObservableObject {
     /// nil = streaming yok (demo, çip yok ya da enclave anahtarı elde değil) → bugünkü davranış.
     private let streamer: SimilarityStreamer?
 
-    /// Oturum başlangıcı — kare ölçüsündeki `elapsed_ms` bundan hesaplanır.
-    private var sessionStartedAt: TimeInterval = 0
-
     /// Kaydedilen en iyi karenin ölçüleri — submit'te **1. adayın** ölçüm satırı olur.
     ///
     /// Neden ekranda tutuluyor: bu sayılar O KAREYE ait ve submit anında yeniden ölçülemezler
@@ -349,7 +346,10 @@ final class LivenessViewModel: ObservableObject {
         isIdentityVerified = false
         selfieJPEG = nil
         antiSpoofCropJPEGLogic = nil
-        sessionStartedAt = Date().timeIntervalSince1970
+        // sessionStartedAt BURADA set EDİLMEZ: `startTimer()` onu zaten ana kuyrukta,
+        // oturum saatinin gerçekten başladığı anda kuruyor. Burada ikinci kez yazmak
+        // video kuyruğundan ana kuyruk durumuna dokunmak olurdu (iplik disiplini) ve
+        // iki farklı "oturum başlangıcı" üretirdi.
         bestFrameMetrics = nil
         lastActionTime = 0
         lastCaptureTime = 0
@@ -673,8 +673,7 @@ final class LivenessViewModel: ObservableObject {
                 faceWidthRatio: Int(faceFrac * 100),
                 gestureCount: index,
                 wrongGestureCount: wrongAttempts,
-                elapsedMs: sessionStartedAt > 0
-                    ? Int((Date().timeIntervalSince1970 - sessionStartedAt) * 1000) : nil)
+                elapsedMs: sessionStartedAt.map { Int(Date().timeIntervalSince($0) * 1000) })
             bestFrameMetrics = frameMetrics
 
             // Canlı benzerlik akışı: en iyi kare YENİLENDİĞİNDE enclave'e gönderilir. Kare akışı
