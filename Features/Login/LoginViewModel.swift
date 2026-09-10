@@ -150,6 +150,9 @@ final class LoginViewModel: ObservableObject {
     private var pendingTicketJson: String?
     private var pendingUserSig: String?
     private var pendingSigTs: Int64 = 0
+    /// Bilete mühürlü yüz referansı — canlı yüz ekranındaki % göstergesi için.
+    /// Cihazdan DIŞARI çıkmaz; gerçek karşılaştırma enclave'de mühürlü biletin kopyasıyla yapılır.
+    private(set) var pendingFaceRef: String?
 
     /// Canlı yüz ekranı kareyi verdi → giriş gönderilebilir.
     func faceCaptured(selfiePNG: Data, cropJPEG: Data, metrics: DeviceFrameMetrics?) {
@@ -172,6 +175,7 @@ final class LoginViewModel: ObservableObject {
     }
 
     private func clearPendingLoginState() {
+        pendingFaceRef = nil
         pendingFaceProof = nil
         pendingTicketJson = nil
         pendingUserSig = nil
@@ -197,6 +201,7 @@ final class LoginViewModel: ObservableObject {
             // Karar biletin kendi FaceRefJpegB64 alanına bakar; demo biletlerin referansı yapısal
             // olarak boş olduğu için demo akışı kamerayı hiç görmez ve UI test pilotu çalışır.
             if LoginWrapperBuilder.needsLiveFace(signedTicketJson: signedTicketJson) {
+                pendingFaceRef = LoginWrapperBuilder.faceRef(signedTicketJson: signedTicketJson)
                 step = .faceCapture   // devamı `faceCaptured` / `faceCaptureCancelled`
                 return
             }

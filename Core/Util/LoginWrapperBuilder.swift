@@ -32,6 +32,16 @@ enum LoginWrapperBuilder {
     /// ve zayıftır — 2026-09-03'te iOS'ta yanlışlıkla tüm kullanıcılara açık bulundu. Demo
     /// biletlerin referansı YAPISAL olarak boştur (DemoRegisterAsync gerçek çip görmez), yani
     /// atlama yolu kendiliğinden çalışır.
+    /// Bilete mühürlü yüz referansı (Base64 JPEG) — giriş ekranındaki % göstergesi için.
+    /// Android `MainViewModel.ticketFaceRef` paritesi. Referans cihazdan DIŞARI çıkmaz.
+    static func faceRef(signedTicketJson: String) -> String? {
+        guard let obj = try? JSONSerialization.jsonObject(with: Data(signedTicketJson.utf8)),
+              let root = obj as? [String: Any],
+              let payload = root["Payload"] as? [String: Any],
+              let ref = payload["FaceRefJpegB64"] as? String, !ref.isEmpty else { return nil }
+        return ref
+    }
+
     static func needsLiveFace(signedTicketJson: String) -> Bool {
         guard let obj = try? JSONSerialization.jsonObject(with: Data(signedTicketJson.utf8)),
               let root = obj as? [String: Any],

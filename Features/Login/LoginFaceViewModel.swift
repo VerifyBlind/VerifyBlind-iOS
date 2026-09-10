@@ -37,11 +37,36 @@ final class LoginFaceViewModel: ObservableObject {
     /// kabul edilebilir kareyi seçerdi.
     private static let settleSeconds: TimeInterval = 1.2
 
+    /**
+     * Ekrandaki yüzdenin yeşile döndüğü sınır — YALNIZ RENK. Hiçbir şeyi engellemez,
+     * hiçbir kapıyı temsil etmez; kayıt ekranındaki 0.65 ile aynı hissi vermek için.
+     */
+    private static let scoreHintGood: Float = 0.65
+
     let camera = CameraController(position: .front)
     private let analyzer = FaceAnalyzer()
+    private let embedder = FaceEmbedder()
 
     @Published private(set) var statusKey = "login_face_status_looking"
     @Published private(set) var warning: String?
+    /// Canlı benzerlik yüzdesi (0-100) — nil ise gösterge gizli.
+    @Published private(set) var matchPercent: Int?
+    /// Yüzde yeşil mi gösterilecek (yalnız sunum).
+    @Published private(set) var matchIsGood = false
+
+    /**
+     * Bilete mühürlü yüz referansının embedding'i — ekrandaki canlı % göstergesi için.
+     *
+     * ⚠️ Bu YALNIZ geri bildirimdir. Otoriter karşılaştırma enclave'de yapılır ve gerçek kapı
+     * odur; buradaki sayı submit'i ENGELLEMEZ. Cihaz eşiği bir güvenlik kontrolü olamaz (yerel
+     * bir sayı) ve bloklayıcı yapılırsa yanlış-red üretir: canlı benzerlik akışının ilk
+     * ölçümünde cihaz 6 karenin 4'ünü reddederken enclave hepsini geçirmişti.
+     *
+     * Skor enclave skoruyla KIYASLANAMAZ: burada MobileFaceNet, orada ArcFace R50.
+     */
+    private var refEmbedding: [Float]?
+    /// Oturum boyunca görülen en yüksek benzerlik — ekrandaki sayı geri düşmesin diye.
+    private var bestMatchScore: Float = 0
 
     /// Başarı: (hizalanmış 112×112 selfie PNG, AYNI karenin 2,7× 80×80 anti-spoof JPEG'i, ölçüler).
     /// iOS'ta kareler `Data` olarak bellekte taşınır (Android dosya yolu tutar) — mevcut ayrım.
@@ -62,8 +87,31 @@ final class LoginFaceViewModel: ObservableObject {
     private var finished = false
     private var timeoutTask: Task<Void, Never>?
 
+    /// Bilete mühürlü yüz referansı (Base64 JPEG). Referans CİHAZDAN DIŞARI ÇIKMAZ; yalnız
+    /// ekranda yüzde göstermek üzere yerel embedding'e çevrilir.
+    var faceRefB64: String?
+
     func start() {
         startedAt = Date()
+
+        // Referans embedding'i BİR KEZ — kamera kuyruğunu her karede meşgul etmesin.
+        // Başarısız olursa yalnız % göstergesi kaybolur; akış aynen sürer, çünkü gerçek
+        // karşılaştırma zaten enclave'de yapılıyor.
+        if let b64 = faceRefB64, !b64.isEmpty {
+            camera.runOnVideoQueue { [weak self] in
+                guard let self,
+                      let data = Data(base64Encoded: b64),
+                      let cg = UIImage(data: data)?.cgImage else {
+                    Log.warning("Yüz referansı çözülemedi — % göstergesi kapalı", category: .liveness)
+                    return
+                }
+                // Kayıt akışındaki chip embedding ile AYNI hizalama.
+                let eyes = LivenessViewModel.detectEyes(in: cg)
+                guard let aligned = FaceAligner.alignedImage(
+                        from: cg, leftEye: eyes.left, rightEye: eyes.right) else { return }
+                self.refEmbedding = self.embedder.embedding(from: aligned)
+            }
+        }
 
         camera.onFrame = { [weak self] buffer, _ in
             // Video kuyruğu — logic durumu burada yazılır (LivenessViewModel disiplini).
@@ -138,19 +186,46 @@ final class LoginFaceViewModel: ObservableObject {
         let sharpness = LivenessViewModel.sharpness(of: aligned)
         let poseOK = abs(frame.signals.yaw) < 20 && abs(frame.signals.pitch) < 20
 
+        // Cihaz-içi benzerlik — YALNIZ ekrandaki % için, submit'i ENGELLEMEZ (bkz. refEmbedding).
+        if let refEmb = refEmbedding, let selfieEmb = embedder.embedding(from: aligned) {
+            let sim = FaceEmbedder.cosineSimilarity(refEmb, selfieEmb)
+            if sim > bestMatchScore { bestMatchScore = sim }
+        }
+
         // Sunum alanları ANA kuyruğa marshal edilir — burası video kuyruğu.
         let warnText: String? =
             (sharpness >= 0 && sharpness <= Self.minSharpness) ? L.t("login_face_warn_blur")
             : (!poseOK ? L.t("login_face_warn_pose") : nil)
+        let showScore = refEmbedding != nil
+        let percent = Int(bestMatchScore * 100)
+        let isGood = bestMatchScore >= Self.scoreHintGood
         DispatchQueue.main.async { [weak self] in
             self?.warning = warnText
             self?.statusKey = warnText == nil ? "login_face_status_hold" : "login_face_status_looking"
+            self?.matchPercent = showScore ? percent : nil
+            self?.matchIsGood = isGood
         }
 
         // Kalite skoru: netlik + poz. Cihaz BENZERLİK ölçmez (bloklamaz) — bu skor yalnız hangi
         // karenin enclave'e gideceğini seçer.
         let quality = (sharpness > 0 ? sharpness : 0) + (poseOK ? 50 : 0)
-        guard quality > bestQuality else { return }
+
+        // ⚠️ SIRA KRİTİK: "iyi kare gördük" işareti ve settle kontrolü, kalite kapısının ÖNÜNDE
+        // olmak zorunda. Kullanıcı sabitlenince kalite ARTMAYI BIRAKIR; kontroller kapının
+        // arkasında kalırsa her kare erken döner, settle hiç değerlendirilmez ve ekran zaman
+        // aşımına kadar bekler. Android'de cihazda yaşandı (giriş ~30 sn); aynı kusur burada da
+        // vardı, parite gereği birlikte düzeltildi.
+        if firstGoodFrameAt == nil, poseOK, sharpness > Self.minSharpness {
+            firstGoodFrameAt = Date()
+        }
+        let settled = firstGoodFrameAt.map { Date().timeIntervalSince($0) >= Self.settleSeconds } ?? false
+
+        // Kalite iyileşmiyorsa yeni kare YAZILMAZ — ama elde geçerli kare varsa ve settle
+        // dolduysa gönderilir.
+        guard quality > bestQuality else {
+            if settled, selfiePNG != nil, antiSpoofCropJPEG != nil { succeed() }
+            return
+        }
 
         // PNG (lossless): ArcFace girişi tam bu 112×112 piksel; bu boyutta JPEG blok artefaktı
         // embedding'i bozabilir.
@@ -163,10 +238,11 @@ final class LoginFaceViewModel: ObservableObject {
 
         let faceFrac = frame.imageSize.width > 0 ? Float(box.width / frame.imageSize.width) : -1
         // Cihaz ölçüleri enclave'de DOĞRULANMAZ — yalnız teşhis satırına yazılır.
-        // `deviceMatchScore` bilerek nil: girişte cihaz benzerlik ölçmüyor ve 0 göndermek ölçüm
-        // satırında "hiç benzemedi" gibi okunurdu. Jest sayaçları da nil — girişte jest yok.
+        // `deviceMatchScore` yalnız referans embedding'i ÜRETİLEBİLDİYSE gider; üretilemediyse nil
+        // kalır, çünkü 0 göndermek ölçüm satırında "hiç benzemedi" gibi okunurdu.
+        // ⚠️ Bu sayı enclave skoruyla KIYASLANAMAZ. Jest sayaçları nil — girişte jest yok.
         frameMetrics = SimilarityStreamer.metricsOf(
-            deviceMatchScore: nil,
+            deviceMatchScore: refEmbedding != nil ? min(max(Int(bestMatchScore * 100), 0), 100) : nil,
             luma: Int(lastLuma),
             sharpness: Int(sharpness),
             quality: Int(quality),
@@ -178,12 +254,7 @@ final class LoginFaceViewModel: ObservableObject {
             wrongGestureCount: nil,
             elapsedMs: Int(Date().timeIntervalSince(startedAt) * 1000))
 
-        if firstGoodFrameAt == nil, poseOK, sharpness > Self.minSharpness {
-            firstGoodFrameAt = Date()
-        }
-        if let first = firstGoodFrameAt, Date().timeIntervalSince(first) >= Self.settleSeconds {
-            succeed()
-        }
+        if settled { succeed() }
     }
 
     /// Süre doldu. Elde kabul edilebilir kare varsa gönderilir: kullanıcıyı mükemmel kare için

@@ -19,9 +19,11 @@ struct LoginFaceView: View {
     private let grayColor = Color(red: 0.333, green: 0.333, blue: 0.333) // #555555
     private let redColor  = Color(red: 1.0, green: 0.267, blue: 0.267)   // #FF4444
 
-    init(onSuccess: @escaping (Data, Data, DeviceFrameMetrics?) -> Void,
+    init(faceRefB64: String?,
+         onSuccess: @escaping (Data, Data, DeviceFrameMetrics?) -> Void,
          onCancel: @escaping () -> Void) {
         let vm = LoginFaceViewModel()
+        vm.faceRefB64 = faceRefB64
         _viewModel = StateObject(wrappedValue: vm)
         _camera = ObservedObject(wrappedValue: vm.camera)
         self.onSuccess = onSuccess
@@ -73,6 +75,17 @@ struct LoginFaceView: View {
 
             ovalCamera
                 .padding(.top, 16)
+
+            // Canlı benzerlik yüzdesi — kayıt ekranındaki göstergenin karşılığı. Burada
+            // HİÇBİR ŞEYİ ENGELLEMEZ, yalnız "ilerliyorum" geri bildirimi verir.
+            if let percent = viewModel.matchPercent {
+                Text("\(percent)%")
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundColor(viewModel.matchIsGood
+                        ? Color(red: 0.16, green: 0.65, blue: 0.27)
+                        : redColor)
+                    .padding(.top, 8)
+            }
 
             Text(L.t(viewModel.statusKey))
                 .font(.system(size: 15))

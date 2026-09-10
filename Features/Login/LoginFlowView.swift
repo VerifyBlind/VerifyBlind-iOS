@@ -30,6 +30,8 @@ struct LoginFlowView: View {
                 // Kare alınamazsa giriş GÖNDERİLMEZ: `faceCaptureCancelled` nonce'u iptal edip
                 // hata ekranına düşer (fail-closed).
                 LoginFaceView(
+                    // Ekrandaki % göstergesi için; referans cihazdan DIŞARI çıkmaz.
+                    faceRefB64: vm.pendingFaceRef,
                     onSuccess: { png, crop, metrics in
                         vm.faceCaptured(selfiePNG: png, cropJPEG: crop, metrics: metrics)
                     },
