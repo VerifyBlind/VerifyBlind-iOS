@@ -11,9 +11,19 @@ struct LegalTermsGate: View {
     let requiredVersion: String
     /// Metin güncellemesi bağlamında farklı bir giriş metni gösterilir.
     let isUpdate: Bool
+    /// app-config sonuçlandı mı (bkz. `AppState.legalTermsVersionResolved`). Sonuçlanmadan kabul
+    /// alınırsa cihaza okunan metnin değil gömülü tabanın sürümü yazılır ve sunucu sürümü gelir
+    /// gelmez kapı yeniden açılır — kullanıcı üst üste iki onay ekranı görür.
+    let versionResolved: Bool
     let onAccept: () -> Void
 
     @State private var agreed = false
+    /// Sunucu hiç cevap vermezse kapı sonsuza kadar bekletmesin: tavan dolunca kabul açılır ve
+    /// gömülü taban sürümle kaydedilir (fail-open YOK — taban yalnız alt sınırdır).
+    @State private var versionWaitElapsed = false
+
+    /// Kabul düğmesi: onay kutusu işaretli VE sürüm belli (ya da bekleme tavanı dolmuş).
+    private var acceptEnabled: Bool { agreed && (versionResolved || versionWaitElapsed) }
 
     private static let termsURL = "https://verifyblind.com/terms"
     private static let dpaURL = "https://verifyblind.com/dpa"
@@ -94,10 +104,10 @@ struct LegalTermsGate: View {
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .frame(height: 52)
-                            .background(agreed ? Theme.themePrimary : Theme.onSurfaceVariant.opacity(0.3),
+                            .background(acceptEnabled ? Theme.themePrimary : Theme.onSurfaceVariant.opacity(0.3),
                                         in: RoundedRectangle(cornerRadius: 16))
                     }
-                    .disabled(!agreed)
+                    .disabled(!acceptEnabled)
 
                     // iOS'ta uygulamayı programatik kapatmak App Store kurallarına aykırıdır
                     // (Android'deki "Reddet ve çık" burada bilinçli olarak yok); reddeden kullanıcı
@@ -115,7 +125,15 @@ struct LegalTermsGate: View {
             }
         }
         .interactiveDismissDisabled(true)
+        .task {
+            try? await Task.sleep(nanoseconds: UInt64(Self.versionWaitCapSeconds * 1_000_000_000))
+            versionWaitElapsed = true
+        }
     }
+
+    /// Sürüm beklemesinin tavanı. Kullanıcı metni okuyup onay kutusunu işaretlerken zaten dolar,
+    /// yani normal akışta hiç fark edilmez; ağ tamamen yoksa kapı yine de açılabilir kalır.
+    private static let versionWaitCapSeconds: Double = 2.0
 
     private func linkRow(_ key: String, url: String) -> some View {
         Button {

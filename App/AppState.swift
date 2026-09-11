@@ -40,6 +40,13 @@ final class AppState: ObservableObject {
     @Published var legalTermsServerVersion: String? = nil
     /// Cihazdaki kabul — UserDefaults'tan okunur, kabul anında güncellenir ki overlay kapansın.
     @Published var legalTermsAcceptedVersion: String? = LegalTerms.acceptedVersion
+    /// app-config denemesi SONUÇLANDI mı (başarı da başarısızlık da sayılır).
+    ///
+    /// Kapı, sunucu sürümü gelmeden gömülü tabanı gösterir; kullanıcı o aralıkta onaylarsa cihaza
+    /// okuduğu metnin değil TABANIN sürümü yazılır ve config gelir gelmez kapı yeniden açılır
+    /// (Android'de aynı arıza üst üste iki onay ekranı olarak görüldü, 2026-09-11). Bu bayrak
+    /// kapının kabul düğmesini o kısa aralıkta bekletmek için kullanılır — bkz. `LegalTermsGate`.
+    @Published var legalTermsVersionResolved = false
 
     /// Geçici toast mesajı (Android `Toast` paritesi) — RootView alt kısımda gösterir, ~2sn sonra siler.
     @Published var toastMessage: String?
@@ -69,6 +76,9 @@ final class AppState: ObservableObject {
     /// Sunucu app-config'ini çeker; zorunlu güncelleme + demo butonu görünürlüğünü günceller.
     /// Android `MainViewModel.fetchAppConfig` paritesi.
     func loadConfig() async {
+        // Başarı da başarısızlık da kapının beklemesini bitirir: ağ yoksa gömülü taban geçerlidir
+        // ve kullanıcı sonsuza kadar bekletilmez.
+        defer { legalTermsVersionResolved = true }
         do {
             let cfg = try await VerifyAPI.shared.appConfig()
             minimumIosVersion = cfg.minimumIosVersion

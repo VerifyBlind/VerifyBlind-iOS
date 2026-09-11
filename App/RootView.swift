@@ -121,6 +121,7 @@ struct RootView: View {
                 LegalTermsGate(
                     requiredVersion: appState.requiredLegalTermsVersion,
                     isUpdate: appState.legalTermsAcceptedVersion?.isEmpty == false,
+                    versionResolved: appState.legalTermsVersionResolved,
                     onAccept: { appState.refreshLegalTermsAcceptance() }
                 )
             }

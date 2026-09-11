@@ -16,7 +16,7 @@ enum LegalTerms {
 
     /// Uygulamaya gömülü taban sürüm — landing-site metinlerinin "Versiyon" etiketiyle hizalı.
     /// Sunucuya hiç ulaşılamadığında geçerli olan alt sınırdır.
-    static let baselineVersion = "1.0"
+    static let baselineVersion = "1.1"
 
     // MARK: - Saf karar mantığı
 
