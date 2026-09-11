@@ -17,6 +17,8 @@ struct HistoryView: View {
     /// Silme SERT ve geri alınamaz olduğu için onaysız silinmez.
     @State private var pendingDelete: HistoryRecord?
     @State private var authPassed = false
+    /// Biyometrik istem şu an açık mı — çift tetiklemeyi ve butonun çift basılmasını engeller.
+    @State private var authenticating = false
     @State private var showBackupBanner = false
 
     var body: some View {
@@ -24,26 +26,66 @@ struct HistoryView: View {
             if authPassed {
                 mainContent
             } else {
-                Theme.background.ignoresSafeArea()
+                lockedState
             }
         }
         // Yedekleme ekranından geri dönüldüğünde `task` yeniden koşar; kapı bir kez geçilmişse
         // ikinci bir Face ID istemi çıkmamalı.
         .task {
             guard !authPassed else { return }
-            await authenticateOnAppear()
+            await authenticate()
         }
     }
 
-    private func authenticateOnAppear() async {
+    /// Kapı geçilene kadar duran kilit ekranı.
+    ///
+    /// Eskiden reddedilen kapı ekranı KAPATIYORDU: parmağını yanlış okutan ya da istemi kazara
+    /// kapatan kullanıcı cüzdana atılıyor, geçmişi görmek için gezinmeye baştan başlıyordu.
+    /// Android kilitli ekranda bırakıp yeniden denemeye izin veriyor (`layoutAuthLock`, dokununca
+    /// tekrar dener) — parite denetimi 2026-09-03, D-5. Geri çubuğu duruyor, yani kullanıcı
+    /// kilitli de kalmıyor.
+    private var lockedState: some View {
+        VStack(spacing: 0) {
+            NavTopBar(title: L.t("history_title"), titleColor: Theme.primary, onBack: onBack)
+            Spacer()
+            VStack(spacing: 14) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 52))
+                    .foregroundColor(Theme.themePrimary)
+                Text(L.t("app_lock_title"))
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(Theme.onSurface)
+                Text(L.t("app_lock_desc"))
+                    .font(.system(size: 14))
+                    .foregroundColor(Theme.onSurfaceVariant)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+                PrimaryGradientButton(title: L.t("btn_unlock"),
+                                      enabled: !authenticating,
+                                      loading: authenticating,
+                                      height: 52, fontSize: 16) {
+                    Task { await authenticate() }
+                }
+                .padding(.horizontal, 40)
+                .padding(.top, 8)
+            }
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.background.ignoresSafeArea())
+    }
+
+    private func authenticate() async {
+        guard !authenticating else { return }
+        authenticating = true
+        defer { authenticating = false }
         do {
             try await BiometricGate.authenticate(reason: L.t("biometric_subtitle_decrypt"))
             authPassed = true
         } catch {
             // Biyometrik iptal/ret = beklenen kullanıcı davranışı, geliştirici aksiyonu yok.
             // Sentry'e event GİTMEZ (yalnızca breadcrumb) — ContentView app-lock kapısıyla aynı desen.
-            Log.info("İşlem geçmişi biyometrik kapısı reddedildi (geri dönülür)", category: .flow)
-            onBack()
+            Log.info("İşlem geçmişi biyometrik kapısı reddedildi (kilit ekranında kalınır)", category: .flow)
         }
     }
 

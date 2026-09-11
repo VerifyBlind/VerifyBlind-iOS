@@ -95,7 +95,7 @@ struct BackupSettingsView: View {
         // Şifreleme seçimi + parola
         .sheet(isPresented: $vm.showEncryptSheet) { encryptSheet }
         // "Dosya olarak kaydet": paylaşım sayfası (Dosyalar / AirDrop / WhatsApp …)
-        .sheet(isPresented: $vm.showShare) {
+        .sheet(isPresented: $vm.showShare, onDismiss: { vm.cleanUpShareFile() }) {
             if let url = vm.shareURL { ActivityView(items: [url]) }
         }
         // Telefondaki dosyadan geri yükle
@@ -325,6 +325,11 @@ final class BackupViewModel: ObservableObject {
             message = L.t("backup_upload_success")
         } catch CloudProviderError.cancelled {
             // sessiz
+        } catch CloudProviderError.permissionDenied {
+            // "Yükleme başarısız" demek izni onaylamayan kullanıcıyı yanıltıyor — hesabı seçtiğini
+            // biliyor. Eksik olanın izin olduğunu söyle ki kendi düzeltebilsin (Android paritesi).
+            logCloudFailure("upload", provider.id, CloudProviderError.permissionDenied)
+            message = L.t("cloud_permission_denied_message")
         } catch {
             logCloudFailure("upload", provider.id, error)
             message = L.t("backup_upload_failed")
@@ -339,6 +344,22 @@ final class BackupViewModel: ObservableObject {
             showShare = true
         } catch {
             message = L.t("backup_save_failed")
+        }
+    }
+
+    /// Paylaşım sayfası kapanınca geçici `.vfbackup`'ı siler.
+    ///
+    /// Dosya `tmp/` içinde kalıyordu ve ŞİFRESİZ de olabiliyor (kullanıcı şifrelemeyi kapatabilir):
+    /// tüm işlem geçmişinin düz metin kopyası, kimsenin sildiğini bilmediği bir yerde bekliyordu.
+    /// Paylaşım hedefi dosyayı sayfa kapanmadan kopyalar, yani silmek güvenli
+    /// (parite denetimi 2026-09-03, D-13).
+    func cleanUpShareFile() {
+        guard let url = shareURL else { return }
+        shareURL = nil
+        do {
+            try FileManager.default.removeItem(at: url)
+        } catch {
+            Log.warning("Geçici yedek dosyası silinemedi", error: error, category: .backup)
         }
     }
 
@@ -360,6 +381,9 @@ final class BackupViewModel: ObservableObject {
                 restoreProvider = provider
                 showFileList = true
             } catch CloudProviderError.cancelled {
+            } catch CloudProviderError.permissionDenied {
+                logCloudFailure("list", provider.id, CloudProviderError.permissionDenied)
+                message = L.t("cloud_permission_denied_message")
             } catch {
                 logCloudFailure("list", provider.id, error)
                 message = L.t("backup_read_failed")

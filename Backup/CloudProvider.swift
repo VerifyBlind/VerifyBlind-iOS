@@ -49,6 +49,11 @@ enum CloudProviderError: Error, CustomStringConvertible {
     case notAuthenticated
     case presentationFailed
     case cancelled
+    /// Hesap seçildi ama istenen kapsam ONAYLANMADI (Google'ın ayrıntılı izin ekranında kutucuk
+    /// işaretlenmeden "Devam" denebiliyor). İptalden AYRI tutulur: kullanıcı hesabını seçtiğini
+    /// bildiği için "giriş yapılamadı" demek yanıltıcı, eksik olanın izin olduğu söylenmeli
+    /// (Android `CloudLoginError.PERMISSION_DENIED` paritesi — parite denetimi 2026-09-03, D-7).
+    case permissionDenied
     case http(Int, String)
     case message(String)
 
@@ -57,6 +62,7 @@ enum CloudProviderError: Error, CustomStringConvertible {
         case .notAuthenticated:   return "notAuthenticated"
         case .presentationFailed: return "presentationFailed"
         case .cancelled:          return "cancelled"
+        case .permissionDenied:   return "permissionDenied"
         case .http(let c, let m): return "http(\(c): \(m))"
         case .message(let m):     return m
         }

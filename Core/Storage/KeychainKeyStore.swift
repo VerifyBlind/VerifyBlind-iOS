@@ -6,12 +6,16 @@ import LocalAuthentication
 ///
 /// İki RSA-2048 anahtar Keychain'de yaşar (Android `AndroidKeyStore` eşdeğeri):
 /// - **User key** — biyometrik-kapılı (`.userPresence`), ticket'in AES anahtarını çözer.
-///   Android `USER_KEY_ALIAS` (`setUserAuthenticationRequired(true)`, per-use auth) paritesi.
+///   Android `USER_KEY_ALIAS` paritesi: `setUserAuthenticationRequired(true)` + ZAMAN PENCERELİ
+///   doğrulama (`setUserAuthenticationParameters`, V6 — biyometri VEYA cihaz kilidi).
 /// - **History key** — biyometriksiz, history title/description çözer. Android `HISTORY_KEY_ALIAS`.
 ///
 /// Decrypt **OAEP-SHA1/MGF1-SHA1** (Android `keystoreOaepSpec` + sunucu user-key sarması). iOS Secure
 /// Enclave RSA desteklemediği için anahtarlar normal Keychain'de access-control ile yaşar; biyometrik
-/// gating kullanım anında (private key op) tetiklenir — Android per-use auth ile aynı davranış.
+/// gating kullanım anında (private key op) tetiklenir.
+///
+/// ⚠️ Eski yorum Android'i "per-use auth" diye anlatıyordu; V5'ten beri DOĞRU DEĞİL. Android da
+/// tek prompt kullanıyor (time-bound pencere), yani iki platform aynı davranışta.
 enum KeychainKeyStore {
 
     private static let userKeyTag    = Data("app.verifyblind.ios.userkey.v1".utf8)
@@ -47,8 +51,10 @@ enum KeychainKeyStore {
 
     /// Holder-of-key (Y-4): TEK Face ID/passcode promptuyla hem ticket'in AES anahtarını çözer hem de
     /// `message`'i user key ile RSA-PSS/SHA-256 imzalar. LAContext bir kez doğrulanır; her iki
-    /// private-key işlemi aynı doğrulanmış context'le yapılır (ek prompt yok). Android'de user key
-    /// auth-per-use olduğundan iki prompt gerekir; iOS'ta LAContext yeniden kullanımı tek prompta indirir.
+    /// private-key işlemi aynı doğrulanmış context'le yapılır (ek prompt yok). Android da TEK prompt
+    /// gösteriyor — user key time-bound olduğundan aynı pencerede hem decrypt hem imza yapılıyor
+    /// (`BiometricHelper.authenticateForKeyUse`). Eski yorum "Android'de iki prompt gerekir" diyordu
+    /// ve V5'ten beri yanlıştı.
     static func decryptAndSign(_ cipherBase64: String, message: String, reason: String) async throws -> (aesKey: String, signatureBase64: String) {
         let context = LAContext()
         try await authenticate(context: context, reason: reason)

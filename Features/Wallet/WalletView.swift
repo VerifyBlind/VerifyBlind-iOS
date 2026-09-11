@@ -211,8 +211,16 @@ struct WalletView: View {
         } catch {
             // Biyometrik iptal/ret = beklenen kullanıcı davranışı → event değil, breadcrumb (ContentView deseni).
             Log.info("Kimlik kaldırma biyometrik iptal", category: .flow)
+            // Ama kullanıcıya GÖRÜNÜR bir karşılık verilmeli: ekran hiç değişmediği için silme
+            // isteğinin düştüğü mü yoksa dokunuşun mu kaçtığı anlaşılmıyordu. Android burada
+            // `operation_cancelled` toast'ı gösteriyor (parite denetimi 2026-09-03, D-4).
+            appState.showToast(L.t("operation_cancelled"))
             return
         }
+        // personId cardId ile BİRLİKTE, SecureStore temizlenmeden önce yakalanır: geçmiş kaydı
+        // Android'de `pid` taşıyor, iOS'ta boş gidiyordu ve yedekten geri yüklenen satır sahibine
+        // bağlanamıyordu (parite denetimi 2026-09-03, D-14).
+        let personId = SecureStore.getPersonId()
         let cardId = SecureStore.getCardId()
         TicketStore.clear()
         SecureStore.clear()
@@ -227,6 +235,7 @@ struct WalletView: View {
                 description: L.t("history_card_deleted_desc"),
                 status: 1,
                 actionType: .deletedCard,
+                personId: personId ?? "",
                 cardId: cardId ?? ""
             )
         }

@@ -1,6 +1,10 @@
 import Foundation
 
-/// İşlem geçmişi mantığı — Android `HistoryFragment` (yükle, sil tombstone, revoke) portu.
+/// İşlem geçmişi mantığı — Android `HistoryFragment` (yükle, SERT sil, revoke) portu.
+///
+/// "tombstone" DEĞİL: sürekli bulut senkronu kaldırılınca silme kalıcı `DELETE`e geçti. Eski
+/// yorum hâlâ tombstone diyordu ve tam da bu, bir denetimde yanlış yönlendirmişti — satır kalırsa
+/// nonce `getAllNonces()`'ta durur ve o kayıt yedekten bir daha geri yüklenemez.
 @MainActor
 final class HistoryViewModel: ObservableObject {
     @Published var records: [HistoryRecord] = []

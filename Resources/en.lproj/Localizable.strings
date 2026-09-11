@@ -522,6 +522,9 @@
 "backup_invalid_file" = "This is not a valid backup file.";
 "backup_upload_success" = "Backup uploaded.";
 "backup_upload_failed" = "Upload failed. Check your connection and try again.";
+/* The account was chosen but the Drive scope was not granted — "sign-in failed" would be
+   misleading (parity with Android cloud_permission_denied_message). */
+"cloud_permission_denied_message" = "Backup permission was not granted. Tick the Google Drive checkbox on the permission screen and try again.";
 "restore_no_files" = "No backup files found.";
 "restore_pick_file" = "Choose a backup";
 "restore_password_title" = "Enter backup password";

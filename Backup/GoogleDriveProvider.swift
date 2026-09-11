@@ -50,7 +50,17 @@ final class GoogleDriveProvider: CloudProvider {
                 hint: nil,
                 additionalScopes: [Self.driveScope]
             ) { result, error in
-                if result?.user != nil {
+                if let user = result?.user {
+                    // Hesap geldi ama KAPSAM gelmemiş olabilir: ayrıntılı izin ekranında Drive
+                    // kutucuğu işaretlenmeden "Devam" denebiliyor. Burada başarı sayarsak yükleme
+                    // 403 ile düşüyor ve kullanıcı "giriş yaptım ama yükleme patlıyor" durumunda
+                    // kalıyordu; Android girişi başarısız sayıp izni söylüyor
+                    // (parite denetimi 2026-09-03, D-7).
+                    guard user.grantedScopes?.contains(Self.driveScope) == true else {
+                        Log.warning("Drive giriş başarısız: kapsam onaylanmadı", category: .flow)
+                        cont.resume(throwing: CloudProviderError.permissionDenied)
+                        return
+                    }
                     Log.info("Google Drive OAuth başarılı", category: .flow)
                     cont.resume()
                 } else if let error = error {

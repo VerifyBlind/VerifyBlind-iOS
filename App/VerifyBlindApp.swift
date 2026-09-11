@@ -34,7 +34,11 @@ struct VerifyBlindApp: App {
 
     /// `app.verifyblind.com` verify deep-link'ini AppState'e koyar; RootView login akışını başlatır.
     private func handleVerifyURL(_ url: URL) {
-        guard url.host == "app.verifyblind.com" else { return }
+        // Şema + host + `/request` — kural `QRPayloadParser` ile PAYLAŞILIR ki taranan QR ile
+        // gelen deep-link aynı kapıdan geçsin. Eskiden yalnız host'a bakılıyordu; aynı host'taki
+        // başka bir sayfanın bağlantısı da login akışını açıyordu
+        // (Android `handleIntent` paritesi — parite denetimi 2026-09-03, D-1).
+        guard QRPayloadParser.isVerifyURL(url) else { return }
         Log.info("Verify deep-link alındı", category: .flow)
         appState.pendingVerifyURL = url.absoluteString
     }

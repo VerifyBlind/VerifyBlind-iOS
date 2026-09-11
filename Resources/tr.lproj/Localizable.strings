@@ -522,6 +522,9 @@
 "backup_invalid_file" = "Bu geçerli bir yedek dosyası değil.";
 "backup_upload_success" = "Yedek yüklendi.";
 "backup_upload_failed" = "Yükleme başarısız. Bağlantınızı kontrol edip tekrar deneyin.";
+/* Hesap seçildi ama Drive kapsamı onaylanmadı — "giriş yapılamadı" demek yanıltıcı olur
+   (Android cloud_permission_denied_message paritesi). */
+"cloud_permission_denied_message" = "Yedekleme izni verilmedi. İzin ekranındaki Google Drive kutucuğunu işaretleyip tekrar deneyin.";
 "restore_no_files" = "Yedek dosyası bulunamadı.";
 "restore_pick_file" = "Bir yedek seçin";
 "restore_password_title" = "Yedek parolasını girin";
