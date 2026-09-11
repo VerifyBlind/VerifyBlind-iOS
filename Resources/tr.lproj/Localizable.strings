@@ -540,7 +540,7 @@
 "legal_terms_link_dpa" = "Veri İşleme Sözleşmesi";
 "legal_terms_link_disclosure" = "Aydınlatma Metni";
 "legal_terms_summary_title" = "Kısaca";
-"legal_terms_summary_body" = "· Kimlik numaranız cihazınızdan ve güvenli enclave'den dışarı çıkmaz.\n· Uygulamayı yalnızca kendi kimlik kartınızla kullanabilirsiniz.\n· Uygulama resmi kimlik belgesi yerine geçmez.\n· 18 yaşından büyük olmalısınız.\n· Tüm verilerinizi istediğiniz an Ayarlar'dan silebilirsiniz.";
+"legal_terms_summary_body" = "· Kimlik numaranız cihazınızdan ve güvenli enclave'den dışarı çıkmaz.\n· Uygulamayı yalnızca kendi kimlik kartınızla kullanabilirsiniz.\n· Uygulama resmi kimlik belgesi yerine geçmez.\n· 15 yaşını doldurmuş olmalısınız.\n· Tüm verilerinizi istediğiniz an Ayarlar'dan silebilirsiniz.";
 "legal_terms_checkbox" = "Kullanım Şartları, Veri İşleme Sözleşmesi ve Aydınlatma Metni'ni okudum, kabul ediyorum.";
 "legal_terms_accept" = "Kabul et ve devam et";
 "legal_terms_decline_hint" = "Kabul etmiyorsanız uygulamayı kapatabilirsiniz. VerifyBlind bu metinler kabul edilmeden kullanılamaz.";
