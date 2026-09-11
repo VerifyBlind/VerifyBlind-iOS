@@ -528,6 +528,12 @@ struct AppConfigResponse: Codable {
     /// Yürürlükteki hukuki metin demeti sürümü. Cihazdaki kabulden yeniyse yeniden onay istenir.
     /// Boş/nil = sunucu bir şey dayatmıyor; istemci gömülü taban sürümünde kalır (bkz. `LegalTerms`).
     let legalTermsVersion: String?
+    /// Yapay zekâ asistanı açık mı — GÖRÜNÜRLÜK bilgisi, yetki değil (sunucu kapısı
+    /// `ChatbotController`'da). Asistan 2026-08-28'de kapatıldı ve kapalıyken uç 200 + "SSS'ye
+    /// bakın" mesajı dönüyor, yani istemci bunu okumazsa kullanıcı hiçbir soruya cevap alamayan
+    /// bir asistan görüyor. nil/false → giriş noktası GİZLİ (fail-closed; landing-site de öyle
+    /// yapıyor). Bkz. parite denetimi 2026-09-03, O-10.
+    let chatbotEnabled: Bool?
     enum CodingKeys: String, CodingKey {
         case minimumAndroidVersion = "minimum_android_version"
         case minimumIosVersion = "minimum_ios_version"
@@ -535,6 +541,7 @@ struct AppConfigResponse: Codable {
         case environment
         case demoVersionIos = "demo_version_ios"
         case legalTermsVersion = "legal_terms_version"
+        case chatbotEnabled = "chatbot_enabled"
     }
 }
 

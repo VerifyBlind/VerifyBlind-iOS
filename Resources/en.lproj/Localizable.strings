@@ -467,6 +467,9 @@
    error → separate, neutral copy. The system `localizedDescription` is never shown to the user. */
 "biometric_cancelled_title" = "Operation Cancelled";
 "biometric_cancelled_message" = "Authentication was not completed. You can try again whenever you are ready.";
+/* Not a cancellation but a real biometric failure (lockout, sensor busy) — parity with Android
+   `biometric_error_title`. */
+"biometric_error_title" = "Authentication Failed";
 "biometric_error_retry_message" = "Authentication could not be completed. Please try again.";
 "biometric_error_lockout_message" = "Too many failed attempts. Continue with your device passcode, or try again in a few minutes.";
 

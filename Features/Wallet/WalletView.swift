@@ -92,7 +92,7 @@ struct WalletView: View {
             Text(removeError ?? "")
         }
         .sheet(isPresented: $showHowItWorks) {
-            HelpView(onBack: { showHowItWorks = false })
+            HelpView(onBack: { showHowItWorks = false }, chatbotEnabled: appState.chatbotEnabled)
         }
         .onAppear { appState.refresh() }
     }

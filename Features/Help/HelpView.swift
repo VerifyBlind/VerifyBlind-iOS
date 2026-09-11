@@ -5,6 +5,10 @@ import SwiftUI
 /// "Destek Asistanı" butonu portlanmış Chatbot'u sheet olarak açar.
 struct HelpView: View {
     let onBack: () -> Void
+    /// Asistan giriş noktası gösterilsin mi — sunucudaki `chatbot_enabled` (bkz. `AppState`).
+    /// Parametre, `@EnvironmentObject` DEĞİL: bu ekran hem NavigationStack hedefi hem de sheet
+    /// olarak sunuluyor ve eksik bir environment nesnesi çalışma anında çökme demektir.
+    var chatbotEnabled: Bool = false
     @State private var showChatbot = false
 
     var body: some View {
@@ -13,7 +17,9 @@ struct HelpView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    chatbotButton
+                    // Asistan sunucuda kapalıyken kart HİÇ gösterilmez: kapalı uç 200 + "SSS'ye
+                    // bakın" döndüğü için giriş noktası cevapsız bir sohbet vaat ediyordu.
+                    if chatbotEnabled { chatbotButton }
                     quickStartSection
                     screenGuidesSection
                     faqSection

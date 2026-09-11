@@ -237,6 +237,22 @@ final class RegisterViewModel: ObservableObject {
                     documentType: mrz.documentType,
                     handshakeNonce: session.nonce
                 )
+
+                // Çip Active Authentication'ı DESTEKLİYOR (DG15 var) ama imza gelmedi → bu bir BELGE
+                // sorunu değil, OKUMA sorunudur. `DocumentSupport` boş imzayı `.noActiveAuth` sayıp
+                // "bu belge desteklenmiyor" diyordu; kullanıcı geçici bir çip arızası yüzünden geri
+                // dönüşü olmayan bir ekranda kalıyordu. Android'de bu vakaya DocumentSupport hiç
+                // ulaşmıyor: okuyucu `NfcActiveAuthException` atıyor ve akış "kartı yeniden okutun"
+                // yoluna giriyor (parite denetimi 2026-09-03, O-8).
+                //
+                // ⚠️ Sayaç sıfırlamasından ÖNCE: `nfcAttempt = 0` bu kontrolün üstünde olsaydı her
+                // başarılı okuma bütçeyi tazeler ve 3 denemelik sınır hiç dolmazdı (sonsuz döngü).
+                if let dg15 = result.dg15, !dg15.isEmpty, result.activeAuthSignature.isEmpty {
+                    await retryOrFail(reason: "AA destekleniyor ama imza boş döndü",
+                                      nfcReason: "aa_failed")
+                    return
+                }
+
                 nfcAttempt = 0
 
                 // Yaş kapısı DocumentSupport'tan ÖNCE: 15 yaşını doldurmamış birinin kartı zaten
@@ -588,6 +604,11 @@ final class RegisterViewModel: ObservableObject {
             personId: unified.personId,
             cardId: unified.cardId
         )
+        // Kart ekleme bitti → KVKK onayını SIFIRLA ki bir sonraki partner doğrulamasında rıza
+        // yeniden istensin. Bayrak açık kalınca `ConsentBottomSheet` kutusu ÖN-İŞARETLİ açılıyor ve
+        // kullanıcı hiç dokunmadan onaylayabiliyordu — ön-işaretli rıza, açık rıza değildir.
+        // Android bunu `RegistrationSuccess` olayında yapıyor (parite denetimi 2026-09-03, O-1).
+        AppPrefs.kvkkConsentAccepted = false
         Log.info("Kayıt başarılı (cardId set)", category: .flow)
     }
 

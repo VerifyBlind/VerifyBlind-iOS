@@ -30,6 +30,16 @@ enum PartnerManager {
         load()
     }
 
+    /// "Verilerimi Sil" — önbelleği tümüyle kaldırır (Android `performFullReset`'in `partner_cache` +
+    /// `VerifyBlind_Partners` temizliği paritesi).
+    ///
+    /// Tam temizlikten SONRA burada kalan kayıtlar, kullanıcının hangi partnerlerle doğrulama
+    /// yaptığını (ad + logo) cihazda tutmaya devam ediyordu — `DataWipe` her izi sildiğini
+    /// söylerken (parite denetimi 2026-09-03, O-3).
+    static func clear() {
+        d.removeObject(forKey: key)
+    }
+
     private static func load() -> [String: PartnerItem] {
         guard let data = d.data(forKey: key),
               let map = try? JSONDecoder().decode([String: PartnerItem].self, from: data) else {

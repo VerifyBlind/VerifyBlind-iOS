@@ -19,6 +19,15 @@ enum UserFacingError {
         if let api = error as? APIClientError, let key = api.suggestedTitleKey {
             return L.t(key)
         }
+        // Biyometrik durumlar kendi başlığını hak eder: "Sistem Hatası" bunları bizim arızamız gibi
+        // gösteriyordu (bkz. `message(for:)`).
+        if let keychain = error as? KeychainKeyStoreError {
+            switch keychain {
+            case .authCancelled: return L.t("biometric_cancelled_title")
+            case .authFailed:    return L.t("biometric_error_title")
+            default:             break
+            }
+        }
         if NetworkStatus.isTransportFailure(error) { return L.t("connection_error_title") }
         return L.t(internalFallbackKey ?? "error_system_title")
     }
@@ -31,6 +40,13 @@ enum UserFacingError {
     ///   yokken "sunucu hatası oluştu" demek arızayı yanlış tarafa yazar.
     static func message(for error: Error, internalFallbackKey: String? = nil) -> String {
         if let api = error as? APIClientError, let text = api.errorDescription {
+            return text
+        }
+        // `KeychainKeyStoreError` yerelleştirilmiş metnini ZATEN üretiyordu (deneme kilidi / tekrar
+        // dene) ama bu fonksiyon ona hiç bakmadığı için metin hiçbir ekrana ULAŞMIYORDU: Face ID
+        // kilitlenen kullanıcı "beklenmeyen hata" görüyor, ne yapacağı söylenmiyordu. Anahtar
+        // çevriliydi, yol bağlı değildi (parite denetimi 2026-09-03, O-2).
+        if let keychain = error as? KeychainKeyStoreError, let text = keychain.errorDescription {
             return text
         }
         if NetworkStatus.isTransportFailure(error) { return L.t("error_connection_generic") }

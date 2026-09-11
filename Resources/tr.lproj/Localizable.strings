@@ -467,6 +467,9 @@
    ayrı, nötr metin. Sistemin `localizedDescription`'ı hiçbir zaman ekrana basılmaz. */
 "biometric_cancelled_title" = "İşlem İptal Edildi";
 "biometric_cancelled_message" = "Kimlik doğrulama tamamlanmadı. Hazır olduğunuzda tekrar deneyebilirsiniz.";
+/* İptal DEĞİL, gerçek bir biyometrik başarısızlık (deneme kilidi, sensör meşgul) — Android
+   `biometric_error_title` paritesi. */
+"biometric_error_title" = "Kimlik Doğrulanamadı";
 "biometric_error_retry_message" = "Kimlik doğrulama tamamlanamadı. Lütfen tekrar deneyin.";
 "biometric_error_lockout_message" = "Çok fazla başarısız deneme yapıldı. Cihaz şifrenizle devam edin ya da birkaç dakika sonra tekrar deneyin.";
 

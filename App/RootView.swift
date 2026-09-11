@@ -61,7 +61,7 @@ struct RootView: View {
                     BackupSettingsView(onBack: { popPath() })
                         .navigationBarHidden(true)
                 case .help:
-                    HelpView(onBack: { popPath() })
+                    HelpView(onBack: { popPath() }, chatbotEnabled: appState.chatbotEnabled)
                         .navigationBarHidden(true)
                 case .faq:
                     FaqWebView(onBack: { popPath() })

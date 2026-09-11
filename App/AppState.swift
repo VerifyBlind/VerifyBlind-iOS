@@ -10,6 +10,11 @@ final class AppState: ObservableObject {
     /// Demo modu (kartsız cihaz testi). Cihaz sürümü, admin panelden tanımlanan iOS demo sürümüyle
     /// birebir eşleşirse açılır (`loadConfig`'te belirlenir). Android `demoEnabled` paritesi.
     @Published var demoEnabled: Bool = false
+    /// Yapay zekâ asistanı açık mı (sunucudan, `app-config`). VARSAYILAN KAPALI: asistan sunucuda
+    /// kapalıyken Yardım ekranındaki giriş noktası duruyordu ve kullanıcı hiçbir soruya cevap
+    /// alamayan bir sohbete giriyordu (parite denetimi 2026-09-03, O-10). Android'de bu ekrana
+    /// giden bir giriş hiç yok.
+    @Published var chatbotEnabled: Bool = false
     /// Register/Login tam-ekran akışı açıkken otomatik biyometrik kilidi bastır — NFC/kamera/Face ID
     /// sistem UI'sı akış ortasında .background tetikleyip sahte kilit/döngü yaratmasın.
     @Published var suppressAutoLock = false
@@ -74,6 +79,9 @@ final class AppState: ObservableObject {
             demoEnabled = !demoVersion.isEmpty && demoVersion == current
             // Hukuki metin sürümü: yükseltilmişse overlay kendiliğinden yeniden açılır.
             legalTermsServerVersion = cfg.legalTermsVersion
+            // Asistan görünürlüğü. Alan yoksa/false ise GİZLİ kalır; config hiç yüklenemezse de
+            // aşağıdaki catch'e düşülür ve varsayılan `false` korunur (fail-closed).
+            chatbotEnabled = cfg.chatbotEnabled ?? false
         } catch {
             Log.warning("AppConfig yüklenemedi", error: error, category: .app)
         }

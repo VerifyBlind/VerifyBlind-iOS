@@ -115,6 +115,10 @@ final class LivenessViewModel: ObservableObject {
     private var challenges: [LivenessAction] = []
     private var index = 0
     private var chipEmbedding: [Float]?
+    /// Çip fotoğrafı VERİLDİ ama görüntü çözülemedi (ör. JPEG2000 DG2). "Çip yok" durumundan
+    /// ayırt edilmeli: orada eşleştirme beklenmez, burada eşleştirme YAPILAMADI ve sessizce
+    /// geçilirse doğrulanmamış kayıt oluşur (Android `chipDecodeFailed` paritesi).
+    private var chipDecodeFailed = false
     private var isIdentityVerified = false
     private var bestMatchScore: Float = 0
     private var bestSavedMatchScore: Float = -1
@@ -374,12 +378,24 @@ final class LivenessViewModel: ObservableObject {
         runStartedAtMs = Date().timeIntervalSince1970 * 1000
         faceMissingWarning = nil
         poseSettled = false
+        // `chipEmbedding` bilerek korunur (bir kez üretilir, koşular arası yeniden kullanılır);
+        // çözülememe bayrağı da onunla aynı ömre sahip olmalı ki "Tekrar Dene" kapıyı açmasın.
+        chipDecodeFailed = chipDecodeFailed && chipEmbedding == nil
         smileGate.reset()   // yeni oturum → nötr yüz henüz görülmedi
         analyzer.resetDiagnostics()
     }
 
     private func prepareChipEmbeddingIfNeeded() {
-        guard chipEmbedding == nil, let data = chipPhotoData, let cg = UIImage(data: data)?.cgImage else { return }
+        guard chipEmbedding == nil, let data = chipPhotoData else { return }
+        guard let cg = UIImage(data: data)?.cgImage else {
+            // Çip fotoğrafı VERİLDİ ama çözülemedi. Bayrak şart: aşağıdaki başarı kapısı bunu
+            // "çip yok" sanıp sessizce geçiyordu — yani yüz eşleştirmesi HİÇ yapılmadan kayıt
+            // tamamlanabiliyordu (parite denetimi 2026-09-03, O-5).
+            chipDecodeFailed = true
+            Log.error("Çip fotoğrafı çözülemedi — cihazda yüz eşleştirmesi yapılamayacak",
+                      category: .liveness)
+            return
+        }
         let eyes = Self.detectEyes(in: cg)
         if let aligned = FaceAligner.alignedImage(from: cg, leftEye: eyes.left, rightEye: eyes.right) {
             chipEmbedding = embedder.embedding(from: aligned)
@@ -721,7 +737,12 @@ final class LivenessViewModel: ObservableObject {
         // çöpe atmasını engellemek. Diğer koşullar (jestler, selfie varlığı) aynen aranır.
         // Android `LivenessActivity.finishSuccess` paritesi.
         let verified = isIdentityVerified || (streamer?.hasEnclaveApproval == true)
-        let hasChip = chipEmbedding != nil
+        // Çip fotoğrafı VERİLMİŞSE kapı aranır — embedding üretilemediyse de. Eski hâli
+        // `chipEmbedding != nil` idi: çözülemeyen bir çip "çip yok" sayılıyor ve eşleştirme
+        // sessizce ATLANIYORDU. Karar yine `verified`'e kalıyor, yani enclave onayı varsa akış
+        // geçer (yukarıdaki iki-yol notu); yalnız cihazda da enclave'de de doğrulanmamış kayıt
+        // artık geçemez (parite denetimi 2026-09-03, O-5).
+        let hasChip = chipEmbedding != nil || chipDecodeFailed
         let score = bestMatchScore
         let jpeg = selfieJPEG
         let cropJPEG = antiSpoofCropJPEGLogic

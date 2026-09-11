@@ -270,8 +270,14 @@ enum KeychainKeyStoreError: Error, CustomStringConvertible {
     var localizedDescription: String { description }
 }
 
-/// Kullanıcıya gösterilecek metin. Akışların `fail(...)` çağrıları `(error as? LocalizedError)?.errorDescription`
-/// okuduğu için biyometrik durumlar burada tek yerden yerelleştirilir — sistemin teknik metni ekrana ÇIKMAZ.
+/// Kullanıcıya gösterilecek metin — biyometrik durumlar burada tek yerden yerelleştirilir; sistemin
+/// teknik metni ekrana ÇIKMAZ.
+///
+/// ⚠️ Akışlar bu metni DOĞRUDAN okumaz (eski yorum öyle diyordu ve BAYATTI): `fail(...)` çağrıları
+/// `UserFacingError.message(for:)` üzerinden geçiyor. O fonksiyon bir süre `LocalizedError`'a hiç
+/// bakmadı, dolayısıyla buradaki metinler üretiliyor ama hiçbir ekrana ulaşmıyordu. Bağ artık
+/// `UserFacingError` içinde açıkça kurulu (parite denetimi 2026-09-03, O-2) — oradaki `KeychainKeyStoreError`
+/// dalını kaldıran biri bu metinleri yeniden sessizce ölü bırakır.
 extension KeychainKeyStoreError: LocalizedError {
     var errorDescription: String? {
         switch self {

@@ -29,6 +29,12 @@ enum DataWipe {
         // yazılınca ortaya çıktı: sıfırlamadan sonra hukuki kapı geri gelmiyordu.
         LegalTerms.clearAcceptance()
 
+        // C3. Partner önbelleği. `AppPrefs.clearAll()` sayılı anahtar listesini siliyor ve partner
+        // önbelleği o listede DEĞİL; Android `partner_cache` + `VerifyBlind_Partners` prefs'lerini
+        // tümüyle siliyordu. Kalan kayıtlar kullanıcının hangi partnerlerle doğrulama yaptığını
+        // (ad + logo) cihazda tutuyordu (parite denetimi 2026-09-03, O-3).
+        PartnerManager.clear()
+
         // D. Hassas tanımlayıcılar (Keychain) + RSA anahtarları
         SecureStore.clear()
         KeychainKeyStore.deleteUserKey()

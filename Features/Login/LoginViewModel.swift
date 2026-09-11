@@ -260,7 +260,14 @@ final class LoginViewModel: ObservableObject {
         if case let APIClientError.http(_, body) = error, body?.errorCode == "ERR_TICKET_REVOKED" {
             // Ticket sunucu tarafında iptal edildi → yerel kaydı sil. Akış kapanınca RootView'in
             // onDismiss'i AppState.refresh() çağırır → kayıtsız (kimlik ekleme) durumuna dönülür.
+            //
+            // SecureStore da temizlenir (Android `clearTicket` paritesi): yalnız ticket silinince
+            // `SecureStore.getCardId()` iptal edilmiş kartı döndürmeye devam ediyor, geçmiş filtresi
+            // o kartın kayıtlarını göstermeyi sürdürüyor ve `AppState.currentCardId` dolu kalıyordu
+            // (parite denetimi 2026-09-03, O-4). Kullanıcı anahtarı BİLEREK silinmez — iptalde
+            // anahtarı silmemek iki platformda da ortak davranış, ayrı bir karar.
             TicketStore.clear()
+            SecureStore.clear()
             fail(title: L.t("ticket_revoked_title"),
                  message: body?.error ?? L.t("ticket_revoked_message"),
                  error: nil)
