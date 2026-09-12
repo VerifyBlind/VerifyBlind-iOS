@@ -59,6 +59,8 @@ final class LivenessLogicTests: XCTestCase {
                     "feedback_prompt_yes", "feedback_prompt_no", "feedback_subject_card_add",
                     "feedback_step_mrz", "feedback_step_nfc", "feedback_step_liveness", "feedback_step_submit",
                     "scan_mrz_instruction", "scan_mrz_subtitle",
+                    "scan_mrz_instruction_prefix", "scan_mrz_instruction_emphasis",
+                    "scan_mrz_instruction_suffix", "scan_mrz_card_hint_a11y",
                     "btn_retry", "btn_cancel", "btn_close"]
         for key in keys {
             XCTAssertNotEqual(L.t(key), key, "Eksik lokalizasyon anahtarı: \(key)")

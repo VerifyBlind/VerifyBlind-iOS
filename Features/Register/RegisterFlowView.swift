@@ -319,6 +319,7 @@ private struct MRZScanStepView: View {
     @StateObject private var camera = CameraController(position: .back)
     @State private var scanner = MRZScanner()
     @State private var scanLineProgress: CGFloat = 0
+    @State private var arrowBounce: CGFloat = 0
 
     var body: some View {
         ZStack {
@@ -363,13 +364,42 @@ private struct MRZScanStepView: View {
                             .position(x: frameX + frameW / 2,
                                       y: frameY + 4 + (frameH - 8) * scanLineProgress)
                             .animation(.linear(duration: 1.6).repeatForever(autoreverses: true), value: scanLineProgress)
+
+                        // Kart görseli + zıplayan ok (Android paritesi): kullanıcının
+                        // gözü kameranın ortasında olduğu için hangi yüzün istendiğini
+                        // metin değil, bu görsel anlatır.
+                        //
+                        // Genişlik, çerçevenin ÜSTÜNDE kalan boşluğa göre kısılır: sabit
+                        // oranda (frameW*0.83) çizilince kart iPhone SE'de ekran dışına,
+                        // büyük cihazlarda da çentiğin altına taşıyordu.
+                        // GeometryReader yalnız alt güvenli alanı yok sayar; üstte geo
+                        // zaten güvenli alanın altından başlar, bu yüzden çentik payı
+                        // eklemeye gerek yok — sadece küçük bir nefes payı bırakılır.
+                        let hintTopInset: CGFloat = 8
+                        let hintMaxW = MRZCardHint.widthThatFits(
+                            available: frameY - hintTopInset - 10,
+                            preferred: frameW * 0.83
+                        )
+                        if hintMaxW > 0 {
+                            MRZCardHint(cardW: hintMaxW, arrowOffset: arrowBounce)
+                                .frame(width: geo.size.width)
+                                .position(x: geo.size.width / 2,
+                                          y: frameY - MRZCardHint.totalHeight(cardW: hintMaxW) / 2 - 10)
+                        }
                     }
                     .ignoresSafeArea(edges: .bottom)
 
                     // Bottom instructions
                     VStack(spacing: 4) {
-                        Text(L.t("scan_mrz_instruction"))
+                        // "ARKA" amber+bold: kırmızı kamera ekranında hata sinyali okunur.
+                        (Text(L.t("scan_mrz_instruction_prefix"))
                             .font(.system(size: 16, weight: .semibold)).foregroundColor(.white)
+                         + Text(L.t("scan_mrz_instruction_emphasis"))
+                            .font(.system(size: 19, weight: .heavy))
+                            .foregroundColor(Color(red: 1, green: 0.702, blue: 0.192))  // #FFB331
+                         + Text(L.t("scan_mrz_instruction_suffix"))
+                            .font(.system(size: 16, weight: .semibold)).foregroundColor(.white))
+                            .accessibilityLabel(L.t("scan_mrz_instruction"))
                         Text(L.t("scan_mrz_subtitle"))
                             .font(.system(size: 13)).foregroundColor(Color(white: 0.69))
                             .multilineTextAlignment(.center)
@@ -381,6 +411,10 @@ private struct MRZScanStepView: View {
                 .onAppear {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                         scanLineProgress = 1
+                        // Android startArrowAnimation(): 900ms, 0→10→0 zıplama.
+                        withAnimation(.easeOut(duration: 0.45).repeatForever(autoreverses: true)) {
+                            arrowBounce = 10
+                        }
                     }
                 }
             }
@@ -411,6 +445,72 @@ private struct MRZScanStepView: View {
             Image(systemName: "video.slash.fill").font(.system(size: 40)).foregroundStyle(.white)
             Text(L.t("camera_permission_required")).foregroundStyle(.white)
         }
+    }
+}
+
+/// Kimlik kartının ARKA yüzünü, MRZ bölgesi kesikli kırmızı çerçeveyle işaretlenmiş
+/// halde gösterir; altında tarama çerçevesine doğru zıplayan bir ok durur.
+/// Android `layoutCardVisual` + `viewMrzZone` + `ivMrzArrow` eşdeğeri.
+private struct MRZCardHint: View {
+    let cardW: CGFloat
+    let arrowOffset: CGFloat
+
+    /// Android layout_constraintDimensionRatio="1.586:1".
+    private static let cardRatio: CGFloat = 1.586
+    private static let arrowSize: CGFloat = 28
+    /// Kart ile ok arası + okun zıplama payı (Android: 6dp margin).
+    private static let arrowGap: CGFloat = 6
+
+    static func totalHeight(cardW: CGFloat) -> CGFloat {
+        cardW / cardRatio + arrowGap + arrowSize
+    }
+
+    /// `available` dikey boşluğa sığan en geniş kart genişliği (en fazla `preferred`).
+    /// Boşluk ok + minimum kart için bile yetmiyorsa 0 döner → ipucu çizilmez.
+    static func widthThatFits(available: CGFloat, preferred: CGFloat) -> CGFloat {
+        let forCard = available - arrowGap - arrowSize
+        guard forCard > 0 else { return 0 }
+        let fitted = min(preferred, forCard * cardRatio)
+        return fitted >= minCardW ? fitted : 0
+    }
+
+    /// Bu genişliğin altında kart okunaksız hale gelir; hiç göstermemek daha iyi.
+    private static let minCardW: CGFloat = 120
+
+    var body: some View {
+        let cardH = cardW / Self.cardRatio
+
+        VStack(spacing: Self.arrowGap) {
+            ZStack(alignment: .bottom) {
+                Image("kimlikCard")
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: cardW, height: cardH)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+
+                // MRZ bölgesi: kartın alt %38'i (Android layout_constraintHeight_percent).
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color(red: 1, green: 0, blue: 0).opacity(0.094))  // #18FF0000
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .strokeBorder(
+                                Color(red: 0.933, green: 0.133, blue: 0.133),  // #EE2222
+                                style: StrokeStyle(lineWidth: 2.5, dash: [10, 5])
+                            )
+                    )
+                    .frame(width: cardW - 6, height: cardH * 0.38)
+                    .padding(.bottom, 3)
+            }
+            .shadow(color: .black.opacity(0.5), radius: 8, y: 2)
+
+            Image(systemName: "arrow.down")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundColor(Color(red: 0, green: 0.851, blue: 1))  // #00D9FF
+                .frame(width: Self.arrowSize, height: Self.arrowSize)
+                .offset(y: arrowOffset)
+        }
+        .accessibilityElement()
+        .accessibilityLabel(L.t("scan_mrz_card_hint_a11y"))
     }
 }
 

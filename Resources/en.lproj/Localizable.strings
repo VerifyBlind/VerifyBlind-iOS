@@ -391,6 +391,10 @@
 "step_nfc" = "NFC";
 "step_face" = "Face";
 "scan_mrz_instruction" = "Scan the Back of Your ID Card";
+"scan_mrz_instruction_prefix" = "Scan the ";
+"scan_mrz_instruction_emphasis" = "BACK";
+"scan_mrz_instruction_suffix" = " of Your ID Card";
+"scan_mrz_card_hint_a11y" = "Back of the ID card; the machine-readable zone at the bottom is outlined in red";
 "scan_mrz_subtitle" = "Show the back of your ID card to the camera\nand fit it inside the frame";
 "scan_qr_instruction" = "Align QR Code with the frame";
 "nfc_card_searching" = "Searching for card...";

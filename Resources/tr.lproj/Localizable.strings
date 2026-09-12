@@ -391,6 +391,10 @@
 "step_nfc" = "NFC";
 "step_face" = "Yüz";
 "scan_mrz_instruction" = "Kimlik Kartının Arka Yüzünü Okutun";
+"scan_mrz_instruction_prefix" = "Kimlik Kartının ";
+"scan_mrz_instruction_emphasis" = "ARKA";
+"scan_mrz_instruction_suffix" = " Yüzünü Okutun";
+"scan_mrz_card_hint_a11y" = "Kimlik kartının arka yüzü; alttaki makine okunabilir bölge kırmızı çerçeveyle işaretli";
 "scan_mrz_subtitle" = "Kartın arka yüzünü kameraya gösterin\nve çerçevenin içine sığdırın";
 "scan_qr_instruction" = "QR Kodunu çerçeveye hizalayın";
 "nfc_card_searching" = "Kart aranıyor...";
