@@ -506,6 +506,10 @@ final class RegisterViewModel: ObservableObject {
             let encKey = try CryptoUtils.rsaEncrypt(aesKey, publicKeyBase64: session.enclavePubKey)
             let req = RegistrationRequest(
                 encryptedKey: encKey, aesBlob: aesBlob, countryIsoCode: scanned.issuingState,
+                // Nonce'un DÜZ kopyası — relay bunu tek-kullanımlık olarak tüketir (şifreli yükü
+                // açamadığı için içerideki asıl nonce'u göremez). Enclave ikisinin EŞLEŞTİĞİNİ
+                // doğrular; buraya yanlış değer yazmak saldırgana kazanç sağlamaz. Android paritesi.
+                nonce: session.nonce,
                 // Ölçüm satırlarını canlılık sırasındaki karelerle birleştiren izleme numarası.
                 // Şifreli yükün DIŞINDA: relay'in görmesi gerekir, enclave'in bilmesine gerek yok.
                 flowId: flowId,

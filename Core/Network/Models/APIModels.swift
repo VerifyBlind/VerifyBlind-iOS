@@ -117,6 +117,14 @@ struct RegistrationRequest: Codable {
     var encryptedKey: String
     var aesBlob: String
     var countryIsoCode: String = ""
+    /// Handshake nonce'unun DÜZ METİN kopyası — relay'in tek-kullanımlık tüketimi için.
+    ///
+    /// Nonce asıl olarak şifreli yükün İÇİNDE gider; relay onu göremediği için kayıt akışında
+    /// replay koruması yoktu (aynı yük 15 dk boyunca tekrar gönderilebiliyordu). Bu kopya relay'in
+    /// hangi nonce'u tüketeceğini bilmesini sağlar; enclave ikisinin EŞLEŞTİĞİNİ doğrular, yani
+    /// buraya yanlış değer yazmak işe yaramaz. Nonce zaten gizli değildir (handshake yanıtında
+    /// düz metin gelir). Göndermemek sunucuda APP_UPDATE_REQUIRED ile reddedilir.
+    var nonce: String? = nil
     /// Ölçüm satırlarını canlılık sırasındaki karelerle birleştiren izleme numarası.
     /// Şifreli yükün DIŞINDA: relay'in görmesi gerekir, enclave'in bilmesine gerek yok.
     /// Kimlikle bağ taşımaz.
@@ -130,6 +138,7 @@ struct RegistrationRequest: Codable {
         case encryptedKey = "encrypted_key"
         case aesBlob = "aes_blob"
         case countryIsoCode = "country_iso_code"
+        case nonce
         case flowId = "flow_id"
         case candidateMetrics = "candidate_metrics"
     }
