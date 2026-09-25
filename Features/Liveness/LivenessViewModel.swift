@@ -113,9 +113,6 @@ final class LivenessViewModel: ObservableObject {
     /// Başarıda kayıt yüküne giren olay kanıtı (ana kuyrukta okunur).
     private(set) var choreographyProof: ChoreographyProof?
 
-    /// Kılavuzdaki "Sizden sırayla N hareket istenecek" için.
-    var eventCountForGuide: Int { events.count }
-
     let camera = CameraController(position: .front)
     private let analyzer = FaceAnalyzer()
     private let embedder = FaceEmbedder()

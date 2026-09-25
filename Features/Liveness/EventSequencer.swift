@@ -477,8 +477,13 @@ struct EventSequencer {
         return .ok
     }
 
+    /// Kırpma sayılan kapanış: gözlerden BİRİNİN kapanması yeter (2026-09-25, kullanıcı kararı).
+    /// Komut emojisi (😉) tek göz kırpmayı gösteriyor ve sahada tek gözle kırpan algılanmadı.
+    /// Güvenlik kaybı yok: fotoğraf tek gözünü de kırpamaz; istenen, komuta canlı bir tepki.
+    /// Açılış (kenarın sıfırlanması, `eyesOpen`) İKİ gözün de açılmasını ister — tek göz
+    /// kırpmanın ortasında sayaç ikinci kez tetiklenmesin. Android `EventCollector.isClosing`.
     private func eyesClosedNow(_ s: FaceSignals) -> Bool {
-        s.leftEyeOpen < Self.eyeClosed && s.rightEyeOpen < Self.eyeClosed
+        min(s.leftEyeOpen, s.rightEyeOpen) < Self.eyeClosed
     }
 
     private func eyesOpen(_ s: FaceSignals) -> Bool {

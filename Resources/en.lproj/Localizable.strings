@@ -163,7 +163,7 @@
 "liveness_face_mouth_open" = "Open Your Mouth 😮";
 "liveness_face_double_blink" = "Blink Twice 😉😉";
 "liveness_did_mouth_open" = "you opened your mouth";
-"liveness_ev_hint_blink" = "Close and open both eyes together";
+"liveness_ev_hint_blink" = "Close and open your eyes briefly";
 "liveness_ev_hint_double_blink" = "Twice in a row, quickly";
 "liveness_ev_hint_smile" = "Smile wide enough to show your teeth";
 "liveness_ev_hint_mouth_open" = "Open your mouth as if saying “aah”";
@@ -181,12 +181,9 @@
 "liveness_ev_settle_timeout_message" = "Your face needs to be inside the frame and still, and relaxed before each command. Please try again somewhere well lit.";
 "liveness_ev_missing" = "The verification steps could not be loaded. Please update the app and try again.";
 "liveness_guide_title" = "Before you start";
-"liveness_guide_subtitle" = "Verification takes about 15 seconds. A little preparation gets you through on the first try.";
-"liveness_guide_light" = "Stand somewhere well lit, with the light in front of you — no window or lamp behind you.";
-"liveness_guide_hold" = "Hold the phone steady at eye level, at a comfortable distance, with your face inside the frame.";
-"liveness_guide_accessories" = "Take off sunglasses, a mask or a hat. What is behind you does not matter.";
-"liveness_guide_moves_title" = "You will be asked for %d moves in a row";
-"liveness_guide_moves_intro" = "Each time, the moves are picked from the list below in a different order. Relax your face before each move and do it when the command appears.";
+"liveness_guide_light" = "Keep the light in front of you — no window or lamp behind you.";
+"liveness_guide_hold" = "Hold the phone steady at eye level.";
+"liveness_guide_accessories" = "Take off glasses or a hat if you wear them.";
 "liveness_guide_start" = "Start";
 "liveness_selfie_error_title" = "Selfie Error";
 "liveness_selfie_error_message" = "Your face could not be captured clearly. Please try again in a well-lit environment.";

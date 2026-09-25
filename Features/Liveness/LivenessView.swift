@@ -136,8 +136,10 @@ struct LivenessView: View {
 
     // MARK: - Kılavuz (koşudan önce bir kez)
 
-    /// Işık, telefonun tutuluşu, aksesuarlar ve hareketlerin NASIL yapılacağı. Yanlış reddin en ucuz
-    /// ilacı baştan doğru bilgi; kamera arkada ısınırken okunur. Android `guideOverlay` paritesi.
+    /// Yalnız akışın kendiliğinden öğretemediği üç şey (ışık, gözlük/şapka, telefonun tutuluşu):
+    /// bunlar hareketler bittikten SONRA enclave'de kimlik reddine döner, en pahalı red o.
+    /// Hareketlerin nasıl yapılacağı komutun altında yazıyor, burada tekrarlanmaz. Kamera arkada
+    /// ısınırken okunur. Android `guideOverlay` paritesi.
     private var guideOverlay: some View {
         ZStack {
             Theme.background.ignoresSafeArea()
@@ -146,42 +148,16 @@ struct LivenessView: View {
                     Text(L.t("liveness_guide_title"))
                         .font(.system(size: 24, weight: .bold))
                         .foregroundColor(Theme.onSurface)
-                    Text(L.t("liveness_guide_subtitle"))
-                        .font(.system(size: 15))
-                        .foregroundColor(Theme.onSurfaceVariant)
-                        .padding(.top, 6)
-
                     VStack(alignment: .leading, spacing: 12) {
                         guideLine("liveness_guide_light")
-                        guideLine("liveness_guide_hold")
                         guideLine("liveness_guide_accessories")
+                        guideLine("liveness_guide_hold")
                     }
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16))
                     .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.outlineVariant, lineWidth: 1))
                     .padding(.top, 20)
-
-                    Text(L.t("liveness_guide_moves_title", viewModel.eventCountForGuide))
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(Theme.onSurface)
-                        .padding(.top, 24)
-                    Text(L.t("liveness_guide_moves_intro"))
-                        .font(.system(size: 15))
-                        .foregroundColor(Theme.onSurfaceVariant)
-                        .padding(.top, 6)
-
-                    VStack(alignment: .leading, spacing: 14) {
-                        guideMove("liveness_face_blink", "liveness_ev_hint_blink")
-                        guideMove("liveness_face_double_blink", "liveness_ev_hint_double_blink")
-                        guideMove("liveness_face_smile", "liveness_ev_hint_smile")
-                        guideMove("liveness_face_mouth_open", "liveness_ev_hint_mouth_open")
-                    }
-                    .padding(16)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16))
-                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.outlineVariant, lineWidth: 1))
-                    .padding(.top, 12)
 
                     Button {
                         viewModel.beginAfterGuide()
@@ -206,17 +182,6 @@ struct LivenessView: View {
             .font(.system(size: 15))
             .foregroundColor(Theme.onSurface)
             .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private func guideMove(_ nameKey: String, _ hintKey: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(L.t(nameKey))
-                .font(.system(size: 16, weight: .bold))
-                .foregroundColor(Theme.onSurface)
-            Text(L.t(hintKey))
-                .font(.system(size: 14))
-                .foregroundColor(Theme.onSurfaceVariant)
-        }
     }
 
     // MARK: - Metin + canlı durum katmanları

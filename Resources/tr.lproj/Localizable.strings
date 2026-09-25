@@ -163,7 +163,7 @@
 "liveness_face_mouth_open" = "Ağzını Aç 😮";
 "liveness_face_double_blink" = "İki Kez Göz Kırp 😉😉";
 "liveness_did_mouth_open" = "ağzınızı açtınız";
-"liveness_ev_hint_blink" = "İki gözünüzü birlikte kapatıp açın";
+"liveness_ev_hint_blink" = "Gözlerinizi kısaca kapatıp açın";
 "liveness_ev_hint_double_blink" = "Art arda iki kez, hızlıca kırpın";
 "liveness_ev_hint_smile" = "Dişleriniz görünecek kadar geniş gülümseyin";
 "liveness_ev_hint_mouth_open" = "“Aaa” der gibi ağzınızı açın";
@@ -181,12 +181,9 @@
 "liveness_ev_settle_timeout_message" = "Yüzünüz çerçevenin içinde ve sabit olmalı; komut gelmeden önce yüzünüz gevşek olmalı. Aydınlık bir yerde tekrar deneyin.";
 "liveness_ev_missing" = "Doğrulama adımları alınamadı. Uygulamayı güncelleyip tekrar deneyin.";
 "liveness_guide_title" = "Başlamadan önce";
-"liveness_guide_subtitle" = "Doğrulama yaklaşık 15 saniye sürer. Birkaç basit hazırlık ilk denemede geçmenizi sağlar.";
-"liveness_guide_light" = "Aydınlık bir yerde durun; ışık önünüzden gelsin, arkanızda pencere ya da lamba olmasın.";
-"liveness_guide_hold" = "Telefonu göz hizasında, rahat bir mesafede sabit tutun; yüzünüz çerçevenin içinde kalsın.";
-"liveness_guide_accessories" = "Güneş gözlüğü, maske ya da şapka varsa çıkarın. Arkanızda ne olduğunun önemi yok.";
-"liveness_guide_moves_title" = "Sizden sırayla %d hareket istenecek";
-"liveness_guide_moves_intro" = "Hareketler her seferinde aşağıdakiler arasından, farklı sırayla seçilir. Her hareketten önce yüzünüzü gevşetin ve hareketi komut ekrana gelince yapın.";
+"liveness_guide_light" = "Işık önünüzden gelsin; arkanızda pencere ya da lamba olmasın.";
+"liveness_guide_hold" = "Telefonu göz hizasında sabit tutun.";
+"liveness_guide_accessories" = "Gözlük ya da şapka varsa çıkarın.";
 "liveness_guide_start" = "Başla";
 "liveness_selfie_error_title" = "Selfie Hatası";
 "liveness_selfie_error_message" = "Yüzünüz net bir şekilde çekilemedi. Lütfen ışıklı bir ortamda tekrar deneyin.";

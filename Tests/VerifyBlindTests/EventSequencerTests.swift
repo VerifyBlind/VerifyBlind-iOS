@@ -19,6 +19,13 @@ final class EventSequencerTests: XCTestCase {
                     boundingBox: box, leftEye: nil, rightEye: nil, landmarksOK: true, lipOpen: lip)
     }
 
+    /// Tek göz kapalı (göz kırpma, 😉), diğeri açık.
+    private func wink(left: Float = 0.05, right: Float = 0.95) -> FaceSignals {
+        FaceSignals(yaw: 0, pitch: 0, roll: 0, leftEyeOpen: left, rightEyeOpen: right, smile: 0.1,
+                    boundingBox: EventSequencerTests.faceBox, leftEye: nil, rightEye: nil,
+                    landmarksOK: true, lipOpen: nil)
+    }
+
     /// Diziyi 50 ms'lik karelerle sürer; her kırpma sahte bir JPEG döndürür.
     private struct Driver {
         var seq: EventSequencer
@@ -111,6 +118,45 @@ final class EventSequencerTests: XCTestCase {
         d.frame(sig(eyes: 0.05))
         XCTAssertEqual(d.seq.phase, .afterEvent)
         XCTAssertEqual(d.seq.steps[0].events.count, 2, "Enclave çift kırpmada iki kare ister")
+    }
+
+    /// Tek gözle kırpma da kırpmadır — hangi göz olursa olsun (2026-09-25, kullanıcı kararı).
+    func testWinkWithEitherEyeCountsAsBlink() {
+        for w in [wink(left: 0.05, right: 0.95), wink(left: 0.95, right: 0.05)] {
+            var d = Driver([.blink])
+            d.hold(sig(), forMs: 600)
+            d.frame(w)
+            XCTAssertEqual(d.seq.phase, .afterEvent)
+            XCTAssertEqual(d.seq.steps[0].events.count, 1)
+        }
+    }
+
+    func testDoubleWinkCompletesDoubleBlink() {
+        var d = Driver([.doubleBlink])
+        d.hold(sig(), forMs: 600)
+        d.frame(wink())
+        d.hold(sig(), forMs: 200)
+        d.frame(wink())
+        XCTAssertEqual(d.seq.phase, .afterEvent)
+        XCTAssertEqual(d.seq.steps[0].events.count, 2)
+    }
+
+    /// Kapalı tutulan göz bir kez sayılır: kenar ancak İKİ göz de açılınca yeniden kurulur.
+    func testHeldWinkCountsOnce() {
+        var d = Driver([.doubleBlink])
+        d.hold(sig(), forMs: 600)
+        d.hold(wink(), forMs: 400)
+        XCTAssertEqual(d.seq.eventCount, 1)
+        XCTAssertEqual(d.seq.phase, .event)
+    }
+
+    /// Yarı kısık göz kırpma değildir.
+    func testHalfClosedEyeIsNotABlink() {
+        var d = Driver([.blink])
+        d.hold(sig(), forMs: 600)
+        d.hold(wink(left: 0.3, right: 0.95), forMs: 300)
+        XCTAssertEqual(d.seq.phase, .event)
+        XCTAssertEqual(d.seq.eventCount, 0)
     }
 
     /// Tek kırpmanın ardından sessizlik istemsiz kırpmadır — sessizce sıfırlanır, ceza yok.
