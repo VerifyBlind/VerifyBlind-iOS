@@ -15,8 +15,14 @@ import Vision
 /// çift kırpma. Oval çerçeve de kalktı (bkz. `FaceFrameView`).
 ///
 /// İPLİK DİSİPLİNİ: TÜM logic durumu (dizi, skorlar, embedding) yalnız kamera VİDEO KUYRUĞUNDA
-/// okunur/yazılır (`camera.runOnVideoQueue` + `analyzer.onFace`/`onNoFace`); `@Published` sunum
-/// güncellemeleri daima ana kuyruğa marshalled edilir. Bu yüzden `@MainActor` KULLANILMAZ.
+/// okunur/yazılır (`analyzer.onFace`/`onNoFace`); `@Published` sunum güncellemeleri daima ana
+/// kuyruğa marshalled edilir. Bu yüzden `@MainActor` KULLANILMAZ.
+///
+/// 🔴 `camera.runOnVideoQueue` KULLANILMAZ. Kareler akarken kuyruğa sonradan atılan iş saniyelerce
+/// bekletiliyor: 2026-09-25'te kılavuzdaki "Başla"dan sonra koşuyu başlatacak iş 22 sn bekledi ve
+/// ancak kullanıcı vazgeçip kamera durunca çalıştı — ekran boş talimatla donmuş göründü (2026-08-25'te
+/// aynı sıçrama 40 sn beklemişti). Başlatma artık bir bayrakla isteniyor ve kare döngüsünün KENDİSİ
+/// bir sonraki karede başlatıyor (`takeStartRequest`).
 final class LivenessViewModel: ObservableObject {
 
     static let matchThreshold: Float = 0.65
@@ -162,6 +168,11 @@ final class LivenessViewModel: ObservableObject {
     /// "Yüzünüz çerçevede değil" uyarısı (video kuyruğu).
     private var faceMissingWarning: String?
 
+    /// Koşu başlatma isteği — ana kuyrukta yazılır, kare döngüsünde (video kuyruğu) tüketilir.
+    /// Kilit, iki kuyruğun aynı Bool'a eşzamanlı dokunması için; iş kuyruğa ATILMAZ (bkz. sınıf notu).
+    private let startLock = NSLock()
+    private var startRequested = false
+
     /// Ana kuyruktaki bekçi — kare akışının durup durmadığını izler.
     private var watchdog: Timer?
     /// Son işlenen karenin anı (ms). Video kuyruğunda yazılır, bekçi okur (tek kelime).
@@ -300,18 +311,33 @@ final class LivenessViewModel: ObservableObject {
         sessionStartedAt = Date()
         lastFrameAtMs = Date().timeIntervalSince1970 * 1000
         startWatchdog()
-        camera.runOnVideoQueue { [weak self] in
-            guard let self else { return }
-            self.resetLogicState()
-            self.prepareChipEmbeddingIfNeeded()
-            if self.isDemo {
-                DispatchQueue.main.async { self.presentDemoStep(0) }
-            } else {
-                var seq = EventSequencer(events: self.events)
-                seq.start(now: Self.nowMs)
-                self.sequencer = seq
-                self.present(seq)
-            }
+        // Kare döngüsü bir sonraki karede başlatır. Kare hiç gelmezse bekçi `stallTimeout` sonra
+        // akışı bitirir — kullanıcı boş ekranda kalmaz.
+        startLock.lock()
+        startRequested = true
+        startLock.unlock()
+    }
+
+    /// İstenmiş bir başlatma varsa tüketir (video kuyruğu, her karede).
+    private func takeStartRequest() -> Bool {
+        startLock.lock()
+        defer { startLock.unlock() }
+        let requested = startRequested
+        startRequested = false
+        return requested
+    }
+
+    /// Koşuyu başlatır — yalnız kare döngüsünden (video kuyruğu).
+    private func startLogic() {
+        resetLogicState()
+        prepareChipEmbeddingIfNeeded()
+        if isDemo {
+            DispatchQueue.main.async { [weak self] in self?.presentDemoStep(0) }
+        } else {
+            var seq = EventSequencer(events: events)
+            seq.start(now: Self.nowMs)
+            sequencer = seq
+            present(seq)
         }
     }
 
@@ -366,6 +392,7 @@ final class LivenessViewModel: ObservableObject {
     }
 
     private func handleFace(_ frame: FaceAnalyzer.Frame) {
+        if takeStartRequest() { startLogic() }
         let now = Self.nowMs
         lastFrameAtMs = now
         lastFaceTime = now
@@ -400,6 +427,7 @@ final class LivenessViewModel: ObservableObject {
     }
 
     private func handleNoFace() {
+        if takeStartRequest() { startLogic() }
         lastFrameAtMs = Self.nowMs
         guard var seq = sequencer, seq.isActive else { return }
         let signals = seq.tick(now: Self.nowMs)
