@@ -219,11 +219,15 @@ struct LoginFaceProof: Codable {
     let antiSpoofCrop: String
     /// Cihaz ölçüleri — DOĞRULANMAZ, yalnız teşhis satırına yazılır.
     let deviceMetrics: DeviceFrameMetrics?
+    /// Doğrulamanın TEK hareketi (2026-09-26) — kayıttaki olay dizisi kanıtıyla aynı biçim, tek
+    /// adım. nil ise alan hiç yazılmaz.
+    var choreographyProof: ChoreographyProof? = nil
 
     enum CodingKeys: String, CodingKey {
         case userSelfie = "user_selfie"
         case antiSpoofCrop = "anti_spoof_crop"
         case deviceMetrics = "device_metrics"
+        case choreographyProof = "choreography_proof"
     }
 }
 

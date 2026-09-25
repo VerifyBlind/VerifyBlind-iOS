@@ -27,7 +27,7 @@ final class LoginViewModel: ObservableObject {
     @Published var step: Step = .scanning
     @Published var partnerInfo: PartnerInfoResponse?
 
-    private var nonce: String = ""
+    private(set) var nonce: String = ""
     private var pkHash: String?
 
     /// App-to-app deeplink akışı mı (true → geri-dönüş URL'i onurlandırılır).
@@ -154,23 +154,25 @@ final class LoginViewModel: ObservableObject {
     /// Cihazdan DIŞARI çıkmaz; gerçek karşılaştırma enclave'de mühürlü biletin kopyasıyla yapılır.
     private(set) var pendingFaceRef: String?
 
-    /// Canlı yüz ekranı kareyi verdi → giriş gönderilebilir.
-    func faceCaptured(selfiePNG: Data, cropJPEG: Data, metrics: DeviceFrameMetrics?) {
+    /// Canlı yüz ekranı kareyi (ve tek hareketin kanıtını) verdi → giriş gönderilebilir.
+    func faceCaptured(selfiePNG: Data, cropJPEG: Data, metrics: DeviceFrameMetrics?,
+                      moveProof: ChoreographyProof? = nil) {
         pendingFaceProof = LoginFaceProof(
             userSelfie: selfiePNG.base64EncodedString(),
             antiSpoofCrop: cropJPEG.base64EncodedString(),
-            deviceMetrics: metrics)
+            deviceMetrics: metrics,
+            choreographyProof: moveProof)
         step = .processing
         Task { await sendLogin() }
     }
 
     /// Kare alınamadı veya kullanıcı vazgeçti → giriş GÖNDERİLMEZ (fail-closed: "ölçemedik" asla
     /// "geçti" değildir). Nonce açıkça iptal edilir ki partner "lütfen bekleyiniz"de asılı kalmasın.
-    func faceCaptureCancelled() {
+    func faceCaptureCancelled(moveFailed: Bool = false) {
         clearPendingLoginState()
         Task { await cancelPop() }
         fail(title: L.t("login_face_cancelled_title"),
-             message: L.t("login_face_cancelled_message"),
+             message: L.t(moveFailed ? "login_face_move_failed_message" : "login_face_cancelled_message"),
              error: nil)
     }
 

@@ -205,7 +205,7 @@
 /* Girişteki canlı yüz adımı (LoginFaceView). Jest YOK: ekran ~2 saniyede bitmeli,
    yoksa 2FA/step-up kullanım alanı ölür. Android values-tr/strings.xml ile birebir. */
 "login_face_title" = "Sizin olduğunuzu doğrulayalım";
-"login_face_subtitle" = "Bir an için kameraya bakın. Doğrulamayı yalnız kimliğin sahibi tamamlayabilir.";
+"login_face_subtitle" = "Kameraya bakın, ardından istenen hareketi yapın. Doğrulamayı yalnız kimliğin sahibi tamamlayabilir.";
 "login_face_status_looking" = "Yüzünüz aranıyor…";
 "login_face_status_hold" = "Sabit durun…";
 "login_face_status_adjust" = "Gözlüğünüz varsa çıkarın ve yüzünüzü ışığa dönün";
@@ -213,6 +213,8 @@
 "login_face_warn_pose" = "Doğrudan kameraya bakın";
 "login_face_cancelled_title" = "Doğrulama tamamlanmadı";
 "login_face_cancelled_message" = "Yüzünüzü yakalayamadık, bu yüzden doğrulama iptal edildi. Lütfen aydınlık bir yerde tekrar deneyin.";
+"login_face_move_retry" = "Hareketi göremedik — bir kez daha deneyelim";
+"login_face_move_failed_message" = "İstenen hareketi algılayamadık, bu yüzden doğrulama iptal edildi. Yüzünüzü ışığa dönüp tekrar deneyin.";
 "btn_retry" = "Tekrar Dene";
 "liveness_face_smile_relax" = "Yüzünüzü gevşetin 😐";
 "liveness_too_many_errors_title" = "Çok Fazla Yanlış Hareket";

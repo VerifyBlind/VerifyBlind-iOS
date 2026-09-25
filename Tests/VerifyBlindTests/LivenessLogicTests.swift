@@ -30,6 +30,7 @@ final class LivenessLogicTests: XCTestCase {
                     "liveness_ev_resets_title", "liveness_ev_resets_message",
                     "liveness_ev_settle_timeout_title", "liveness_ev_settle_timeout_message",
                     "liveness_ev_missing", "liveness_error_title",
+                    "login_face_move_retry", "login_face_move_failed_message",
                     "liveness_guide_title", "liveness_guide_light",
                     "liveness_guide_hold", "liveness_guide_accessories", "liveness_guide_start",
                     "feedback_prompt_title", "feedback_prompt_message",

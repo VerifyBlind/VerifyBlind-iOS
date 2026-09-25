@@ -2,28 +2,34 @@ import SwiftUI
 
 /// Girişteki canlı yüz ekranı — Android `LoginFaceActivity` + `activity_login_face.xml` paritesi.
 ///
-/// `LivenessView`'ün sadeleştirilmiş hâli: adım sayacı, komut metni, geri sayım halkası ve alt
-/// ipucu YOK. Girişte jest yoktur ve ekran ~2 saniyede kapanmalıdır — ekran ne kadar sade olursa
-/// 2FA/step-up kullanımı o kadar mümkün kalır.
+/// `LivenessView`'ün sadeleştirilmiş hâli: en iyi kare, ardından TEK hareket (2026-09-26). Adım
+/// sayacı ve kılavuz yok; komut ve nasıl yapılacağı durum satırının yerinde gösterilir. Ekran ne
+/// kadar sade olursa 2FA/step-up kullanımı o kadar mümkün kalır.
 struct LoginFaceView: View {
     @StateObject private var viewModel = LoginFaceViewModel()
     @ObservedObject private var camera: CameraController
 
-    /// (hizalanmış 112×112 selfie PNG, AYNI karenin 2,7× anti-spoof JPEG'i, cihaz ölçüleri)
-    let onSuccess: (Data, Data, DeviceFrameMetrics?) -> Void
-    /// Kare alınamadı veya kullanıcı vazgeçti → çağıran giriş isteğini GÖNDERMEZ (fail-closed).
-    let onCancel: () -> Void
+    /// (hizalanmış 112×112 selfie PNG, AYNI karenin 2,7× anti-spoof JPEG'i, cihaz ölçüleri,
+    /// hareket kanıtı)
+    let onSuccess: (Data, Data, DeviceFrameMetrics?, ChoreographyProof?) -> Void
+    /// Kare/hareket alınamadı veya kullanıcı vazgeçti → çağıran giriş isteğini GÖNDERMEZ
+    /// (fail-closed). `true`: istenen hareket algılanamadı.
+    let onCancel: (_ moveFailed: Bool) -> Void
 
     @State private var savedBrightness: CGFloat?
 
     private let grayColor = Color(red: 0.333, green: 0.333, blue: 0.333) // #555555
     private let redColor  = Color(red: 1.0, green: 0.267, blue: 0.267)   // #FF4444
 
+    /// - Parameter loginNonce: QR isteğinin nonce'u — tek hareket ondan türetilir (`LoginEvent`);
+    ///   enclave aynı nonce'tan aynısını türetip ölçer.
     init(faceRefB64: String?,
-         onSuccess: @escaping (Data, Data, DeviceFrameMetrics?) -> Void,
-         onCancel: @escaping () -> Void) {
+         loginNonce: String?,
+         onSuccess: @escaping (Data, Data, DeviceFrameMetrics?, ChoreographyProof?) -> Void,
+         onCancel: @escaping (_ moveFailed: Bool) -> Void) {
         let vm = LoginFaceViewModel()
         vm.faceRefB64 = faceRefB64
+        vm.loginEvent = loginNonce.flatMap { LoginEvent.forNonce($0) }
         _viewModel = StateObject(wrappedValue: vm)
         _camera = ObservedObject(wrappedValue: vm.camera)
         self.onSuccess = onSuccess
@@ -46,8 +52,8 @@ struct LoginFaceView: View {
             savedBrightness = UIScreen.main.brightness
             UIScreen.main.brightness = 1.0
             UIApplication.shared.isIdleTimerDisabled = true
-            viewModel.onSuccess = { png, crop, metrics in onSuccess(png, crop, metrics) }
-            viewModel.onFailure = { onCancel() }
+            viewModel.onSuccess = { png, crop, metrics, proof in onSuccess(png, crop, metrics, proof) }
+            viewModel.onFailure = { moveFailed in onCancel(moveFailed) }
             viewModel.start()
         }
         .onDisappear {
@@ -87,12 +93,29 @@ struct LoginFaceView: View {
                     .padding(.top, 8)
             }
 
-            Text(L.t(viewModel.statusKey))
-                .font(.system(size: 15))
-                .foregroundColor(grayColor)
+            if let instruction = viewModel.moveInstruction {
+                // Tek hareket: komut büyük ve koyu, nasıl yapılacağı altında.
+                VStack(spacing: 6) {
+                    Text(instruction)
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundColor(.black)
+                    if !viewModel.moveHint.isEmpty {
+                        Text(viewModel.moveHint)
+                            .font(.system(size: 15))
+                            .foregroundColor(grayColor)
+                    }
+                }
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)
                 .padding(.vertical, 24)
+            } else {
+                Text(L.t(viewModel.statusKey))
+                    .font(.system(size: 15))
+                    .foregroundColor(grayColor)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 24)
+            }
         }
     }
 
@@ -103,7 +126,7 @@ struct LoginFaceView: View {
         GeometryReader { geo in
             let side = min(geo.size.width * 0.8, geo.size.height / FaceFrameView<EmptyView>.aspect)
             ZStack {
-                FaceFrameView(width: side, aligned: false, progress: nil) {
+                FaceFrameView(width: side, aligned: viewModel.frameAligned, progress: viewModel.timeProgress) {
                     CameraPreview(session: camera.session)
                 }
 

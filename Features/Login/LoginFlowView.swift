@@ -32,10 +32,12 @@ struct LoginFlowView: View {
                 LoginFaceView(
                     // Ekrandaki % göstergesi için; referans cihazdan DIŞARI çıkmaz.
                     faceRefB64: vm.pendingFaceRef,
-                    onSuccess: { png, crop, metrics in
-                        vm.faceCaptured(selfiePNG: png, cropJPEG: crop, metrics: metrics)
+                    // Doğrulamanın tek hareketi bu nonce'tan türetilir (enclave de aynısını türetir).
+                    loginNonce: vm.nonce,
+                    onSuccess: { png, crop, metrics, proof in
+                        vm.faceCaptured(selfiePNG: png, cropJPEG: crop, metrics: metrics, moveProof: proof)
                     },
-                    onCancel: { vm.faceCaptureCancelled() })
+                    onCancel: { moveFailed in vm.faceCaptureCancelled(moveFailed: moveFailed) })
             case .success:
                 // Ayrı "Başarılı" ekranı yok (Android paritesi): partnere geri dön (deeplink) + toast + kapat.
                 Color.clear.onAppear {

@@ -205,7 +205,7 @@
 /* Girişteki canlı yüz adımı (LoginFaceView). Jest YOK: ekran ~2 saniyede bitmeli,
    yoksa 2FA/step-up kullanım alanı ölür. Android values/strings.xml ile birebir. */
 "login_face_title" = "Confirm it is you";
-"login_face_subtitle" = "Look at the camera for a moment. Only the ID owner can complete a verification.";
+"login_face_subtitle" = "Look at the camera, then do the move we ask for. Only the ID owner can complete a verification.";
 "login_face_status_looking" = "Looking for your face…";
 "login_face_status_hold" = "Hold still…";
 "login_face_status_adjust" = "Take off glasses if you wear them, and face the light";
@@ -213,6 +213,8 @@
 "login_face_warn_pose" = "Look straight at the camera";
 "login_face_cancelled_title" = "Verification not completed";
 "login_face_cancelled_message" = "We could not capture your face, so the verification was cancelled. Please try again in a well-lit spot.";
+"login_face_move_retry" = "We did not catch the move — let us try once more";
+"login_face_move_failed_message" = "We could not detect the requested move, so the verification was cancelled. Face the light and try again.";
 "btn_retry" = "Try Again";
 "liveness_face_smile_relax" = "Relax your face 😐";
 "liveness_too_many_errors_title" = "Too Many Incorrect Moves";
