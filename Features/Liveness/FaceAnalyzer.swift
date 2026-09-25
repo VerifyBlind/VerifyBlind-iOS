@@ -31,6 +31,10 @@ final class FaceAnalyzer {
     var onFace: ((Frame) -> Void)?
     var onNoFace: (() -> Void)?
 
+    /// Bu karede dudak konturu ölçülsün mü — yalnız ağız açma adımında true. İkinci dedektör kare
+    /// hızını düşürür; diğer adımlarda çalışmamalı. Video kuyruğunda okunur.
+    var contourWanted: (() -> Bool)?
+
     /// Ön kamera aynası telafisi. ML Kit'in `headEulerAngleY`'si "görüntünün sağına dönük yüz =
     /// pozitif" tanımlı ve `LivenessGestureDetector` bunu Android'in kuralıyla okuyor
     /// (pozitif = FaceLeft). Ama Android analiz karesini AYNALAMAZ, biz aynalıyoruz
@@ -55,10 +59,25 @@ final class FaceAnalyzer {
         options.performanceMode = .accurate
         options.landmarkMode = .all          // göz merkezleri → FaceAligner
         options.classificationMode = .all    // gülümseme + göz açıklık olasılıkları
-        options.contourMode = .none          // kontur pahalı ve kullanılmıyor
+        options.contourMode = .none          // kontur pahalı — yalnız ağız açmada, ayrı dedektörle
         // Android `enableTracking()` çağırıyor; burada BİLİNÇLİ olarak yok. Tracking yalnız
         // kareler arası yüz KİMLİĞİ (trackingID) üretir ve biz onu hiçbir yerde okumuyoruz —
         // her karede en büyük yüzü seçiyoruz. Parite sinyallerde, kimlik atamada değil.
+        return FaceDetector.faceDetector(options: options)
+    }()
+
+    /// Ağız açma için dudak KONTURU — Android'deki ikinci dedektörün karşılığı.
+    ///
+    /// ML Kit'in yüz NOKTALARI çene açılmasını izlemiyor (Android sahasında açık ağızda alt dudak
+    /// noktası ters yöne gitti, gülümseme olasılığı 0,82'ye çıktı ve "ağzını aç" komutu yalnız
+    /// somurtarak geçilebildi). Konturda iç dudak kenarları doğrudan ölçülüyor. `.fast` + yalnız
+    /// kontur: sınıflandırma zaten ana dedektörden geliyor.
+    private lazy var contourDetector: FaceDetector = {
+        let options = FaceDetectorOptions()
+        options.performanceMode = .fast
+        options.landmarkMode = .none
+        options.classificationMode = .none
+        options.contourMode = .all
         return FaceDetector.faceDetector(options: options)
     }()
 
@@ -212,7 +231,18 @@ final class FaceAnalyzer {
             Log.info("ML Kit giriş yolu çözüldü: \(inputPath.rawValue)", category: .liveness)
         }
 
-        onFace?(Frame(signals: makeSignals(face, coordinateScale: coordinateScale),
+        var signals = makeSignals(face, coordinateScale: coordinateScale)
+        if contourWanted?() == true {
+            let contourStart = Date().timeIntervalSince1970 * 1000
+            let contourFaces = (try? contourDetector.results(in: image)) ?? []
+            timing.record("kontur", Date().timeIntervalSince1970 * 1000 - contourStart)
+            // Kontur yalnız en belirgin yüz için üretiliyor; oran ölçekten bağımsız, kutu gerekmez.
+            signals.lipOpen = contourFaces
+                .max(by: { boxArea($0.frame) < boxArea($1.frame) })
+                .flatMap(Self.innerLipOpen)
+        }
+
+        onFace?(Frame(signals: signals,
                       pixelBuffer: pixelBuffer,
                       imageSize: imageSize,
                       orientation: orientation))
@@ -256,6 +286,21 @@ final class FaceAnalyzer {
     private func point(_ face: Face, _ type: FaceLandmarkType, _ scale: CGFloat) -> CGPoint? {
         guard let p = face.landmark(ofType: type)?.position else { return nil }
         return CGPoint(x: p.x * scale, y: p.y * scale)
+    }
+
+    /// İç dudak açıklığı — Android `LivenessAnalyzer.innerLipOpen` ile birebir: üst dudağın ALT
+    /// kenarının ortası ile alt dudağın ÜST kenarının ortası arası, iç ağız genişliğine (üst dudak alt
+    /// kenarının iki ucu) bölünmüş. Kapalı ağızda ~0; ölçek ve kafa eğiminden bağımsız.
+    static func innerLipOpen(_ face: Face) -> Float? {
+        guard let upper = face.contour(ofType: .upperLipBottom)?.points,
+              let lower = face.contour(ofType: .lowerLipTop)?.points,
+              upper.count >= 3, lower.count >= 3,
+              let first = upper.first, let last = upper.last else { return nil }
+        let u = upper[upper.count / 2]
+        let l = lower[lower.count / 2]
+        let width = hypot(last.x - first.x, last.y - first.y)
+        guard width >= 1 else { return nil }
+        return Float(hypot(l.x - u.x, l.y - u.y) / width)
     }
 
     /// Kilitlenmemişken uzun süre yüz çıkmazsa diğer giriş yolunu dener (dönüşümlü).

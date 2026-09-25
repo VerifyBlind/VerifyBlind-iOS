@@ -83,7 +83,8 @@ final class RegisterViewModel: ObservableObject {
     private var antiSpoofCropData: Data?
     private var registrationNonce: String?
 
-    var challenges: [Int] { session?.challenges ?? [] }
+    /// Olay dizisi (sunucu nonce'tan türetir). Boşsa canlılık ekranı açık bir hatayla durur.
+    var events: [Int] { session?.events ?? [] }
 
     /// Huni telemetrisi — yalnız GERÇEK kayıt akışı sayılır; demo istatistiği kirletmemeli.
     private func track(_ step: FlowTelemetry.Step) {
@@ -108,6 +109,9 @@ final class RegisterViewModel: ObservableObject {
     /// ⚠️ "Önceden onaylanmış" bir kare DEĞİLDİR: enclave register'da her adayı normal kapıdan
     /// yeniden geçirir ve streaming'de neyi onayladığını bilmez.
     private var approvedSelfieData: Data?
+
+    /// Olay dizisi kanıtı — kayıt yüküne girer (Android `ChoreographyProof` paritesi).
+    private var choreographyProof: ChoreographyProof?
     private var approvedCropData: Data?
 
     /// Adayların KARE ölçüleri (rank sırasına göre) — canlılık ekranında ölçüldüğü hâliyle.
@@ -321,12 +325,10 @@ final class RegisterViewModel: ObservableObject {
 
                 scanned = result
                 track(.nfc)
-                if challenges.isEmpty {
-                    step = .processing
-                    await finalizeReal()
-                } else {
-                    step = .biometricConsent   // rıza → liveness
-                }
+                // Canlılık HER ZAMAN açılır. Eskiden sunucu jest listesi göndermezse kayıt canlılıksız
+                // gönderiliyordu (selfie'siz yük enclave'de zaten düşüyordu). Olay dizisi gelmediyse
+                // canlılık ekranı açık bir hata gösterir — sürüm uyuşmazlığı sessizce geçmez.
+                step = .biometricConsent   // rıza → liveness
             } catch let e as NFCReadError {
                 switch e {
                 case .cancelled:
@@ -389,6 +391,7 @@ final class RegisterViewModel: ObservableObject {
     func onLivenessCandidates(_ candidates: LivenessCandidates) {
         approvedSelfieData = candidates.approvedSelfie
         approvedCropData = candidates.approvedCrop
+        choreographyProof = candidates.choreographyProof
         candidateMetricsList = [candidates.bestMetrics, candidates.approvedMetrics].compactMap { $0 }
     }
 
@@ -437,7 +440,7 @@ final class RegisterViewModel: ObservableObject {
         if let photo { diagnosticPhotoData = photo }
         guard let nonce = session?.nonce else { return }
         let score = diagnostics?.matchScorePercent
-        Task { await FlowTelemetry.shared.livenessFailed(reason: reason.rawValue, nonce: nonce, score: score) }
+        Task { await FlowTelemetry.shared.livenessFailed(reason: reason.flowReason, nonce: nonce, score: score) }
     }
 
     /// Demo: NFC ekranı ~2s sonra biyometrik rızaya geçer (Android `demoProceedAfterNfc`).
@@ -454,6 +457,10 @@ final class RegisterViewModel: ObservableObject {
     }
 
     // MARK: - Gerçek kayıt finalize
+
+    /// Kullanıcıyı kayıt akışının başına değil CANLILIK TESTİNİN başına döndüren enclave kodları.
+    /// Hepsi sunucuda yeniden denenebilir (nonce geri açılır) ve hepsinin düzeltmesi kareye ait.
+    static let livenessRetryCodes: Set<String> = ["ERR_BIOMETRIC_MISMATCH", "ERR_CHOREO_IDENTITY"]
 
     private func finalizeReal() async {
         guard let scanned, let session, let userPubKey else {
@@ -497,6 +504,9 @@ final class RegisterViewModel: ObservableObject {
                 }
             }
             payload.candidates = candidates.isEmpty ? nil : candidates
+            // Olay dizisi kanıtı: her hareketin nötr ve olay kareleri. Enclave yapıyı ve HER karede
+            // kimliği doğrular; eksik kanıt yapı hatasıdır (ERR_CHOREO_INVALID).
+            payload.choreographyProof = choreographyProof
             // iOS App Attest (Aşama 6) relay'de el sıkışmada doğrulanır; register enclave'e proxy'lenir
             // ve el sıkışma nonce'una bağlıdır → şifreli IntegrityToken iOS'ta BOŞ bırakılır (Android'de
             // bu alan Play Integrity taşır). Bkz. AppAttestService + sunucu ClientAttestationGate.
@@ -531,10 +541,15 @@ final class RegisterViewModel: ObservableObject {
             // okuması GEÇERLİ; düzeltilmesi gereken tek şey kareye ait (ışık, gözlük, açı).
             // Kullanıcıyı kartını yeniden okutmaya zorlamak, düzeltmesi kolay bir sorunu
             // vazgeçme sebebine çevirirdi.
+            // ERR_CHOREO_IDENTITY de aynı yola gider: hareket karelerinden birinde yüz kartla
+            // eşleşmedi (kötü ışık, çerçeveden taşan yüz). Sunucu bunu yeniden denenebilir sayıp
+            // nonce'u geri açıyor; aynı dizi yeni karelerle tekrar yürütülür.
             if case APIClientError.http(_, let body) = error,
-               (body?.errorCode ?? body?.code) == "ERR_BIOMETRIC_MISMATCH" {
+               let code = body?.errorCode ?? body?.code,
+               Self.livenessRetryCodes.contains(code) {
                 // Önceki denemenin adayları temizlenir: yeni turda yeniden üretilecekler ve
                 // eskisini taşımak, ölçüm satırını yanlış kareye bağlardı.
+                choreographyProof = nil
                 approvedSelfieData = nil
                 approvedCropData = nil
                 candidateMetricsList = []

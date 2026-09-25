@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// Aşama 3 dev test ekranı — liveness. Üç mod:
-/// - **Çipsiz**: gerçek jest akışı (sol/sağ/blink/smile) + en iyi selfie yakalama + hizalama (%'siz).
-/// - **Demo**: jest beklemeden her adım otomatik geçer (UI akışı doğrulaması).
+/// - **Çipsiz**: gerçek olay dizisi (çift kırpma/gülümseme/ağız açma) + en iyi selfie yakalama + hizalama (%'siz).
+/// - **Demo**: hareket beklemeden her adım otomatik geçer (UI akışı doğrulaması).
 /// - **Çip ile (NFC)**: önce çipten DG2 yüzü okunur → canlı % + best-match-frame (model gömülüyse).
 ///
 /// Çip okuma Aşama 2 `PassportNFCReader`'ı yeniden kullanır (prefilled dev kart MRZ'si).
@@ -19,7 +19,7 @@ struct LivenessTestView: View {
     @State private var readingChip = false
 
     private let reader = PassportNFCReader()
-    private let challenges = [1, 2, 3, 4] // faceLeft, faceRight, blink, smile (VM ≥5'e tamamlar)
+    private let events = [4, 2, 3] // çift kırpma, gülümseme, ağız açma — sunucu dizisinin biçimi
 
     struct LivenessSession: Identifiable {
         let id = UUID()
@@ -30,7 +30,7 @@ struct LivenessTestView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Liveness akışını cihazda doğrular. Çipsiz mod jestleri + yakalama + hizalamayı; çip modu canlı % eşleşmesini test eder (model gömülüyse).")
+                Text("Liveness akışını cihazda doğrular. Çipsiz mod hareketleri + yakalama + hizalamayı; çip modu canlı % eşleşmesini test eder (model gömülüyse).")
                     .font(.footnote).foregroundStyle(.secondary)
 
                 Button {
@@ -99,7 +99,7 @@ struct LivenessTestView: View {
         .navigationBarTitleDisplayMode(.inline)
         .fullScreenCover(item: $session) { cfg in
             LivenessView(
-                viewModel: LivenessViewModel(challenges: challenges, chipPhotoData: cfg.chip, isDemo: cfg.isDemo),
+                viewModel: LivenessViewModel(events: events, chipPhotoData: cfg.chip, isDemo: cfg.isDemo),
                 onSuccess: { jpeg, _, score, _ in
                     lastSelfie = UIImage(data: jpeg)
                     lastScore = score

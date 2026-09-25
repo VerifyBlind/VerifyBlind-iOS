@@ -5,48 +5,63 @@ import Vision
 
 /// Liveness orkestrasyonu — Android `LivenessActivity` portu.
 ///
-/// Ön kamera + `FaceAnalyzer` ile challenge sırasını (≥5) yürütür; hareket başına 15sn (her
-/// başarıda sıfırlanır) + 60sn oturum tavanı + 5 yanlış hareket bütçesi, jest ilerlemesi
-/// (yanlış hareket AYNI adımı tekrarlatır; istemsiz göz kırpma sayılmaz), kare-yakalama best-frame mantığı
-/// (match-iyileşmesi / kalite / ilk-kayıt) ve `MATCH_THRESHOLD=0.65`. Çıktı: hizalanmış 112×112
-/// selfie JPEG + eşleşme sonucu. Chip (DG2) verilmezse %'siz çalışır (Android null-chip yolu).
+/// Ön kamera + `FaceAnalyzer` ile sunucunun OLAY DİZİSİNİ (`EventSequencer`) yürütür: her hareketten
+/// önce nötr kare, hareket anında olay karesi; kareler yüzün çevresinden kırpılıp kayıt yüküne
+/// `ChoreographyProof` olarak girer ve enclave HER karede kimliği doğrular. Yanında kare-yakalama
+/// best-frame mantığı (match-iyileşmesi / kalite / ilk-kayıt) ve `MATCH_THRESHOLD=0.65`. Çıktı:
+/// hizalanmış 112×112 selfie + eşleşme sonucu + olay kanıtı. Chip (DG2) verilmezse %'siz çalışır.
 ///
-/// İPLİK DİSİPLİNİ: TÜM logic durumu (index, skorlar, embedding) yalnız kamera VİDEO KUYRUĞUNDA
-/// okunur/yazılır (`camera.runOnVideoQueue` + `analyzer.onFace`); `@Published` sunum güncellemeleri
-/// daima ana kuyruğa marshalled edilir. Bu yüzden `@MainActor` KULLANILMAZ (video kuyruğu logic'i
-/// ile çakışırdı).
+/// 🔴 Mesafe ve kafa çevirme YOK (2026-09-25): tek rahat mesafede göz kırpma, gülümseme, ağız açma,
+/// çift kırpma. Oval çerçeve de kalktı (bkz. `FaceFrameView`).
+///
+/// İPLİK DİSİPLİNİ: TÜM logic durumu (dizi, skorlar, embedding) yalnız kamera VİDEO KUYRUĞUNDA
+/// okunur/yazılır (`camera.runOnVideoQueue` + `analyzer.onFace`/`onNoFace`); `@Published` sunum
+/// güncellemeleri daima ana kuyruğa marshalled edilir. Bu yüzden `@MainActor` KULLANILMAZ.
 final class LivenessViewModel: ObservableObject {
 
     static let matchThreshold: Float = 0.65
 
-    /// Hareket başına süre — HER BAŞARILI HAREKETTE sıfırlanır. İlerleyen kullanıcı zamana yenilmez;
-    /// yalnızca gerçekten takılan bir oturum (karanlık oda, yüz yok) sona erer. Eski tasarım 5 hareket
-    /// için TEK bir 30sn sayaç kullanıyordu ve ilk kez deneyenleri yüzleri EŞLEŞMİŞKEN reddediyordu
-    /// (Sentry: iki ardışık timeout, bestScore %75 ve %76 — eşik %65).
-    static let gestureTimeout: TimeInterval = 15
-    /// Oturum tavanının hareket bütçesinin ÜSTÜNE eklediği pay: her onayda 1sn ✅ animasyonu,
-    /// yanlış harekette 1.5sn ceza, gülümseme gevşeme aşaması (≤5sn) ve yüz bulma süresi.
-    static let sessionOverhead: TimeInterval = 20
-    /// Yanlış hareket bütçesi. Kötüye kullanımın ASIL sınırı budur, saat değil: jest dizisi oturum
-    /// boyunca sabit olduğundan sınırsız deneme, diziyi deneme-yanılmayla öğrenmeye izin verirdi.
-    /// (Eskiden yanlış hareket sayısı SINIRSIZDI; tek fren 30sn'lik saatti.)
-    static let maxWrongAttempts = 5
+    /// Kalan süre bu oranın altına inince çizgi kehribara döner ve tek bir sessiz dokunuş gelir.
+    static let lowTimeFraction = 0.27
 
-    enum FailureReason: String {
-        /// Tek harekete ayrılan süre doldu (15sn). Kullanıcı komutu anlamadı ya da yapamadı.
-        case gestureTimeout = "timeout_gesture"
-        /// Oturum tavanı doldu (60sn). Genelde takılan/terk edilmiş oturum.
-        case sessionTimeout = "timeout_session"
-        case tooManyErrors  = "too_many_errors"
-        case noSelfie       = "no_selfie"
-        case matchFailed    = "match_failed"
+    /// Kare akışı bu kadar süre durursa (kamera takıldı) akış biter. Dizinin kendi saati kare
+    /// döngüsünde işliyor; kare hiç gelmezse o saat de durur ve kullanıcı donmuş ekranda kalırdı.
+    static let stallTimeout: TimeInterval = 6
 
-        /// Ekranda ikisi de "süre doldu" olarak görünür — ayrım YALNIZ istatistik içindir.
+    enum FailureReason: Equatable {
+        /// Hareket için ayrılan süre doldu. Kullanıcı komutu anlamadı ya da yapamadı.
+        case gestureTimeout
+        /// Yüz yerleştirilip gevşetilemedi (çerçeve, ışık).
+        case settleTimeout
+        /// Kare akışı durdu (bekçi).
+        case sessionTimeout
+        case tooManyErrors
+        /// Yüz adım adım kayboldu.
+        case tooManyResets
+        case noSelfie
+        case matchFailed
+        /// Sunucu olay dizisi göndermedi — sürüm uyuşmazlığı.
+        case missingSequence
+
+        /// Huninin sabit sebep kümesindeki karşılığı (Android `EventCollector.Failure.flowReason`).
+        var flowReason: String {
+            switch self {
+            case .gestureTimeout, .settleTimeout: return "timeout_gesture"
+            case .sessionTimeout: return "timeout_session"
+            case .tooManyErrors, .tooManyResets: return "too_many_errors"
+            case .noSelfie: return "no_selfie"
+            case .matchFailed: return "match_failed"
+            case .missingSequence: return "missing_sequence"
+            }
+        }
+
         var isTimeout: Bool { self == .gestureTimeout || self == .sessionTimeout }
     }
 
     enum Phase: Equatable {
         case preparing
+        /// Başlamadan önceki kılavuz — "Başla"ya basılınca koşu başlar.
+        case guide
         case running
         case success
         case failure(FailureReason)
@@ -57,63 +72,55 @@ final class LivenessViewModel: ObservableObject {
     @Published var instruction = ""
     @Published var subInstruction = ""
     @Published var stepText = ""
-    /// Aktif hareketin kalan süre oranı (1 → tam, 0 → doldu). Ekranda RAKAM DEĞİL, incelen bir
-    /// halka olarak gösterilir: rakam "yetişemeyeceksin" baskısı kuruyor ve kafa çevrikken zaten
-    /// görünmüyor; halka "devam et" der.
-    @Published var gestureProgress: Double = 1
+    /// Aktif adımın kalan süre oranı (1 → tam, 0 → doldu). Rakam değil, çerçevede eriyen çizgi.
+    @Published var timeProgress: Double = 1
+    /// Yüz yerinde ve hazır → çerçeve yeşil; değilse kırmızı.
+    @Published var frameAligned = false
     @Published var liveScorePercent = 0
     @Published var showScore = false   // chipEmbedding != nil
     @Published var checkmark = false
-    @Published var wrongMove = false
-    /// "Yanlış hareket: başınızı sağa çevirdiniz" — hangi hareketin yakalandığını söyler.
-    @Published var wrongMoveDetail = ""
-    @Published var qualityWarning: String?   // (b) ışık uyarısı — Android tvQualityWarning karşılığı
-    @Published var debugEyeOpen = 0   // dev: canlı göz-açıklık % (blink kalibrasyonu)
-    @Published var debugSmile = 0     // dev: canlı smile sinyali ×100 (smile kalibrasyonu)
+    /// Tek seferlik uyarı: yanlış hareket ya da adımın yeniden başlaması. ~1.5 sn görünür.
+    @Published var notice: String?
+    @Published var qualityWarning: String?   // ışık/netlik/yüz uyarısı — Android tvQualityWarning karşılığı
     @Published private(set) var alignedSelfieJPEG: Data?
 
     /// Teşhis için dışarı verilebilecek son kare — başarıda da BAŞARISIZLIKTA da aynı kare:
-    /// gönderilebilseydi sunucunun göreceği kare buydu. Reddedilen deneme, elimizdeki en
-    /// değerli kare (eşleşme neden düştü sorusunu yalnız o yanıtlıyor), o yüzden `onFailure`
-    /// ile dışarı verilir. Cihazdan KENDİLİĞİNDEN çıkmaz: kullanıcı geri bildirim kutusunda
-    /// açıkça işaretlerse e-postaya ek olur. Demo yer tutucusu (boş Data) teşhis değildir.
+    /// gönderilebilseydi sunucunun göreceği kare buydu. Cihazdan KENDİLİĞİNDEN çıkmaz: kullanıcı
+    /// geri bildirim kutusunda açıkça işaretlerse e-postaya ek olur. Demo yer tutucusu teşhis değildir.
     var diagnosticJPEG: Data? {
         guard let data = alignedSelfieJPEG, !data.isEmpty else { return nil }
         return data
     }
     @Published private(set) var antiSpoofCropJPEG: Data?
 
-    /// Çip fotoğrafının MODELE GİREN hâli (hizalanmış 112×112 PNG). Ham DG2 değil: teşhis için
-    /// gereken şey karşılaştırmanın girdisidir, belgenin kendisi değil. Buradan hiçbir yere GİTMEZ —
+    /// Çip fotoğrafının MODELE GİREN hâli (hizalanmış 112×112 PNG). Buradan hiçbir yere GİTMEZ —
     /// yalnız geri bildirim kutusunda kullanıcı AYRI bir anahtarı açarsa e-postaya ek olur.
     @Published private(set) var alignedChipPNG: Data?
 
-    /// Son denemenin skaler ölçüleri — geri bildirim e-postasının gövdesine eklenir.
-    ///
-    /// Neden gerekli: destek kutusuna bugüne kadar 112×112'lik bir kırpım gidiyordu ve YANINDA HİÇ
-    /// SAYI YOKTU — "benzerlik yetersiz" diyen kullanıcının skorunu, kare parlaklığını, kafa açısını
-    /// bilmeden sebebi tahmin etmekten başka şey yapılamıyordu. Buradaki her alan zaten hesaplanıyor
-    /// ve yalnızca cihazdaki loga yazılıyordu.
-    ///
-    /// Hepsi SKALER: biyometrik veri değil, görüntü değil. Gizlilik maliyeti sıfır, teşhis değeri
-    /// fotoğraftan yüksek — luma tek başına "arkadan ışık" hipotezini doğrular ya da çürütür.
+    /// Son denemenin skaler ölçüleri — geri bildirim e-postasının gövdesine eklenir. Hepsi SKALER:
+    /// biyometrik veri değil, görüntü değil.
     @Published private(set) var diagnosticsSummary: String = ""
     @Published private(set) var selfiePreview: UIImage?
     @Published private(set) var chipPreview: UIImage?
     private(set) var finalMatchScore: Float = 0
+
+    /// Başarıda kayıt yüküne giren olay kanıtı (ana kuyrukta okunur).
+    private(set) var choreographyProof: ChoreographyProof?
+
+    /// Kılavuzdaki "Sizden sırayla N hareket istenecek" için.
+    var eventCountForGuide: Int { events.count }
 
     let camera = CameraController(position: .front)
     private let analyzer = FaceAnalyzer()
     private let embedder = FaceEmbedder()
     private var ciContext: CIContext { FaceAnalyzer.sharedCIContext }   // tek paylaşılan context
 
-    private let challengesInput: [LivenessAction]
+    private let events: [EventSequencer.Event]
     private let chipPhotoData: Data?
     private let isDemo: Bool
 
     // MARK: Logic durumu (yalnız video kuyruğu)
-    private var challenges: [LivenessAction] = []
-    private var index = 0
+    private var sequencer: EventSequencer?
     private var chipEmbedding: [Float]?
     /// Çip fotoğrafı VERİLDİ ama görüntü çözülemedi (ör. JPEG2000 DG2). "Çip yok" durumundan
     /// ayırt edilmeli: orada eşleştirme beklenmez, burada eşleştirme YAPILAMADI ve sessizce
@@ -123,123 +130,53 @@ final class LivenessViewModel: ObservableObject {
     private var bestMatchScore: Float = 0
     private var bestSavedMatchScore: Float = -1
     private var bestSavedQualityScore: Float = -1
-    private var lastActionTime: TimeInterval = 0
     private var lastCaptureTime: TimeInterval = 0
     private var selfieJPEG: Data?
+    private var antiSpoofCropJPEGLogic: Data?
     private var lastLuma: Float = -1   // en son ölçülen ortalama parlaklık (0-255)
-    /// Sunucuya GİDEN kareye ait kalite ölçüleri. Pasif canlılık (anti-spoof) reddi tek bir skaler
-    /// olarak geliyor ve görüntüyü SAKLAMIYORUZ (ZK); geriye dönük "neden sahte sanıldı" sorusunu
-    /// ancak bu skalerler yanıtlayabilir — ışık, netlik, poz, yüzün kadrajdaki payı.
+    /// Sunucuya GİDEN kareye ait kalite ölçüleri — "neden sahte sanıldı" sorusunu ancak bu
+    /// skalerler yanıtlayabilir: ışık, netlik, poz, yüzün kadrajdaki payı.
     private var savedFrameMetrics: String?
     private var lumaWarning: String?   // ışık uyarısı (her kare — video kuyruğu)
     private var blurWarning: String?   // netlik uyarısı (best-frame yakalamada — video kuyruğu)
     private let feedback = LivenessFeedback()
-    private var wrongAttempts = 0
-
-    /// Aktif hareketin ölçümü: komut EKRANA GELDİĞİ an (ms) ve o hareket için yapılan yanlış sayısı.
-    ///
-    /// Neden komut anından: "kullanıcı bu hareketi çözmeyi kaç saniyede başardı" sorusunun cevabı
-    /// bu. Sayaç (`restartGestureClock`) yanlış hareketten ve onay animasyonundan sonra yeniden
-    /// başlıyor, yani sayaçtan ölçmek "son denemesi kaç saniye sürdü"yü verirdi. Gülümsemedeki
-    /// "önce yüzünüzü gevşetin" ara adımı da bilerek süreye dâhil: kullanıcı açısından o bekleme
-    /// de gülümseme komutunun bir parçası.
-    private var gestureStartedAtMs: TimeInterval = 0
-    private var gestureWrongCount = 0
-    /// Nötr bir yüz GÖRÜLDÜ mü? Gülümseme cezası ancak nötrden bir GEÇİŞ olarak yazılır, ve
-    /// yazıldığı anda bu bayrak DÜŞER — yani sürekli gülümseyen (ya da öyle ölçülen) biri her
-    /// karede hata yiyemez, yeniden nötr görülmeden ikinci ceza gelmez.
-    ///
-    /// Android'de bu bayrak vardı, iOS'ta HİÇ YOKTU: gerçek parite açığı buydu. Kullanıcının
-    /// "hata mesajı kalkar kalkmaz aynısı tekrar geliyor, tüm haklarım doluyor" döngüsünü kıran
-    /// da bu — challenge başına DEĞİL, gözlem başına sıfırlanır.
-    private var smileGate = SmileEdgeGate()
-    /// Gülümseme "yükselişi" ölçülebilir mi — kullanıcının nötr olduğu EN AZ BİR kare görüldü mü?
-    /// Karar KARE bazlı verilir (Android paritesi): komut anındaki tek örnekleme kırılgandı ve
-    /// gülümseyerek gelen kullanıcıya "yüzünüzü gevşetin" hiç gösterilmiyordu.
-    private var smileArmed = false
-    private var smileRelaxShown = false
-    /// Nötre dönüş beklemesi için üst sınır (ms, epoch). Aşılırsa normal adıma geçilir — kullanıcı
-    /// gevşeme aşamasında takılıp ASLA timeout yememeli (fail-open, eski davranış).
-    private var smileArmDeadline: TimeInterval = 0
-    static let smileRelaxTimeout: TimeInterval = 5
-    private var lastSmileSignal: Float = 0
-    /// Yüz izleme sürekliliği — kadrajdan çıkıp geri girme tespiti (ms, epoch).
+    /// Yüz izleme sürekliliği — son yüz görülme anı (ms, epoch).
     private var lastFaceTime: TimeInterval = 0
-    /// Bir sonraki komutun sunulacağı an (ms, epoch; 0 = bekleyen yok).
-    ///
-    /// Eskiden bu iş `main.asyncAfter` → `camera.runOnVideoQueue` zinciriyle veriliyordu ve cihazda
-    /// 40 SANİYE boyunca çalışmadı (Sentry 2026-08-25: "3/4" yazıldı, "4/4" ancak kamera durunca
-    /// geldi) — üstelik aynı sürede kareler kesintisiz işleniyordu (en büyük boşluk 235 ms).
-    /// Kuyruk sıçramasının neden geciktiğini açıklayamadım; bu yüzden ona GÜVENMİYORUM. Komut artık
-    /// zaten çalıştığını ÖLÇTÜĞÜMÜZ kare döngüsünün içinde, zamanı gelince sunuluyor.
-    private var pendingPresentAtMs: TimeInterval = 0
-    /// Gözlenen kare aralığının üstel hareketli ortalaması (ms). İzleme boşluğu eşiği buna
-    /// göreceli — sabit eşik, kare hızı düştüğünde jest mantığını aç bırakıyordu.
-    private var frameIntervalMs: TimeInterval = 0
-    private var warmupUntil: TimeInterval = 0
-    static let trackingGapMs: TimeInterval = 400
-    static let trackingWarmupMs: TimeInterval = 400
+    /// Son sunum — yalnız DEĞİŞİNCE ana kuyruğa taşınır (her karede @Published yazmamak için).
+    private var lastPresentation: Presentation?
+    private var lastPublishedTime: Double = 1
+    /// "Süre azalıyor" dokunuşu adım başına bir kez.
+    private var nudgedStep = -1
+    /// Teşhis özeti için ilerleme — TEK KELİMELİK sayılar. Bekçi ana kuyruktan özet ürettiğinde
+    /// dizinin kendisine (diziler taşıyan bir yapı) dokunmasın: eşzamanlı kopyalama çökebilir.
+    private var progressSteps = 0
+    private var progressWrong = 0
 
     /// Koşu başladıktan sonra "yüz yok" demeden önce beklenen süre — kamera ısınsın, kullanıcı
     /// telefonu yerleştirsin diye. Bu süre içinde uyarı verirsek her koşu bir azarla açılır.
     static let noFaceGraceMs: TimeInterval = 2000
-    /// Yüzün kaç ms kayıp kalması uyarıyı hak eder. Baş çevirme sırasında dedektör kısa süre
-    /// yüzü kaybedebiliyor; eşik bunun üstünde olmalı yoksa uyarı yanıp söner.
+    /// Yüzün kaç ms kayıp kalması uyarıyı hak eder.
     static let noFaceWarnMs: TimeInterval = 1500
     /// Koşunun (video kuyruğunda) başladığı an — "yüz yok" uyarısının gecikmesi buradan ölçülür.
     private var runStartedAtMs: TimeInterval = 0
     /// "Yüzünüz çerçevede değil" uyarısı (video kuyruğu).
     private var faceMissingWarning: String?
-    /// Kafa, yeni challenge sunulduktan sonra nötre döndü mü? Dönmeden yanlış-hareket SAYILMAZ:
-    /// aksi halde FaceRight→FaceLeft dizisinde kullanıcı, kendi az önceki DOĞRU hareketi yüzünden
-    /// hata yiyordu.
-    private var poseSettled = false
 
-    /// Hareket süresi azaldığında verilen tek seferlik dürtme — her harekette sıfırlanır.
-    static let lowTimeFraction = 0.27   // 15sn'nin son ~4 saniyesi
-    private var nudged = false
-
-    /// Oturum tavanı — hareket bütçesinden TÜRETİLİR, sabit değildir.
-    ///
-    /// Sabit 60sn yanlıştı: 5 hareket × 15sn = 75sn'lik hareket bütçesini karşılamıyordu, yani
-    /// "her harekete 15 saniye" sözü 4. harekette sessizce bozuluyordu. Hareket süresi ya da
-    /// challenge sayısı değişirse tavan kendiliğinden uyar; ikisi bir daha çelişemez.
-    let effectiveSessionTimeout: TimeInterval
-
-    /// Tavanın formülü — örnek GEREKTİRMEZ.
-    ///
-    /// Ayrı bir statik fonksiyon olmasının sebebi test edilebilirlik: bunu bir `LivenessViewModel`
-    /// üzerinden doğrulamak, sırf bir aritmetik sabit için `FaceEmbedder`'ı (dolayısıyla MobileFaceNet
-    /// CoreML modelini) yüklemek demekti. `testSessionCapCoversTheGestureBudget` üç VM kuruyordu ve
-    /// simülatörde asılıp test sürecini öldürüyordu — CI'da 497 saniye, 33 testten 16'sı.
-    static func sessionTimeout(challengeCount: Int) -> TimeInterval {
-        // Dizi 5'e tamamlanıyor (resetLogicState) → tavan da en az 5 hareketi karşılamalı.
-        gestureTimeout * Double(max(challengeCount, 5)) + sessionOverhead
-    }
-
-    private var timer: Timer?
+    /// Ana kuyruktaki bekçi — kare akışının durup durmadığını izler.
+    private var watchdog: Timer?
+    /// Son işlenen karenin anı (ms). Video kuyruğunda yazılır, bekçi okur (tek kelime).
+    private var lastFrameAtMs: TimeInterval = 0
     private var sessionStartedAt: Date?
-    private var gestureStartedAt: Date?
 
-    /// Akışın huni anahtarı — hareket olayları koşu SIRASINDA doğuyor, yani sonuna kadar
-    /// bekletilip RegisterViewModel'e bırakılamıyor (canlılık hatasında öyle yapılıyor).
-    /// Android'de karşılığı `LivenessActivity`'nin `flow_nonce` intent extra'sı.
+    /// Akışın huni anahtarı — hareket olayları koşu SIRASINDA doğuyor.
     private let flowNonce: String?
 
     /// Canlı benzerlik akışı — canlılık sürerken enclave'e kare gönderir (Android
-    /// `LivenessActivity.streamer` paritesi).
-    ///
-    /// ⚠️ Ekrandaki 0.65 göstergesi ve renk geri bildirimi BUNDAN ETKİLENMEZ. Kullanıcı anlık
-    /// skorunu görüp ortamı düzeltmeli, gözlüğünü çıkarmalı; o baskı ürünün kalitesini koruyor.
-    /// Enclave onayı yalnızca İKİNCİ bir submit yolu açar.
-    ///
-    /// nil = streaming yok (demo, çip yok ya da enclave anahtarı elde değil) → bugünkü davranış.
+    /// `LivenessActivity.streamer` paritesi). Ekrandaki 0.65 göstergesi bundan ETKİLENMEZ;
+    /// enclave onayı yalnızca İKİNCİ bir submit yolu açar. nil = streaming yok.
     private let streamer: SimilarityStreamer?
 
     /// Kaydedilen en iyi karenin ölçüleri — submit'te **1. adayın** ölçüm satırı olur.
-    ///
-    /// Neden ekranda tutuluyor: bu sayılar O KAREYE ait ve submit anında yeniden ölçülemezler
-    /// (kamera çoktan kapanmış olur).
     private var bestFrameMetrics: DeviceFrameMetrics?
 
     /// Enclave'in onayladığı kare — submit'te **2. aday**. Yalnız 1. adaydan FARKLIYSA gönderilir.
@@ -248,26 +185,41 @@ final class LivenessViewModel: ObservableObject {
     var enclaveApprovedMetrics: DeviceFrameMetrics? { streamer?.approvedMetrics }
     /// 1. adayın ölçüleri — RegisterViewModel ölçüm satırını bununla yazar.
     var bestCandidateMetrics: DeviceFrameMetrics? { bestFrameMetrics }
-    /// Adayların KAYNAK KARE numaraları — final satırı ile onu üreten streaming satırını
-    /// birleştirir (iki aday farklı karelerken skorları elle eşleştirmek çalışmaz).
+    /// Adayların KAYNAK KARE numaraları — final satırı ile onu üreten streaming satırını birleştirir.
     var bestSourceSeq: Int? { streamer?.lastSentSeq }
     var approvedSourceSeq: Int? { streamer?.approvedSeq }
 
-    init(challenges: [Int], chipPhotoData: Data?, isDemo: Bool = false, flowNonce: String? = nil,
+    /// Demo dizisi — gerçek sunucu dizisi yoksa (Android `DEMO_EVENTS` paritesi).
+    static let demoEvents: [Int] = [1, 2, 3]
+
+    private struct Presentation: Equatable {
+        var instruction: String
+        var sub: String
+        var step: String
+        var aligned: Bool
+        var checkmark: Bool
+    }
+
+    init(events: [Int], chipPhotoData: Data?, isDemo: Bool = false, flowNonce: String? = nil,
          flowId: String? = nil, enclavePubKey: String? = nil, dg2Raw: Data? = nil) {
-        let input = challenges.map(LivenessAction.fromInt).filter { $0 != .none }
-        self.effectiveSessionTimeout = Self.sessionTimeout(challengeCount: input.count)
-        self.challengesInput = challenges.map(LivenessAction.fromInt).filter { $0 != .none }
+        // Bilinmeyen bir kod gelirse (ileri sürüm sunucu) dizi KULLANILMAZ — yarım anlaşılmış bir
+        // diziyi yürütmek enclave'de "yapı bozuk" reddi demek.
+        let parsed = events.compactMap(EventSequencer.Event.init(rawValue:))
+        let usable = !parsed.isEmpty && parsed.count == events.count
+        if usable {
+            self.events = parsed
+        } else if isDemo {
+            self.events = Self.demoEvents.compactMap(EventSequencer.Event.init(rawValue:))
+        } else {
+            self.events = []
+        }
         self.chipPhotoData = chipPhotoData
         self.isDemo = isDemo
         self.flowNonce = flowNonce
 
         // Canlı benzerlik akışı: yalnız gerçek akışta ve yalnız üç girdi de varken.
-        // Demo huniyi ve ölçümü kirletmez.
-        //
         // ⚠️ HAM DG2 gönderilir, chipPhotoData DEĞİL: enclave benzerlik referansını
-        // SOD-doğrulanmış ham DG2'den çıkarır (register ile AYNI boru hattı). Farklı bir kaynak
-        // kullanmak, streaming'in "geçti" dediği kareyi register'ın reddetmesine yol açardı.
+        // SOD-doğrulanmış ham DG2'den çıkarır (register ile AYNI boru hattı).
         if !isDemo, let flowId, let enclavePubKey, let dg2Raw, !dg2Raw.isEmpty {
             let st = SimilarityStreamer(flowId: flowId, enclavePubKey: enclavePubKey)
             st.prepare(dg2Raw: dg2Raw)
@@ -284,40 +236,52 @@ final class LivenessViewModel: ObservableObject {
         if let data = chipPhotoData, let ui = UIImage(data: data) { chipPreview = ui }
 
         camera.onFrame = { [weak self] buffer, _ in
-            self?.updateQualityWarning(for: buffer)   // (b) ışık uyarısı — her kare (yüz olmasa da)
+            self?.updateQualityWarning(for: buffer)   // ışık uyarısı — her kare (yüz olmasa da)
         }
         // ML Kit `VisionImage`'ı CVPixelBuffer kabul etmiyor → yüz analizi ayrı kanaldan besleniyor.
-        // Aynı kare, aynı video kuyruğu; yalnız taşıyıcı tip farklı.
         camera.onSampleBuffer = { [weak self] sample, orientation in
             self?.analyzer.process(sample, orientation: orientation)
         }
-        // Yüz bulunamayan karelerde de vadesi gelmiş komut sunulmalı: kullanıcı jestten sonra
-        // kadraj dışına çıkarsa akış aksi halde orada takılırdı.
-        analyzer.onNoFace = { [weak self] in self?.presentPendingChallengeIfDue() }
+        // Dudak konturu yalnız ağız açma adımında: ikinci dedektör kare hızını düşürür.
+        analyzer.contourWanted = { [weak self] in self?.sequencer?.wantsContour == true }
+        // Yüz bulunamayan karelerde de dizinin saati işlemeli: yüz kaybı adımı yeniden başlatır.
+        analyzer.onNoFace = { [weak self] in self?.handleNoFace() }
         analyzer.onFace = { [weak self] frame in
             self?.handleFace(frame) // video kuyruğu
         }
+
+        guard isDemo || !events.isEmpty else {
+            // Sunucu dizi göndermedi: kanıtsız kayıt enclave'de eski sürüm gibi kapısız geçerdi —
+            // yeni istemcinin bu yola düşmesi bir sürüm uyuşmazlığıdır, sessizce kabul edilmez.
+            Log.error("Olay dizisi yok — sunucu göndermedi ya da anlaşılamadı; akış başlatılmıyor",
+                      category: .liveness)
+            phase = .failure(.missingSequence)
+            return
+        }
+        // Kamera kılavuz ekrandayken ısınır; kareler dizi başlayana dek işlenmez.
+        camera.start()
+        phase = .guide
+    }
+
+    /// Kılavuzdaki "Başla".
+    func beginAfterGuide() {
+        guard phase == .guide else { return }
         beginRun()
     }
 
     func stop() {
-        invalidateTimer()
+        invalidateWatchdog()
         camera.stop()
         feedback.deactivate()
         // Akış nasıl biterse bitsin gömme vektörü bırakılır. Başarı ve hata yollarında zaten
-        // çağrıldı; burası SESSİZ çıkışı yakalar (geri, uygulamanın kapatılması). Streamer ilk
-        // sebebi tuttuğu için buradaki "abandoned" ancak hiçbir sebep bildirilmediyse kazanır.
-        //
-        // 🔴 Aradığımız vaka tam olarak bu: enclave skoru eşiği geçerken "abandoned" ile biten
-        // akış, cihazdaki ön eleme yüzünden kaybettiğimiz kullanıcıdır.
+        // çağrıldı; burası SESSİZ çıkışı yakalar. Streamer ilk sebebi tuttuğu için buradaki
+        // "abandoned" ancak hiçbir sebep bildirilmediyse kazanır.
         streamer?.release(outcome: "abandoned")
     }
 
     func retry() {
-        // İz bırakıyoruz çünkü bir kullanıcı "Tekrar Dene"nin MRZ'ye döndürdüğünü bildirdi, oysa
-        // bu yol yalnız `beginRun()` çağırıyor — MRZ'ye götüren tek yer `onLivenessCancel`.
-        // Bir sonraki raporda hangi butonun basıldığını tahmin etmek yerine kayıttan okuyacağız.
         Log.info("Liveness: 'Tekrar Dene' → koşu yeniden başlatılıyor", category: .liveness)
+        if case .failure(.missingSequence) = phase { return }
         beginRun()
     }
 
@@ -327,10 +291,15 @@ final class LivenessViewModel: ObservableObject {
         phase = .running
         liveScorePercent = 0
         checkmark = false
-        wrongMove = false
+        notice = nil
+        timeProgress = 1
+        frameAligned = false
         alignedSelfieJPEG = nil
         selfiePreview = nil
-        startTimer()
+        choreographyProof = nil
+        sessionStartedAt = Date()
+        lastFrameAtMs = Date().timeIntervalSince1970 * 1000
+        startWatchdog()
         camera.runOnVideoQueue { [weak self] in
             guard let self else { return }
             self.resetLogicState()
@@ -338,59 +307,48 @@ final class LivenessViewModel: ObservableObject {
             if self.isDemo {
                 DispatchQueue.main.async { self.presentDemoStep(0) }
             } else {
-                self.presentChallengeForIndex()
+                var seq = EventSequencer(events: self.events)
+                seq.start(now: Self.nowMs)
+                self.sequencer = seq
+                self.present(seq)
             }
         }
     }
 
     // MARK: - Video kuyruğu logic
 
-    private var antiSpoofCropJPEGLogic: Data?  // video kuyruğu; main'e finalizeSuccessAttempt'te taşınır
+    private static var nowMs: Double { Date().timeIntervalSince1970 * 1000 }
 
     private func resetLogicState() {
-        var list = challengesInput
-        while list.count < 5 { list.append(.randomGesture()) }
-        challenges = list
-        index = 0
+        sequencer = nil
         bestMatchScore = 0
         bestSavedMatchScore = -1
         bestSavedQualityScore = -1
         isIdentityVerified = false
         selfieJPEG = nil
         antiSpoofCropJPEGLogic = nil
-        // sessionStartedAt BURADA set EDİLMEZ: `startTimer()` onu zaten ana kuyrukta,
-        // oturum saatinin gerçekten başladığı anda kuruyor. Burada ikinci kez yazmak
-        // video kuyruğundan ana kuyruk durumuna dokunmak olurdu (iplik disiplini) ve
-        // iki farklı "oturum başlangıcı" üretirdi.
         bestFrameMetrics = nil
-        lastActionTime = 0
         lastCaptureTime = 0
-        wrongAttempts = 0
-        smileArmed = false
-        smileRelaxShown = false
-        smileArmDeadline = 0
-        lastSmileSignal = 0
         savedFrameMetrics = nil
         lastFaceTime = 0
-        warmupUntil = 0
-        frameIntervalMs = 0
-        pendingPresentAtMs = 0
-        runStartedAtMs = Date().timeIntervalSince1970 * 1000
+        lastPresentation = nil
+        lastPublishedTime = 1
+        nudgedStep = -1
+        progressSteps = 0
+        progressWrong = 0
+        runStartedAtMs = Self.nowMs
         faceMissingWarning = nil
-        poseSettled = false
         // `chipEmbedding` bilerek korunur (bir kez üretilir, koşular arası yeniden kullanılır);
         // çözülememe bayrağı da onunla aynı ömre sahip olmalı ki "Tekrar Dene" kapıyı açmasın.
         chipDecodeFailed = chipDecodeFailed && chipEmbedding == nil
-        smileGate.reset()   // yeni oturum → nötr yüz henüz görülmedi
         analyzer.resetDiagnostics()
     }
 
     private func prepareChipEmbeddingIfNeeded() {
         guard chipEmbedding == nil, let data = chipPhotoData else { return }
         guard let cg = UIImage(data: data)?.cgImage else {
-            // Çip fotoğrafı VERİLDİ ama çözülemedi. Bayrak şart: aşağıdaki başarı kapısı bunu
-            // "çip yok" sanıp sessizce geçiyordu — yani yüz eşleştirmesi HİÇ yapılmadan kayıt
-            // tamamlanabiliyordu (parite denetimi 2026-09-03, O-5).
+            // Çip fotoğrafı VERİLDİ ama çözülemedi. Bayrak şart: başarı kapısı bunu "çip yok"
+            // sanıp sessizce geçiyordu (parite denetimi 2026-09-03, O-5).
             chipDecodeFailed = true
             Log.error("Çip fotoğrafı çözülemedi — cihazda yüz eşleştirmesi yapılamayacak",
                       category: .liveness)
@@ -399,8 +357,7 @@ final class LivenessViewModel: ObservableObject {
         let eyes = Self.detectEyes(in: cg)
         if let aligned = FaceAligner.alignedImage(from: cg, leftEye: eyes.left, rightEye: eyes.right) {
             chipEmbedding = embedder.embedding(from: aligned)
-            // AYNI hizalanmış kareyi teşhis için de saklıyoruz — eşleştirme yolu değişmez,
-            // yalnızca zaten üretilmiş olan görüntü bir kez daha kodlanır.
+            // AYNI hizalanmış kareyi teşhis için de saklıyoruz — eşleştirme yolu değişmez.
             let png = UIImage(cgImage: aligned).pngData()
             DispatchQueue.main.async { [weak self] in self?.alignedChipPNG = png }
         }
@@ -408,224 +365,211 @@ final class LivenessViewModel: ObservableObject {
         Log.info("Liveness chip embedding (\(method)) size=\(chipEmbedding?.count ?? 0)", category: .liveness)
     }
 
-    /// index'i (video kuyruğu) okur ve UI'yi ana kuyrukta sunar. index taşmışsa başarı değerlendir.
-    private func presentChallengeForIndex() {
-        Log.info("Liveness ilerletme 4/4: komut hazırlanıyor, index=\(index)/\(challenges.count)",
-                 category: .liveness)
-        poseSettled = false
-        if index >= challenges.count {
-            finalizeSuccessAttempt()
-            return
-        }
-        let action = challenges[index]
-        let step = "\(index + 1)/\(challenges.count)"
-        // Gülümseme HER ZAMAN bir GEÇİŞ olarak ölçülür; "nötr görüldü mü" kararı processAction'da
-        // kare kare verilir (bkz. smileArmed).
-        smileArmed = false
-        smileRelaxShown = false
-        smileArmDeadline = Date().timeIntervalSince1970 * 1000 + Self.smileRelaxTimeout * 1000
-        // Hareket ölçümü BURADAN başlar — presentChallenge'da DEĞİL: o ana kuyruğa asenkron
-        // dispatch ediliyor, yani ölçüm video kuyruğu ilerledikten sonra düşebilirdi. Buradaki
-        // smileArmed/smileArmDeadline ile aynı cinsten, hareket başına logic durumu.
-        gestureStartedAtMs = Date().timeIntervalSince1970 * 1000
-        gestureWrongCount = 0
-        DispatchQueue.main.async { [weak self] in
-            self?.presentChallenge(action: action, step: step)
-        }
-    }
-
-    /// Vadesi gelmiş bir komut varsa sunar. Kare döngüsünden çağrılır — yüz bulunsun bulunmasın.
-    private func presentPendingChallengeIfDue() {
-        guard pendingPresentAtMs > 0 else { return }
-        let now = Date().timeIntervalSince1970 * 1000
-        guard now >= pendingPresentAtMs else { return }
-        pendingPresentAtMs = 0
-        presentChallengeForIndex()
-    }
-
     private func handleFace(_ frame: FaceAnalyzer.Frame) {
-        presentPendingChallengeIfDue()
-        let quality = LivenessGestureDetector.qualityScore(frame.signals, imageSize: frame.imageSize)
-        captureFrame(frame, quality: quality)
-        processAction(frame.signals)
-    }
-
-    private func processAction(_ signals: FaceSignals) {
-        guard !isDemo, index < challenges.count else { return }
-        let now = Date().timeIntervalSince1970 * 1000
-
-        // Canlı kalibrasyon göstergeleri (dev) — her karede. Artık ikisi de GERÇEK olasılık yüzdesi.
-        let eyeOpen = min(signals.leftEyeOpen, signals.rightEyeOpen)
-        let eyePct = Int(eyeOpen * 100)
-        let smilePct = Int(signals.smile * 100)
-        DispatchQueue.main.async { [weak self] in
-            self?.debugEyeOpen = eyePct
-            self?.debugSmile = smilePct
-        }
-
-        // Yüz izleme koptu mu? Kadrajdan çıkıp geri girildiğinde ilk kareler bozuk gelir. Android'de
-        // bu koruma YOK; iOS'ta kalıyor (parite = birleşim: ileri tarafı geri çekme).
-        // Eşik MUTLAK olamaz. 400 ms sabiti, kareler 30 fps geldiğinde doğruydu; ML Kit'e geçince
-        // kare aralığı ~600 ms'ye çıktı ve koşul HER karede doğru olmaya başladı: `warmupUntil`
-        // sürekli 400 ms ileri itildi, guard bir daha asla geçilemedi ve jest tespiti ilk kareden
-        // sonra tamamen öldü ("ilk hareket kabul edildi, sonrasında hiçbir şey algılanmıyor",
-        // cihaz kaydı 2026-08-25). Küçültme kare hızını geri getirdi, ama yavaş bir cihazda aynı
-        // tuzak yeniden kurulurdu — bu yüzden eşik artık GÖZLENEN kare aralığına göreceli.
-        //
-        // "Kopma" = normal ritmin belirgin dışına çıkan boşluk. Mutlak taban korunuyor: kareler
-        // hızlıyken 2.5 kat, gerçek bir yüz kaybını temsil edecek kadar uzun değildir.
-        if lastFaceTime > 0 {
-            let gap = now - lastFaceTime
-            let expected = frameIntervalMs > 0 ? frameIntervalMs : gap
-            if gap > max(Self.trackingGapMs, expected * 2.5) {
-                warmupUntil = now + Self.trackingWarmupMs
-            }
-            // EMA karşılaştırmadan SONRA güncellenir: aksi halde tek bir uzun boşluk beklentiyi
-            // kendi seviyesine çeker ve bir sonraki gerçek kopmayı gizler.
-            frameIntervalMs = frameIntervalMs > 0 ? frameIntervalMs * 0.8 + gap * 0.2 : gap
-        }
+        let now = Self.nowMs
+        lastFrameAtMs = now
         lastFaceTime = now
+        let quality = LivenessGestureDetector.qualityScore(frame.signals, imageSize: frame.imageSize)
 
-        // Sınıflandırma gelmediyse bu kare ÖLÇÜM DEĞİLDİR (bkz. FaceSignals.landmarksOK).
-        guard signals.landmarksOK, now >= warmupUntil else { return }
+        if isDemo {
+            captureFrame(frame, quality: quality, fullCG: nil)
+            return
+        }
+        // Kılavuz ekrandayken ya da dizi bittiyse kareler dizinin işi değil.
+        guard var seq = sequencer, seq.isActive else { return }
 
-        lastSmileSignal = signals.smile
-
-        // Kafa nötre döndüyse yanlış-hareket sayımı açılır (bkz. poseSettled).
-        if !poseSettled, abs(signals.yaw) < LivenessGestureDetector.yawThreshold { poseSettled = true }
-
-        // Nötr yüz görüldü → bundan sonraki yükseliş YENİ bir gülümsemedir (kenar tespiti).
-        smileGate.observe(lastSmileSignal)
-
-        let target = challenges[index]
-
-        // Gülümseme "arming": nötr bir kare görülmeden gülümseme KABUL EDİLMEZ. Throttle'dan önce
-        // çalışır ki geçiş akıcı olsun. Kullanıcı komut anında gülümsüyorsa talimat "yüzünüzü
-        // gevşetin"e döner; nötre inince asıl komut geri gelir ve sayaç tam süreyle yeniden başlar.
-        //
-        // Bu ekranın yüz ASIKKEN çıkması, Vision döneminde göreceli baseline'ın bozulmasından
-        // geliyordu; karar artık mutlak bir olasılık eşiğine (0.4) dayanıyor.
-        if target == .smile, !smileArmed {
-            let gaveUp = now >= smileArmDeadline
-            if LivenessGestureDetector.isSmileNeutral(lastSmileSignal) || gaveUp {
-                smileArmed = true
-                if smileRelaxShown {
-                    let step = "\(index + 1)/\(challenges.count)"
-                    DispatchQueue.main.async { [weak self] in
-                        self?.presentChallenge(action: .smile, step: step)
-                    }
-                }
-            } else if !smileRelaxShown {
-                smileRelaxShown = true
-                DispatchQueue.main.async { [weak self] in
-                    self?.showSmileRelaxPrompt()
-                }
+        // Tam kare bir kez üretilir: hem olay kırpması hem selfie adayı aynı kareyi kullanabilir.
+        var fullCG: CGImage?
+        let box = frame.signals.boundingBox
+        var signals = seq.offer(frame.signals, frameSize: frame.imageSize, now: now) {
+            if fullCG == nil {
+                fullCG = analyzer.timing.measure("tamKare", { cgImage(from: frame.pixelBuffer) })
             }
+            guard let cg = fullCG else { return nil }
+            return analyzer.timing.measure("olayKırpma", { Self.faceCropJPEG(cg, box: box) })
+        }
+        signals += seq.tick(now: now)
+        sequencer = seq
+
+        // 🔴 Olay beklenirken selfie adayı (tam kare + hizalama + gömme) ERTELENİR: kare hızı
+        // düşerse 100-150 ms'lik bir kırpma iki kare arasında kalır (Android'de sahada yaşandı).
+        if !seq.quietPhase && seq.isActive {
+            captureFrame(frame, quality: quality, fullCG: fullCG)
+        }
+        handle(signals, seq)
+    }
+
+    private func handleNoFace() {
+        lastFrameAtMs = Self.nowMs
+        guard var seq = sequencer, seq.isActive else { return }
+        let signals = seq.tick(now: Self.nowMs)
+        sequencer = seq
+        handle(signals, seq)
+    }
+
+    /// Dizinin tek seferlik bildirimlerini işler ve sunumu günceller (video kuyruğu).
+    private func handle(_ signals: [EventSequencer.Signal], _ seq: EventSequencer) {
+        progressSteps = seq.completedSteps
+        progressWrong = seq.wrongEvents
+        for signal in signals {
+            switch signal {
+            case .stepDone:
+                feedback.play(.stepOk)
+            case .wrong(let event):
+                feedback.play(.wrong)
+                let did = L.t(event == .mouthOpen ? "liveness_did_mouth_open" : "liveness_did_smile")
+                showNotice(L.t("liveness_wrong_move_detail", did))
+            case .stepReset:
+                feedback.play(.wrong)
+                showNotice(L.t("liveness_ev_reset_face"))
+            case .resolved(let event, let durationMs, let wrongCount, let timedOut):
+                reportEvent(event, durationMs: durationMs, wrongCount: wrongCount, timedOut: timedOut)
+            case .failed(let failure):
+                // İz kaydı breadcrumb olarak kalır (olay değil → kota yemez, mesajı şişirmez) ve
+                // hemen ardından `finalizeFailure`'ın yazdığı uyarıya iliştirilir.
+                Log.info("Olay dizisi başarısız: \(failure) — iz: \(seq.trace)", category: .liveness)
+                let reason: FailureReason
+                switch failure {
+                case .settleTimeout: reason = .settleTimeout
+                case .eventTimeout: reason = .gestureTimeout
+                case .tooManyWrong: reason = .tooManyErrors
+                case .tooManyResets: reason = .tooManyResets
+                }
+                finalizeFailure(reason)
+                return
+            case .completed:
+                choreographyProofLogic = Self.makeProof(seq, elapsedMs: Int(Self.nowMs - runStartedAtMs))
+                finalizeSuccessAttempt()
+                return
+            }
+        }
+        present(seq)
+    }
+
+    /// Başarıda video kuyruğunda kurulur, `finalizeSuccessAttempt` ana kuyruğa taşır.
+    private var choreographyProofLogic: ChoreographyProof?
+
+    /// Kanıt: adım başına nötr + olay kareleri, iz kaydı ve sayaçlar.
+    static func makeProof(_ seq: EventSequencer, elapsedMs: Int) -> ChoreographyProof {
+        let steps = seq.steps.map { step in
+            ChoreographyProofStep(
+                neutral: step.neutral.map { [$0.base64EncodedString()] } ?? [],
+                event: step.events.map { $0.base64EncodedString() },
+                attempts: step.wrong + 1)
+        }
+        return ChoreographyProof(steps: steps, elapsedMs: elapsedMs, resets: seq.resets,
+                                 wrongEvents: seq.wrongEvents, trackingChanges: nil, trace: seq.trace)
+    }
+
+    /// Dizinin durumunu ekrana çevirir; yalnız DEĞİŞENİ ana kuyruğa taşır.
+    private func present(_ seq: EventSequencer) {
+        let step = min(seq.completedSteps, max(seq.events.count - 1, 0))
+        let stepLabel = seq.events.isEmpty ? "" : "\(step + 1)/\(seq.events.count)"
+        var p = Presentation(instruction: "", sub: "", step: stepLabel, aligned: false, checkmark: false)
+        switch seq.phase {
+        case .settle:
+            let placed = seq.framing == .ok
+            p.aligned = placed && !seq.needsRelax
+            switch seq.framing {
+            case .tooSmall: p.instruction = L.t("liveness_ev_closer")
+            case .tooLarge: p.instruction = L.t("liveness_ev_farther")
+            case .offFrame: p.instruction = L.t("liveness_ev_place")
+            case .ok: p.instruction = L.t(seq.needsRelax ? "liveness_face_smile_relax" : "liveness_ev_hold")
+            }
+            p.sub = L.t("liveness_ev_hold_hint")
+        case .event:
+            p.aligned = true
+            if let event = seq.currentEvent {
+                p.instruction = seq.needsRelax ? L.t("liveness_face_smile_relax") : Self.eventText(event)
+                p.sub = seq.needsRelax ? L.t("liveness_ev_relax_hint")
+                    : seq.eventCount == 1 ? L.t("liveness_ev_again") : Self.eventHint(event)
+            }
+        case .afterEvent:
+            p.aligned = true
+            p.checkmark = true
+        case .done:
             return
         }
 
-        // İlerleme throttle'dan SONRA (önceki jestin yeni challenge'a sızmasını önler).
-        guard now - lastActionTime >= 2000 else { return }
-
-        guard let detected = LivenessGestureDetector.detect(signals) else { return }
-
-        if detected == target {
-            advanceOnSuccess(now: now)
-            return
+        if p != lastPresentation {
+            lastPresentation = p
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.phase == .running else { return }
+                self.instruction = p.instruction
+                self.subInstruction = p.sub
+                self.stepText = p.step
+                self.frameAligned = p.aligned
+                self.checkmark = p.checkmark
+            }
         }
 
-        // Hedef dışı KASITLI jest → hata bütçesinden düşer. Kafa henüz nötre dönmediyse sayılmaz.
-        //
-        // Göz kırpma bir REFLEKSTİR — asla sayılmaz (detect() zaten yalnız hedefteyken blink döndürse
-        // bile buraya blink düşmez: hedef değilse aşağıdaki iki koşulun hiçbirine girmez).
-        // Gülümseme İRADİDİR ve sayılır: yalnız kafa dönüşünü saymak bütçeyi işlevsiz bırakıyordu,
-        // çünkü ekranı okuyamayan bir deneme-yanılma düzeneği blink ve smile'ı bedavaya eleyip
-        // yalnız kafa dönüşü pozisyonlarında risk alırdı.
-        //
-        // AMA yalnızca NÖTRDEN YÜKSELİŞ sayılır (`smileGate`): mutlak eşiğin üstünde DURAN
-        // biri her karede hata yiyemez, ve bir ceza yazıldıktan sonra yeniden nötr görülmeden
-        // ikincisi gelmez. Kullanıcının yaşadığı "mesaj kalkar kalkmaz aynısı" döngüsünü bu keser.
-        guard poseSettled else { return }
-        if detected == .faceLeft || detected == .faceRight {
-            handleWrongGesture(now: now, detected: detected)
-        } else if detected == .smile, smileGate.consumeIfArmed() {
-            handleWrongGesture(now: now, detected: .smile)
+        // Kalan süre: yalnız belirgin değişimde yayınla; azalınca adım başına tek dokunuş.
+        let left = seq.timeLeft
+        if abs(left - lastPublishedTime) >= 0.01 || (left >= 1 && lastPublishedTime < 1) {
+            lastPublishedTime = left
+            DispatchQueue.main.async { [weak self] in self?.timeProgress = left }
+        }
+        if left <= Self.lowTimeFraction && nudgedStep != seq.completedSteps {
+            nudgedStep = seq.completedSteps
+            feedback.play(.nudge)
         }
     }
 
-    /// Hareket kabul → sıradaki komut.
-    ///
-    /// ⚠️ Bu geçiş DÖRT kuyruk sıçraması: video → main (tik) → main+1sn → video (hazırlık) →
-    /// main (ekran). 2026-08-25 cihaz testinde tik ekranda ASILI kaldı: adım ilerlemedi, sayaç
-    /// saymayı sürdürdü, kafa çevrilince yanlış-hareket sesi geldi ama yazı çıkmadı — çünkü tik
-    /// `instructionBlock` sırasında en üstte ve uyarıyı da örtüyor. Yani `index` arttı fakat
-    /// `presentChallenge` hiç koşmadı: zincir ortada koptu.
-    ///
-    /// Kopma noktası kodu okuyarak bulunamadı (dört halkanın dördü de tek başına doğru), o
-    /// yüzden her sıçrama iz bırakıyor. Bir sonraki raporda hangi satırın YAZILMADIĞINA bakıp
-    /// yeri tahmin etmeden bulacağız.
-    private func advanceOnSuccess(now: TimeInterval) {
-        lastActionTime = now
-        reportGesture(timedOut: false)
-        index += 1
-        Log.info("Liveness ilerletme 1/4: hareket kabul, index=\(index)", category: .liveness)
-        feedback.play(.stepOk)   // kafa çevrikken ekranı GÖREMİYOR — onayı ses/haptic taşır
+    private func showNotice(_ text: String) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            // Sayaç ONAY animasyonu başlarken sıfırlanır: aksi halde son saniyede yapılan DOĞRU bir
-            // hareketin ardından, bir sonraki talimat ekrana gelmeden timeout tetikleniyordu.
-            self.restartGestureClock()
-            self.checkmark = true
-            Log.info("Liveness ilerletme 2/4: tik gösterildi", category: .liveness)
+            self.notice = text
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                if self?.notice == text { self?.notice = nil }
+            }
         }
-        // 1 sn ✅ animasyonundan sonra sunulacak (kare döngüsü tetikler, kuyruk sıçraması YOK).
-        pendingPresentAtMs = now + 1000
     }
 
-    /// Yanlış hareket: hata bütçesinden düşer ve AYNI hareket yeniden sorulur.
-    ///
-    /// Eskiden `index = 0` ile diziye baştan başlanıyordu. Bu hem meşru kullanıcıyı cezalandırıyordu
-    /// (tek yanlış dönüş = tüm hareketler yeniden) hem de saldırgana yarıyordu: dizi sabit olduğu
-    /// için öğrenilen önek hızlıca tekrar oynatılıp yalnız bir sonraki adım deneniyordu. Artık sınırı
-    /// saat değil, sayılabilir bir bütçe koyuyor.
-    private func handleWrongGesture(now: TimeInterval, detected: LivenessAction) {
-        lastActionTime = now
-        gestureWrongCount += 1
-        wrongAttempts += 1
-        poseSettled = false
-        feedback.play(.wrong)
-        let exhausted = wrongAttempts >= Self.maxWrongAttempts
-        // Kullanıcı NE yaptığını görmeli; yalnız "yanlış hareket" demek "ben ne yaptım ki?" bırakıyor.
-        let didKey: String
-        switch detected {
-        case .faceLeft:  didKey = "liveness_did_face_left"
-        case .faceRight: didKey = "liveness_did_face_right"
-        default:         didKey = "liveness_did_smile"
+    static func eventText(_ event: EventSequencer.Event) -> String {
+        switch event {
+        case .blink: return L.t("liveness_face_blink")
+        case .smile: return L.t("liveness_face_smile")
+        case .mouthOpen: return L.t("liveness_face_mouth_open")
+        case .doubleBlink: return L.t("liveness_face_double_blink")
         }
-        if exhausted {
-            finalizeFailure(.tooManyErrors)   // zaten video kuyruğundayız — sıçramaya gerek yok
-            return
+    }
+
+    /// Hareketin NASIL yapılacağı — komutun altında, komutla aynı anda.
+    static func eventHint(_ event: EventSequencer.Event) -> String {
+        switch event {
+        case .blink: return L.t("liveness_ev_hint_blink")
+        case .smile: return L.t("liveness_ev_hint_smile")
+        case .mouthOpen: return L.t("liveness_ev_hint_mouth_open")
+        case .doubleBlink: return L.t("liveness_ev_hint_double_blink")
         }
-        // Ceza animasyonundan sonra AYNI hareket yeniden sorulur; tetikleyici kare döngüsü.
-        pendingPresentAtMs = now + 1500
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            self.restartGestureClock()   // ceza animasyonu sırasında sayaç dolmasın
-            self.wrongMoveDetail = L.t("liveness_wrong_move_detail", L.t(didKey))
-            self.wrongMove = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { self.wrongMove = false }
-        }
+    }
+
+    /// Olay karesi: yüzün çevresinden kare kırpma (`FaceCrop`), uzun kenar en fazla 480, JPEG.
+    static let eventOutputEdge = 480
+
+    static func faceCropJPEG(_ cg: CGImage, box: CGRect) -> Data? {
+        let rect = FaceCrop.squareAround(box, width: cg.width, height: cg.height)
+        guard let cut = cg.cropping(to: rect) else { return nil }
+        let side = min(eventOutputEdge, Int(rect.width))
+        guard side > 0,
+              let ctx = CGContext(data: nil, width: side, height: side, bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return nil }
+        ctx.interpolationQuality = .high
+        ctx.draw(cut, in: CGRect(x: 0, y: 0, width: side, height: side))
+        guard let out = ctx.makeImage() else { return nil }
+        return UIImage(cgImage: out).jpegData(compressionQuality: 0.88)
     }
 
     /// Best-frame yakalama (Android captureFrame). 400ms throttle.
-    private func captureFrame(_ frame: FaceAnalyzer.Frame, quality: Float) {
-        let now = Date().timeIntervalSince1970 * 1000
+    private func captureFrame(_ frame: FaceAnalyzer.Frame, quality: Float, fullCG preparedCG: CGImage?) {
+        let now = Self.nowMs
         guard now - lastCaptureTime >= 400 else { return }
         lastCaptureTime = now
 
         // Aşamalar ölçülüyor: 2026-08-25'te uygulama video kuyruğunda 77 saniye tamamen durdu ve
         // hangi çağrının tıkadığını ancak süre kaydı söyleyebilir (cihazda debugger yok).
-        guard let fullCG = analyzer.timing.measure("tamKare", { cgImage(from: frame.pixelBuffer) }) else { return }
+        guard let fullCG = preparedCG ?? analyzer.timing.measure("tamKare", { cgImage(from: frame.pixelBuffer) }) else { return }
         let box = frame.signals.boundingBox
         let margin = box.width * 0.4
         let left = max(0, box.minX - margin)
@@ -642,7 +586,6 @@ final class LivenessViewModel: ObservableObject {
         }) else { return }
 
         // Netlik (112×112 aligned) → anlık "net değil" uyarısı + best-frame için kalite bonusu.
-        // Bulanık/kirli lens veya hareket bulanıklığında düşük çıkar (Android computeSharpness paritesi).
         let sharpness = analyzer.timing.measure("netlik", { Self.sharpness(of: aligned) })
         blurWarning = (sharpness >= 0 && sharpness <= Self.blurWarnThreshold)
             ? NSLocalizedString("liveness_quality_blur", comment: "") : nil
@@ -671,7 +614,7 @@ final class LivenessViewModel: ObservableObject {
 
         if shouldSave {
             // PNG (lossless): R50 girişi tam bu 112×112 pikseller; bu boyutta JPEG blok artefaktı
-            // embedding'i bozabilir, dosya zaten ~20-40 KB. (Değişken adı geçmişten "JPEG" kaldı.)
+            // embedding'i bozabilir. (Değişken adı geçmişten "JPEG" kaldı.)
             selfieJPEG = UIImage(cgImage: aligned).pngData()
             antiSpoofCropJPEGLogic = makeAntiSpoofCrop(fullCG: fullCG, box: box)
             let faceFrac = frame.imageSize.width > 0 ? Float(box.width / frame.imageSize.width) : -1
@@ -685,7 +628,6 @@ final class LivenessViewModel: ObservableObject {
             if currentMatch > Self.matchThreshold { isIdentityVerified = true }
 
             // Kaydedilen kare değişti → 1. adayın ölçüleri de bu karenin ölçüleri.
-            // Submit anında yeniden ölçülemezler (kamera kapalı).
             let frameMetrics = SimilarityStreamer.metricsOf(
                 deviceMatchScore: min(max(Int(currentMatch * 100), 0), 100),
                 luma: Int(lastLuma),
@@ -695,15 +637,13 @@ final class LivenessViewModel: ObservableObject {
                 pitch: Int(frame.signals.pitch),
                 roll: Int(frame.signals.roll),
                 faceWidthRatio: Int(faceFrac * 100),
-                gestureCount: index,
-                wrongGestureCount: wrongAttempts,
-                elapsedMs: sessionStartedAt.map { Int(Date().timeIntervalSince($0) * 1000) })
+                gestureCount: progressSteps,
+                wrongGestureCount: progressWrong,
+                elapsedMs: runStartedAtMs > 0 ? Int(Self.nowMs - runStartedAtMs) : nil)
             bestFrameMetrics = frameMetrics
 
-            // Canlı benzerlik akışı: en iyi kare YENİLENDİĞİNDE enclave'e gönderilir. Kare akışı
-            // DEĞİL — yalnız iyileşen kare; enclave'in gördüğü, cihazın o ana kadarki en iyi
-            // hükmüdür. Selfie ve kırpma AYNI kareden gelir (aksi bir açık olurdu: benzerlik
-            // gerçek yüzden, canlılık başka kareden).
+            // Canlı benzerlik akışı: en iyi kare YENİLENDİĞİNDE enclave'e gönderilir. Selfie ve
+            // kırpma AYNI kareden gelir (aksi bir açık olurdu).
             if let selfie = selfieJPEG {
                 streamer?.submitFrame(selfie: selfie, crop: antiSpoofCropJPEGLogic, metrics: frameMetrics)
             }
@@ -723,33 +663,24 @@ final class LivenessViewModel: ObservableObject {
     /// Başarı değerlendirmesi (video kuyruğu) — tüm logic-state burada okunur, sonuç main'e taşınır.
     private func finalizeSuccessAttempt() {
         let metrics = savedFrameMetrics
-        // Başarıda da üretilir: sunucudaki anti-spoof reddi bu adımdan SONRA geliyor, yani
-        // "canlılık geçti ama kayıt düştü" vakasında elimizdeki tek kare ölçüsü bu.
+        // Başarıda da üretilir: sunucudaki anti-spoof reddi bu adımdan SONRA geliyor.
         let summary = makeDiagnosticsSummary(reason: nil)
         let hasSelfie = selfieJPEG != nil
-        // ⚠️ SUBMIT'İN İKİ YOLU VAR (canlı benzerlik akışı):
-        //   (1) cihaz skoru 0.65'i geçti  → isIdentityVerified
-        //   (2) enclave "benzerlik geçti" dedi → streamer.hasEnclaveApproval
-        //
-        // İkincisi bir güvenlik gevşemesi DEĞİLDİR: cihazdaki 0.65 hiçbir zaman güvenlik
-        // kontrolü değildi (yerel bir boolean, yamalanabilir) ve gerçek karar hep enclave'de.
-        // Burada olan şey, enclave'in ZATEN onayladığı bir kareyi cihazın kendi ön elemesiyle
-        // çöpe atmasını engellemek. Diğer koşullar (jestler, selfie varlığı) aynen aranır.
-        // Android `LivenessActivity.finishSuccess` paritesi.
+        // ⚠️ SUBMIT'İN İKİ YOLU VAR (canlı benzerlik akışı): (1) cihaz skoru 0.65'i geçti →
+        // isIdentityVerified, (2) enclave "benzerlik geçti" dedi → streamer.hasEnclaveApproval.
+        // İkincisi bir güvenlik gevşemesi DEĞİLDİR: cihazdaki 0.65 hiçbir zaman güvenlik kontrolü
+        // değildi ve gerçek karar hep enclave'de. Android `LivenessActivity.finishSuccess` paritesi.
         let verified = isIdentityVerified || (streamer?.hasEnclaveApproval == true)
-        // Çip fotoğrafı VERİLMİŞSE kapı aranır — embedding üretilemediyse de. Eski hâli
-        // `chipEmbedding != nil` idi: çözülemeyen bir çip "çip yok" sayılıyor ve eşleştirme
-        // sessizce ATLANIYORDU. Karar yine `verified`'e kalıyor, yani enclave onayı varsa akış
-        // geçer (yukarıdaki iki-yol notu); yalnız cihazda da enclave'de de doğrulanmamış kayıt
-        // artık geçemez (parite denetimi 2026-09-03, O-5).
+        // Çip fotoğrafı VERİLMİŞSE kapı aranır — embedding üretilemediyse de (parite denetimi O-5).
         let hasChip = chipEmbedding != nil || chipDecodeFailed
         let score = bestMatchScore
         let jpeg = selfieJPEG
         let cropJPEG = antiSpoofCropJPEGLogic
+        let proof = choreographyProofLogic
 
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            self.invalidateTimer()
+            self.invalidateWatchdog()
             self.camera.stop()
             self.finalMatchScore = score
             self.diagnosticsSummary = summary
@@ -763,49 +694,26 @@ final class LivenessViewModel: ObservableObject {
             }
             if let jpeg { self.alignedSelfieJPEG = jpeg }
             self.antiSpoofCropJPEG = cropJPEG
-            // Kalite ölçüleri BAŞARIDA da yazılır: sunucudaki anti-spoof reddi buradan SONRA gelir,
-            // yani "canlılık geçti ama sunucu sahte dedi" vakasında elimizdeki tek ipucu bu satır.
+            self.choreographyProof = proof
             Log.info("Liveness başarı: score=\(Int(score * 100))% verified=\(verified) " +
-                     "[\(metrics ?? "kare ölçüsü yok")]", category: .liveness)
+                     "adım=\(proof?.steps.count ?? 0) [\(metrics ?? "kare ölçüsü yok")]", category: .liveness)
             self.feedback.play(.done)
             // Akış bitti — gömme vektörünü serbest bırak ve akışın NASIL bittiğini bildir.
-            // "submitted": kullanıcı canlılığı geçti ve kayıt gönderiliyor.
             self.streamer?.release(outcome: "submitted")
             self.phase = .success
         }
     }
 
-    /// Aktif hareketin sonucunu huniye bildirir: hangi hareket, kaç ms sürdü, kaç yanlıştan sonra.
-    ///
-    /// Neden bu ayrıntı toplanıyor da kare akışı toplanmıyor: bu satırlar AKIŞLA büyür, kareyle
-    /// değil — jest kümesi dört elemanlı ve sunucu `(flow_id, step)` benzersizliğiyle her hareketi
-    /// akış başına bir kez sayıyor. Her karenin sinyalini göndermek ise kareyle büyürdü ve hiçbir
-    /// kararı değiştirmezdi.
-    private func reportGesture(timedOut: Bool) {
-        guard !isDemo, gestureStartedAtMs > 0 else { return }
-        guard index < challenges.count else { return }
-        let step: FlowTelemetry.Step
-        switch challenges[index] {
-        case .faceLeft:  step = .gestureLeft
-        case .faceRight: step = .gestureRight
-        case .smile:     step = .gestureSmile
-        case .blink:     step = .gestureBlink
-        // Enclave hiç .none göndermez; gelse de raporlanacak bir hareket yok.
-        case .none:      return
-        }
-        let duration = Int(Date().timeIntervalSince1970 * 1000 - gestureStartedAtMs)
-        let wrongs = gestureWrongCount
-        guard let nonce = flowNonce else { return }
-        // Aynı hareket iki kez raporlanmasın (sunucu da yutar, ama gereksiz istek atmayalım).
-        gestureStartedAtMs = 0
-        Task { await FlowTelemetry.shared.gestureResolved(step, durationMs: duration,
-                                                          wrongCount: wrongs, timedOut: timedOut,
+    /// Hareketin sonucunu huniye bildirir: hangi hareket, kaç ms sürdü, kaç yanlıştan sonra.
+    /// Satırlar AKIŞLA büyür, kareyle değil — `(flow_id, step)` benzersiz, akış başına bir kez.
+    private func reportEvent(_ event: EventSequencer.Event, durationMs: Int, wrongCount: Int, timedOut: Bool) {
+        guard !isDemo, let nonce = flowNonce else { return }
+        Task { await FlowTelemetry.shared.gestureResolved(event.telemetryStep, durationMs: durationMs,
+                                                          wrongCount: wrongCount, timedOut: timedOut,
                                                           nonce: nonce) }
     }
 
-    /// Teşhis özetini üretir. ⚠️ VİDEO KUYRUĞUNDAN çağrılır: okuduğu alanların (skor, index,
-    /// wrongAttempts, savedFrameMetrics) tamamı logic-state'tir ve ana kuyruktan okunması veri
-    /// yarışı olurdu — dosyanın geri kalanındaki desen de bu (değeri burada yakala, main'e taşı).
+    /// Teşhis özetini üretir. ⚠️ VİDEO KUYRUĞUNDAN çağrılır: okuduğu alanlar logic-state'tir.
     private func makeDiagnosticsSummary(reason: FailureReason?) -> String {
         let chip: String
         if chipEmbedding != nil { chip = "var" }
@@ -813,84 +721,56 @@ final class LivenessViewModel: ObservableObject {
         else { chip = "çözülemedi" }
         var line = "Canlılık / Liveness: skor=%\(Int(bestMatchScore * 100))"
             + " (cihaz eşiği %\(Int(Self.matchThreshold * 100)))"
-            + " adım=\(index)/\(challenges.count)"
-            + " yanlış=\(wrongAttempts)"
+            + " adım=\(progressSteps)/\(events.count)"
+            + " yanlış=\(progressWrong)"
             + " çip=\(chip)"
-        if let reason { line += " sebep=\(reason.rawValue)" }
+        if let reason { line += " sebep=\(reason.flowReason)" }
         return line + "\nKare / Frame: " + (savedFrameMetrics ?? "kare kaydedilmedi")
     }
 
-    /// Video kuyruğundan çağrılır (logic-state okur), sonucu ana kuyruğa taşır.
+    /// Video kuyruğundan (ya da bekçiden) çağrılır, sonucu ana kuyruğa taşır.
     private func finalizeFailure(_ reason: FailureReason) {
         let metrics = savedFrameMetrics
         let score = bestMatchScore
-        let wrongs = wrongAttempts
         let summary = makeDiagnosticsSummary(reason: reason)
-        // Sayaçlar video kuyruğunda yazılıyor → dizeyi BURADA yakala, main'de değil.
         // Parlaklık da eklenir: ML Kit hiç yüz bulamadığında ayırt edilmesi gereken ilk şey
-        // görüntünün BOŞ olup olmadığı, ve ekrandaki uyarı bunu söylemiyor — "yüzünüz çerçevede
-        // değil" uyarısı ışık uyarısının ÖNÜNDE gösteriliyor, yani karanlık kareyi maskeliyor.
+        // görüntünün BOŞ olup olmadığı.
         let diag = analyzer.diagnostics + " luma=\(Int(lastLuma))"
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             guard self.phase == .running else { return }   // çift tetiklenmeye karşı
-            self.invalidateTimer()
+            self.invalidateWatchdog()
             self.camera.stop()
             self.finalMatchScore = score
             self.diagnosticsSummary = summary
-            Log.warning("Liveness başarısız (\(reason)) — bestScore=\(Int(score * 100))% yanlış=\(wrongs) " +
+            Log.warning("Liveness başarısız (\(reason)) — bestScore=\(Int(score * 100))% " +
                         "[\(metrics ?? "kare ölçüsü yok")] \(diag)", category: .liveness)
-            // Ölçüm tablosuna GERÇEK sebep gider: "match_failed" ile biten bir akışın streaming
-            // satırlarında enclave skoru eşiği geçiyorsa, o kullanıcıyı cihaz kapısı yüzünden
-            // kaybetmişiz demektir. stop()'taki "abandoned" bunu ezemez (ilk sebep kazanır).
-            self.streamer?.release(outcome: reason.rawValue)
+            // Ölçüm tablosuna GERÇEK sebep gider; stop()'taki "abandoned" bunu ezemez.
+            self.streamer?.release(outcome: reason.flowReason)
             self.phase = .failure(reason)
         }
     }
 
-    // MARK: - Sunum (ana kuyruk)
+    // MARK: - Demo (ana kuyruk)
 
-    /// Kullanıcı komut gelmeden gülümsüyor → önce nötre dönmesi istenir (sayaç DEVAM eder;
-    /// asıl komut geri geldiğinde `presentChallenge` süreyi zaten sıfırlar).
-    private func showSmileRelaxPrompt() {
-        instruction = L.t("liveness_face_smile_relax")
-        subInstruction = L.t("liveness_face_smile_relax_hint")
-    }
-
-    private func presentChallenge(action: LivenessAction, step: String) {
-        Log.info("Liveness komut ekranda: \(step) \(action)", category: .liveness)
-        stepText = step
-        checkmark = false
-        wrongMove = false
-        wrongMoveDetail = ""
-        restartGestureClock()
-        switch action {
-        case .faceLeft:  instruction = L.t("liveness_face_left")
-        case .faceRight: instruction = L.t("liveness_face_right")
-        case .blink:     instruction = L.t("liveness_face_blink")
-        case .smile:     instruction = L.t("liveness_face_smile")
-        case .none:      instruction = "—"
-        }
-        subInstruction = L.t("liveness_perform_action")
-    }
-
-    // Demo: gerçek jest/selfie gerekmez — her adımı 1sn sonra otomatik onayla (Android demo).
+    /// Demo: gerçek hareket/selfie gerekmez — her adımı 1sn sonra otomatik onayla (Android demo).
     private func presentDemoStep(_ step: Int) {
         guard phase == .running else { return }
-        let demoList = paddedDemoChallenges()
-        if step >= demoList.count {
-            invalidateTimer()
+        if step >= events.count {
+            invalidateWatchdog()
             camera.stop()
-            // Demo selfie gerektirmez (runDemo selfieData'yı kullanmaz). Ama telefon masadaysa/yüz
-            // yoksa captureFrame hiç çalışmaz → alignedSelfieJPEG nil kalır ve View'ın onSuccess
-            // koşulu (`let jpeg = alignedSelfieJPEG`) sağlanmaz → akış .processing'e geçemez, ekran
-            // durmuş kamerada kilitlenir. Yüz yakalanmadıysa boş placeholder ver ki demo tıkanmasın.
+            // Demo selfie gerektirmez. Ama yüz yakalanmadıysa alignedSelfieJPEG nil kalır ve View'ın
+            // onSuccess koşulu sağlanmaz → ekran durmuş kamerada kilitlenir. Boş yer tutucu ver.
             if alignedSelfieJPEG == nil { alignedSelfieJPEG = Data() }
             feedback.play(.done)
             phase = .success
             return
         }
-        presentChallenge(action: demoList[step], step: "\(step + 1)/\(demoList.count)")
+        stepText = "\(step + 1)/\(events.count)"
+        instruction = Self.eventText(events[step])
+        subInstruction = Self.eventHint(events[step])
+        checkmark = false
+        frameAligned = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
             guard let self, self.phase == .running else { return }
             self.feedback.play(.stepOk)   // demo gerçek akışı temsil etmeli (aynı ses/haptic)
@@ -899,60 +779,25 @@ final class LivenessViewModel: ObservableObject {
         }
     }
 
-    private func paddedDemoChallenges() -> [LivenessAction] {
-        var list = challengesInput
-        while list.count < 5 { list.append(.randomGesture()) }
-        return list
-    }
+    // MARK: - Bekçi (ana kuyruk)
 
-    // MARK: - Timer (ana kuyruk)
-
-    private func startTimer() {
-        timer?.invalidate()
-        let now = Date()
-        sessionStartedAt = now
-        gestureStartedAt = now
-        gestureProgress = 1
-        // 0.1sn tick → halka akıcı erisin (saniyelik rakam yok).
-        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            guard let self,
-                  let gestureStart = self.gestureStartedAt,
-                  let sessionStart = self.sessionStartedAt else { return }
-            let gestureLeft = Self.gestureTimeout - Date().timeIntervalSince(gestureStart)
-            self.gestureProgress = max(0, min(1, gestureLeft / Self.gestureTimeout))
-            if !self.nudged, self.gestureProgress <= Self.lowTimeFraction, self.gestureProgress > 0 {
-                self.nudged = true
-                self.feedback.play(.nudge)
-            }
-            let sessionOver = Date().timeIntervalSince(sessionStart) >= self.effectiveSessionTimeout
-            guard gestureLeft <= 0 || sessionOver else { return }
-            self.timer?.invalidate()
-            self.timer = nil
-            // Hangi sayacın dolduğu istatistikte AYRI görünmeli: tek hareket süresi dolması komutun
-            // anlaşılmadığını, oturum tavanı ise akışın terk edildiğini gösterir — farklı düzeltmeler.
-            // Süresi dolan hareket HANGİSİYDİ — huninin "canlılıkta kaybettik"ten sonra
-            // söyleyebildiği tek ayrıntı bu. Akış özetinden ÖNCE gönderilir.
-            self.reportGesture(timedOut: true)
-            let reason: FailureReason = sessionOver ? .sessionTimeout : .gestureTimeout
-            // Video kuyruğuna SIÇRAMADAN bitir: "Time's Up" ekranı o sıçrama yüzünden 25 saniye
-            // gecikmişti (Sentry 2026-08-25). `finalizeFailure` yalnız logic durumunu OKUR ve
-            // sunumu zaten ana kuyruğa taşır; okunan alanlar tek kelimelik ve yarış riski,
-            // kullanıcıyı donmuş bir ekranda bırakmaktan çok daha küçük bir bedel.
-            self.finalizeFailure(reason)
+    /// Kare akışı durursa (kamera takıldı) akışı bitirir. Dizinin saati kare döngüsünde işliyor —
+    /// kare gelmezse o da durur; bu bekçi kullanıcıyı donmuş bir ekranda bırakmamak için.
+    private func startWatchdog() {
+        watchdog?.invalidate()
+        watchdog = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            guard let self, self.phase == .running, !self.isDemo else { return }
+            let idle = Date().timeIntervalSince1970 * 1000 - self.lastFrameAtMs
+            guard idle > Self.stallTimeout * 1000 else { return }
+            self.invalidateWatchdog()
+            // Video kuyruğuna SIÇRAMADAN bitir: sıçrama tıkalıysa "Süre doldu" ekranı da gecikirdi.
+            self.finalizeFailure(.sessionTimeout)
         }
     }
 
-    /// Yeni hareket sunuldu → hareket sayacı sıfırlanır (ana kuyruk). İlerleyen kullanıcı böylece
-    /// asla zamana yenilmez; oturum tavanı (`effectiveSessionTimeout`) yerinde kalır.
-    private func restartGestureClock() {
-        gestureStartedAt = Date()
-        gestureProgress = 1
-        nudged = false
-    }
-
-    private func invalidateTimer() {
-        timer?.invalidate()
-        timer = nil
+    private func invalidateWatchdog() {
+        watchdog?.invalidate()
+        watchdog = nil
     }
 
     // MARK: - Görüntü yardımcıları
@@ -962,8 +807,7 @@ final class LivenessViewModel: ObservableObject {
         return ciContext.createCGImage(ci, from: ci.extent)
     }
 
-    /// MiniFASNetV2 için 2.7x geniş 80x80 JPEG crop (Android LivenessActivity:666 port).
-    /// box: captureFrame'deki piksel-koordinatlı yüz kutusu (captureFrame'den doğrudan gelir).
+    /// MiniFASNetV2 için 2.7x geniş 80x80 JPEG crop (Android AntiSpoofCrop portu).
     private func makeAntiSpoofCrop(fullCG: CGImage, box: CGRect) -> Data? {
         let cx = box.midX, cy = box.midY
         let halfW = box.width * 2.7 / 2
@@ -982,27 +826,18 @@ final class LivenessViewModel: ObservableObject {
         return scaled?.jpegData(compressionQuality: 0.9)
     }
 
-    // MARK: - (b) Ortam kalitesi (ışık) — Android LivenessAnalyzer.averageLuma karşılığı
+    // MARK: - Ortam kalitesi (ışık) — Android LivenessAnalyzer.averageLuma karşılığı
 
-    /// Her karede ortalama parlaklığı ölçer ve karanlık/aşırı-parlak uyarısını (ana kuyrukta) günceller.
+    /// Her karede ortalama parlaklığı ölçer ve karanlık/aşırı-parlak uyarısını günceller.
     /// Video kuyruğunda çağrılır (Android onFrameLuma ile aynı disiplin).
     private func updateQualityWarning(for pixelBuffer: CVPixelBuffer) {
         let luma = Self.averageLuma(pixelBuffer)
         lastLuma = luma
 
-        // "Yüzünüz çerçevede değil" — ışık/netlik uyarılarının ÖNÜNDE gelir.
-        //
-        // Yüz bulunamayan kare sessizce atılıyordu: kullanıcı 15 saniye boyunca hiçbir geri
-        // bildirim almadan bekliyor, sonunda "Süre doldu — hareket tamamlanmadı" yiyordu.
-        //
-        // Yüzün neden bulunamadığı DEĞİŞKEN (kadraj, ışık, dedektörün kendi arızası) ve buradan
-        // bilinemez. Mesele sebep değil, sessizlik: uygulama kare gelmediğini zaten biliyorken
-        // susup faturayı kullanıcıya kesiyordu.
-        //
-        // Bu satırlar `handleFace` ile AYNI kuyrukta (video) koşar, o yüzden `lastFaceTime`
-        // burada kilitsiz okunabilir.
-        let now = Date().timeIntervalSince1970 * 1000
-        let runningLongEnough = runStartedAtMs > 0 && now - runStartedAtMs > Self.noFaceGraceMs
+        // "Yüzünüz çerçevede değil" — ışık/netlik uyarılarının ÖNÜNDE gelir. Uygulama kare
+        // gelmediğini zaten biliyorken susup faturayı kullanıcıya kesmemeli.
+        let now = Self.nowMs
+        let runningLongEnough = sequencer != nil && runStartedAtMs > 0 && now - runStartedAtMs > Self.noFaceGraceMs
         let faceGone = lastFaceTime == 0 || now - lastFaceTime > Self.noFaceWarnMs
         faceMissingWarning = (!isDemo && runningLongEnough && faceGone)
             ? NSLocalizedString("liveness_quality_no_face", comment: "")
@@ -1017,8 +852,7 @@ final class LivenessViewModel: ObservableObject {
         publishWarning()
     }
 
-    /// Işık (öncelikli) + netlik uyarısını tek label'da birleştirir (Android `publishQualityWarning`).
-    /// Video kuyruğunda çağrılır; `@Published` güncellemesi ana kuyruğa marshalled edilir.
+    /// Yüz (öncelikli) + ışık + netlik uyarısını tek label'da birleştirir.
     private func publishWarning() {
         // Sıra önemli: yüz kadrajda değilken "ortam karanlık" demek yanlış hedefi gösterir.
         let w = faceMissingWarning ?? lumaWarning ?? blurWarning
@@ -1030,12 +864,10 @@ final class LivenessViewModel: ObservableObject {
 
     // MARK: - Netlik (blur) ölçümü — Android computeSharpness karşılığı
 
-    /// 112×112 yüz CGImage'ında ileri-fark gradyan enerjisi (Brenner benzeri). Yüksek = net.
-    /// Eşikler `blurWarnThreshold` / `sharpQualityRef` ile aynı; sabit 112 boyut → eşik anlamlı
-    /// (yine de cihazda ince ayar gerekebilir).
     static let blurWarnThreshold: Float = 45
     static let sharpQualityRef: Float = 250   // bu enerjide tam +15 kalite bonusu
 
+    /// 112×112 yüz CGImage'ında ileri-fark gradyan enerjisi (Brenner benzeri). Yüksek = net.
     static func sharpness(of cg: CGImage) -> Float {
         let w = cg.width, h = cg.height
         guard w >= 4, h >= 4 else { return -1 }
@@ -1065,7 +897,6 @@ final class LivenessViewModel: ObservableObject {
     }
 
     /// BGRA pixel buffer'dan ~2048 örnekle ortalama parlaklık (0..255). Hatada 128 (nötr).
-    /// iOS kamerası kCVPixelFormatType_32BGRA verir → Y düzlemi yok, luma BGRA'dan türetilir.
     static func averageLuma(_ pixelBuffer: CVPixelBuffer) -> Float {
         CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
         defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }

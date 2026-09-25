@@ -30,7 +30,10 @@ struct HandshakeResponse: Codable {
     let pcr0Signature: String?
     let attestationDocument: String?
     let enclavePubKey: String?
-    let challenges: [Int]?
+    /// Olay dizisi — canlılık ekranı yalnız bunu yürütür. Sunucu nonce'tan türetir ve register'da
+    /// aynı diziyi yeniden türetip kareleri ona göre ölçer. (Sunucunun eski `challenges` alanı
+    /// mağazadaki eski sürümler içindir; bu sürüm okumaz.)
+    let choreography: Choreography?
 
     enum CodingKeys: String, CodingKey {
         case nonce
@@ -39,8 +42,15 @@ struct HandshakeResponse: Codable {
         case pcr0Signature = "pcr0_signature"
         case attestationDocument = "attestation_document"
         case enclavePubKey = "enclave_pub_key"
-        case challenges
+        case choreography
     }
+}
+
+/// Sunucunun istediği olay dizisi, istenme sırasıyla. `events`: 1 kırp, 2 gülümse, 3 ağız aç,
+/// 4 çift kırp. Tek mesafe — mesafe tabanlı sürüm 1 kaldırıldı (o sürümde `events` alanı yoktu).
+struct Choreography: Codable {
+    let version: Int?
+    let events: [Int]?
 }
 
 struct LoginHandshakeResponse: Codable {
@@ -93,8 +103,13 @@ struct SecurePayload: Codable {
     /// bir kareden, canlılığı başkasından almak gerçek bir açıktır (Android `Candidates` paritesi).
     var candidates: [RegistrationCandidate]? = nil
 
+    /// Olay dizisi kanıtı — her hareketin nötr ve olay kareleri. Enclave yapıyı ve HER karede
+    /// kimliği doğrular (Android `ChoreographyProof` paritesi). Anahtar büyük/küçük harf duyarlı.
+    var choreographyProof: ChoreographyProof? = nil
+
     enum CodingKeys: String, CodingKey {
         case candidates = "Candidates"
+        case choreographyProof = "ChoreographyProof"
         case sod = "SOD"
         case dg1 = "DG1"
         case dg2 = "DG2"
@@ -142,6 +157,38 @@ struct RegistrationRequest: Codable {
         case flowId = "flow_id"
         case candidateMetrics = "candidate_metrics"
     }
+}
+
+/// OLAY DİZİSİ KANITI — her hareket için bir adım: hareketten hemen önceki nötr kare ve hareket
+/// anının kare(ler)i. Kareler yüzün çevresinden kırpılmış JPEG (uzun kenar ≤ 480).
+///
+/// ⚠️ Adım sırası sunucunun dizisiyle AYNI olmak zorunda; eksik adım ya da eksik olay karesi yapı
+/// hatasıdır (ERR_CHOREO_INVALID). Buradaki sayıların hiçbirine güvenilmez.
+struct ChoreographyProof: Codable {
+    var version: Int = 2
+    var steps: [ChoreographyProofStep]
+    var elapsedMs: Int?
+    var resets: Int?
+    var wrongEvents: Int?
+    /// iOS takip numarası kullanmıyor → hep nil (Android'de ölçüm).
+    var trackingChanges: Int?
+    /// Karar zaman çizelgesi (ASCII, ≤ 3500 karakter) — eşik kalibrasyonu ve saha teşhisi için.
+    var trace: String?
+
+    enum CodingKeys: String, CodingKey {
+        case version, steps, resets, trace
+        case elapsedMs = "elapsed_ms"
+        case wrongEvents = "wrong_events"
+        case trackingChanges = "tracking_changes"
+    }
+}
+
+struct ChoreographyProofStep: Codable {
+    /// Hareketten hemen önceki nötr kare — tam olarak bir tane (Base64 JPEG).
+    var neutral: [String]
+    /// Olay kareleri — çift kırpmada iki, diğerlerinde bir.
+    var event: [String]
+    var attempts: Int?
 }
 
 /// Final register yükündeki tek aday — kendi selfie'si + kendi 2,7× anti-spoof kırpması.

@@ -39,4 +39,10 @@ struct FaceSignals {
     /// geri girdiğinde ilk kareler kırpılmadığı halde blink sayılıyordu (kullanıcı geri bildirimi
     /// 2026-08-21). Bu bayrak false ise kare jest kararında KULLANILMAZ (kalite skoruna girer).
     var landmarksOK: Bool = true
+
+    /// İç dudak açıklığı (ML Kit dudak KONTURU): üst dudağın alt kenarının ortası ile alt dudağın
+    /// üst kenarının ortası arası, iç ağız genişliğine bölünmüş. Kapalı ağızda ~0. Yalnız ağız açma
+    /// adımında ölçülür (ikinci dedektör pahalı); diğer karelerde nil. Android
+    /// `LivenessAnalyzer.innerLipOpen` ile AYNI hesap.
+    var lipOpen: Float? = nil
 }

@@ -33,10 +33,10 @@ struct RegisterFlowView: View {
             Theme.background.ignoresSafeArea()
             switch vm.step {
             case .liveness:
-                // Liveness tam ekran (Android ayrı LivenessActivity). Demo: sahte jest + chip yok.
+                // Liveness tam ekran (Android ayrı LivenessActivity). Demo: sahnelenen hareketler + chip yok.
                 LivenessView(
                     viewModel: LivenessViewModel(
-                        challenges: vm.isDemo ? [1, 2, 3] : vm.challenges,
+                        events: vm.isDemo ? LivenessViewModel.demoEvents : vm.events,
                         chipPhotoData: vm.isDemo ? nil : vm.chipPhoto,
                         isDemo: vm.isDemo,
                         flowNonce: vm.flowNonce,

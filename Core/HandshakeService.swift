@@ -8,7 +8,7 @@ enum AttestOutcome {
 }
 
 /// El sıkışma durumu yönetimi — Android `MainViewModel` handshake state'i (enclavePubKey, nonce,
-/// timestamp, nonceSignature, challenges, 5dk TTL) eşdeğeri.
+/// timestamp, nonceSignature, olay dizisi, 5dk TTL) eşdeğeri.
 ///
 /// App Attest (cihaz → sunucu) Aşama 6'da `VerifyAPI.handshake`/`loginHandshake` içinden
 /// `AttestedRequest.perform` ile EKLENİR (relay doğrular; çağrılar sıraya girer). Enclave attestation'ı
@@ -23,7 +23,8 @@ actor HandshakeService {
         let nonce: String
         let timestamp: Int64
         let nonceSignature: String
-        let challenges: [Int]
+        /// Olay dizisi (1 kırp, 2 gülümse, 3 ağız aç, 4 çift kırp) — boşsa canlılık başlamaz.
+        let events: [Int]
         let completedAt: Date
     }
 
@@ -45,11 +46,11 @@ actor HandshakeService {
             nonce: resp.nonce,
             timestamp: resp.timestamp,
             nonceSignature: resp.nonceSignature,
-            challenges: resp.challenges ?? [],
+            events: resp.choreography?.events ?? [],
             completedAt: Date()
         )
         session = s
-        Log.info("Register handshake tamam (challenges=\(s.challenges.count))", category: .flow)
+        Log.info("Register handshake tamam (olay=\(s.events.count))", category: .flow)
         return s
     }
 
@@ -61,7 +62,7 @@ actor HandshakeService {
         let verifiedPub = try verifiedEnclaveKey(from: resp.attestationDocument,
                                                   pcr0Signature: resp.pcr0Signature)
         session = Session(enclavePubKey: verifiedPub, nonce: "", timestamp: 0, nonceSignature: "",
-                          challenges: [], completedAt: Date())
+                          events: [], completedAt: Date())
         Log.info("Login handshake tamam", category: .flow)
         return verifiedPub
     }

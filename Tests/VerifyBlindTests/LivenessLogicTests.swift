@@ -2,59 +2,37 @@ import XCTest
 import CoreGraphics
 @testable import VerifyBlind
 
-/// Liveness jest mantığı — saf/durumlu parçalar (kamera gerektirmez).
+/// Liveness'ın saf/durumlu parçaları (kamera gerektirmez): lokalizasyon, geri bildirim kutusu,
+/// çip imza yapısı, gülümseme eşikleri, hizalama.
 ///
-/// Jest kararı ML Kit'in EĞİTİLMİŞ olasılıklarına dayanır. Buradaki testler o sözleşmeyi sabitler:
-/// eşiklerin Android ile aynı sayı olduğunu, eşik altındaki hiçbir değerin gülümseme sayılmadığını
-/// ve gülümseme cezasının yalnız nötrden bir GEÇİŞ olarak yazıldığını.
-///
-/// Vision döneminin göreceli `SmileDetector`/`BlinkDetector` testleri, o sınıflarla birlikte
-/// kaldırıldı (2026-08-25, cihazda doğrulandıktan sonra).
+/// Hareket KARARI artık `EventSequencer`'da; onun testleri `EventSequencerTests`'te. Kafa çevirme
+/// ve eski jest zamanlayıcısı (2026-09-25) testleriyle birlikte kalktı.
 final class LivenessLogicTests: XCTestCase {
-
-    // MARK: - Zamanlama ve hata bütçesi sözleşmesi
-
-    func testTimingConstants() {
-        // Hareket başına süre HER BAŞARILI HAREKETTE sıfırlanır → ilerleyen kullanıcı zamana yenilmez.
-        XCTAssertEqual(LivenessViewModel.gestureTimeout, 15)
-        // Kötüye kullanımın ASIL sınırı: sayılabilir hata bütçesi (eskiden sınırsızdı).
-        XCTAssertEqual(LivenessViewModel.maxWrongAttempts, 5)
-    }
-
-    /// REGRESYON: sabit 60sn'lik oturum tavanı, 5 hareket × 15sn = 75sn'lik hareket bütçesini
-    /// karşılamıyordu — "her harekete 15 saniye" sözü 4. harekette sessizce bozuluyordu.
-    /// Tavan artık bütçeden türetilir; ikisi bir daha çelişemez.
-    /// ⚠️ `LivenessViewModel` ÖRNEKLEMEZ. Örneklemek `FaceEmbedder`'ı, o da MobileFaceNet CoreML
-    /// modelini yüklüyor; bu test döngüde üç kez yaptığı için simülatörde asılıyor ve test
-    /// sürecini öldürüyordu (CI: 497 saniye, 33 testin yalnız 16'sı koştu). Doğrulanan şey saf
-    /// aritmetik — kamera da sinir ağı da gerekmiyor.
-    func testSessionCapCoversTheGestureBudget() {
-        for count in [3, 5, 7] {
-            let cap = LivenessViewModel.sessionTimeout(challengeCount: count)
-            // Dizi her hâlükârda 5'e tamamlanır → tavan en az 5 hareketi karşılamalı.
-            let gestures = Double(max(count, 5))
-            XCTAssertGreaterThanOrEqual(
-                cap, LivenessViewModel.gestureTimeout * gestures,
-                "Tavan (\(cap)sn) \(gestures) hareketin bütçesini karşılamıyor")
-            // Üstüne onay animasyonu / ceza / gevşeme payı da olmalı.
-            XCTAssertEqual(cap,
-                           LivenessViewModel.gestureTimeout * gestures + LivenessViewModel.sessionOverhead)
-        }
-    }
 
     /// Ekranda gösterilen her metin lokalize edilmeli — uygulama İngilizceyken Türkçe metin
     /// görünüyordu (kullanıcı geri bildirimi 2026-08-21: liveness süresi dolunca TR mesaj).
     func testLivenessStringsAreLocalized() {
-        let keys = ["liveness_wrong_move", "liveness_perform_action",
-                    "liveness_timeout_title", "liveness_timeout_message",
+        let keys = ["liveness_timeout_title", "liveness_timeout_message",
                     "liveness_too_many_errors_title", "liveness_too_many_errors_message",
                     "liveness_selfie_error_title", "liveness_selfie_error_message",
                     "liveness_match_failed_title", "liveness_match_failed_message",
                     "liveness_camera_permission_title", "liveness_camera_permission_body",
-                    "liveness_face_smile_relax", "liveness_face_smile_relax_hint",
+                    "liveness_face_smile_relax",
                     "liveness_thumb_chip", "liveness_thumb_selfie",
-                    "liveness_wrong_move_detail", "liveness_did_face_left", "liveness_did_face_right",
-                    "liveness_did_smile",
+                    "liveness_wrong_move_detail", "liveness_did_smile", "liveness_did_mouth_open",
+                    "liveness_face_blink", "liveness_face_double_blink",
+                    "liveness_face_smile", "liveness_face_mouth_open",
+                    "liveness_ev_hint_blink", "liveness_ev_hint_double_blink",
+                    "liveness_ev_hint_smile", "liveness_ev_hint_mouth_open",
+                    "liveness_ev_place", "liveness_ev_closer", "liveness_ev_farther",
+                    "liveness_ev_hold", "liveness_ev_hold_hint", "liveness_ev_relax_hint",
+                    "liveness_ev_again", "liveness_ev_reset_face",
+                    "liveness_ev_resets_title", "liveness_ev_resets_message",
+                    "liveness_ev_settle_timeout_title", "liveness_ev_settle_timeout_message",
+                    "liveness_ev_missing", "liveness_error_title",
+                    "liveness_guide_title", "liveness_guide_subtitle", "liveness_guide_light",
+                    "liveness_guide_hold", "liveness_guide_accessories", "liveness_guide_moves_title",
+                    "liveness_guide_moves_intro", "liveness_guide_start",
                     "feedback_prompt_title", "feedback_prompt_message",
                     "feedback_prompt_yes", "feedback_prompt_no", "feedback_subject_card_add",
                     "feedback_step_mrz", "feedback_step_nfc", "feedback_step_liveness", "feedback_step_submit",
@@ -142,34 +120,15 @@ final class LivenessLogicTests: XCTestCase {
         }
     }
 
-    // MARK: - ML Kit geçişi: mutlak olasılık eşikleri ve gülümseme ceza kapısı
+    // MARK: - ML Kit: mutlak olasılık eşikleri
 
-    /// `FaceSignals` üretici — yalnız ilgilenilen alanı verip gerisini nötr bırakır.
-    private func sig(smile: Float = 0, yaw: Float = 0,
-                     leftEyeOpen: Float = 1, rightEyeOpen: Float = 1) -> FaceSignals {
-        FaceSignals(yaw: yaw, pitch: 0, roll: 0,
-                    leftEyeOpen: leftEyeOpen, rightEyeOpen: rightEyeOpen, smile: smile,
-                    boundingBox: CGRect(x: 0, y: 0, width: 100, height: 100),
-                    leftEye: nil, rightEye: nil)
-    }
-
-    /// Eşikler Android `LivenessActivity` ile AYNI sayı olmalı — iOS'un kendi kalibrasyonu YOK.
-    /// Bu test sapmayı yakalar: bir eşik "iOS'ta biraz farklı" olmaya başlarsa parite biter.
+    /// Eşikler Android ile AYNI sayı olmalı — iOS'un kendi kalibrasyonu YOK. Olay dizisinin
+    /// eşikleri de aynı değerleri kullanıyor (bkz. `EventSequencerTests.testConstantsMatchAndroid`).
     func testThresholdsMatchAndroid() {
-        XCTAssertEqual(LivenessGestureDetector.yawThreshold, 20)
-        XCTAssertEqual(LivenessGestureDetector.blinkThreshold, 0.1)
         XCTAssertEqual(LivenessGestureDetector.smileThreshold, 0.8)
         XCTAssertEqual(LivenessGestureDetector.smileRelaxBelow, 0.4)
-    }
-
-    /// ASIL REGRESYON (kullanıcı geri bildirimi 2026-08-25): asık yüz "gülümsediniz" sayılıyordu.
-    /// Sinyal artık ham oran değil ML Kit olasılığı; eşiğin ALTINDAKİ hiçbir değer smile olamaz.
-    func testNoSmileBelowThreshold() {
-        for p in stride(from: Float(0), through: 0.79, by: 0.04) {
-            XCTAssertNotEqual(LivenessGestureDetector.detect(sig(smile: p)), .smile,
-                              "olasılık \(p) gülümseme sayılmamalı")
-        }
-        XCTAssertEqual(LivenessGestureDetector.detect(sig(smile: 0.9)), .smile)
+        XCTAssertEqual(EventSequencer.smileOn, LivenessGestureDetector.smileThreshold)
+        XCTAssertEqual(EventSequencer.smileNeutral, LivenessGestureDetector.smileRelaxBelow)
     }
 
     /// Nötr bandı gülümseme eşiğinden dar: 0.4–0.8 arası ne nötr ne gülümseme. Bu ara bant,
@@ -180,42 +139,6 @@ final class LivenessLogicTests: XCTestCase {
         XCTAssertFalse(LivenessGestureDetector.isSmileNeutral(0.4))
         XCTAssertFalse(LivenessGestureDetector.isSmileNeutral(0.6), "ara bant nötr DEĞİL")
         XCTAssertFalse(LivenessGestureDetector.isSmileNeutral(-1), "kare yoksa nötr sayılmaz")
-    }
-
-    /// ASIL REGRESYON: kullanıcı "hata mesajı kalkar kalkmaz aynısı tekrar geliyor, beş hakkın
-    /// tamamı yanıyor" dedi. Sürekli yüksek okunan bir gülümseme sinyali TEK ceza yazdırmalı.
-    func testSustainedSmileChargesOnlyOnePenalty() {
-        var gate = SmileEdgeGate()
-        gate.observe(0.1)                                  // nötr görüldü → ceza mümkün
-        XCTAssertTrue(gate.consumeIfArmed(), "İlk ceza yazılabilmeli")
-
-        for _ in 0..<90 { gate.observe(0.95) }             // ~3 saniye kesintisiz gülümseme
-        XCTAssertFalse(gate.consumeIfArmed(), "Nötr yeniden görülmeden ikinci ceza yazılamaz")
-    }
-
-    /// Komut geldiğinde kullanıcı zaten gülümsüyorsa (ya da öyle ölçülüyorsa) ceza yazılamaz —
-    /// onu gülümsemez hâlde HİÇ görmedik.
-    func testPenaltyRequiresHavingSeenNeutral() {
-        var gate = SmileEdgeGate()
-        for _ in 0..<60 { gate.observe(0.95) }
-        XCTAssertFalse(gate.consumeIfArmed())
-    }
-
-    /// Kapı kalıcı değil: kullanıcı nötre dönerse gerçek bir sonraki gülümseme yine sayılır.
-    /// Ceza bütçesinin kötüye kullanıma karşı işlevi korunuyor.
-    func testNeutralAgainReArmsThePenalty() {
-        var gate = SmileEdgeGate()
-        gate.observe(0.1)
-        XCTAssertTrue(gate.consumeIfArmed())
-        gate.observe(0.2)                                  // yeniden nötr
-        XCTAssertTrue(gate.consumeIfArmed(), "Nötre dönen kullanıcı yeniden ceza alabilmeli")
-    }
-
-    func testGateResetsOnNewSession() {
-        var gate = SmileEdgeGate()
-        gate.observe(0.1)
-        gate.reset()
-        XCTAssertFalse(gate.consumeIfArmed(), "Yeni oturumda nötr baştan görülmeli")
     }
 
     /// `FaceAligner` açıyı `atan2(dy, dx)` ile buluyor → göz sırası ters gelirse yüz 180° DÖNÜK

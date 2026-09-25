@@ -56,23 +56,12 @@ enum Stage3SelfTest {
             return (fixed == nil, fixed ?? "nil (beklenen)")
         })
 
-        // ── Jest tespiti ──
-        r.append(check("detect: yaw 25 → faceLeft") {
-            let s = signals(yaw: 25)
-            return (LivenessGestureDetector.detect(s) == .faceLeft, "\(String(describing: LivenessGestureDetector.detect(s)))")
-        })
-        r.append(check("detect: yaw -25 → faceRight") {
-            (LivenessGestureDetector.detect(signals(yaw: -25)) == .faceRight, "ok")
-        })
-        // Smile artık ML Kit OLASILIĞI [0,1], eşik Android ile aynı: 0.8 (eskiden ham oran, 1.45).
-        r.append(check("detect: smile olasılığı 0.9 → smile") {
-            (LivenessGestureDetector.detect(signals(smile: 0.9)) == .smile, "ok")
-        })
-        r.append(check("detect: iki göz 0.05 → blink") {
-            (LivenessGestureDetector.detect(signals(leftEyeOpen: 0.05, rightEyeOpen: 0.05)) == .blink, "ok")
-        })
-        r.append(check("detect: smile 0.5 (eşiğin altı) → nil") {
-            (LivenessGestureDetector.detect(signals(smile: 0.5)) == nil, "ok")
+        // ── Olay dizisi: yüz boyutu yalnız KALİTE aralığı (tek aralık, mesafe hedefi yok) ──
+        r.append(check("framing: yüz kadrajın %40'ı → ok, %20'si → küçük") {
+            let frame = CGSize(width: 1000, height: 1800)
+            let ok = EventSequencer.framing(of: CGRect(x: 300, y: 600, width: 400, height: 500), in: frame)
+            let small = EventSequencer.framing(of: CGRect(x: 400, y: 700, width: 200, height: 250), in: frame)
+            return (ok == .ok && small == .tooSmall, "\(ok) \(small)")
         })
         // "Nötr" bandı gülümseme eşiğinden AYRI ve daha dar: 0.4-0.8 arası ne nötr ne gülümseme —
         // bu ara bant, gülümsemenin bir GEÇİŞ olarak ölçülmesini sağlayan histerezistir.

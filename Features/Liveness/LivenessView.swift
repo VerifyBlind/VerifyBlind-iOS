@@ -1,9 +1,10 @@
 import SwiftUI
 
 /// Liveness ekranı — Android `LivenessActivity` UI'ının BİREBİR portu (SwiftUI).
-/// Beyaz zemin + ortada OVAL kamera penceresi; kenarlık aynı zamanda AKTİF HAREKETİN kalan süre
-/// halkasıdır (rakamlı sayaç yok). Üstte adım (siyah, ortada) + gri üst ipucu + talimat, altta gri
-/// alt ipucu + sol-altta çip küçük resmi ve canlı %. (b) ışık uyarısı: `viewModel.qualityWarning`.
+/// Beyaz zemin + ortada köşeleri yuvarlatılmış kamera penceresi (`FaceFrameView` — oval DEĞİL);
+/// çerçeve aynı zamanda AKTİF ADIMIN kalan süre çizgisidir (rakamlı sayaç yok). Üstte adım + gri
+/// üst ipucu + talimat ve NASIL yapılacağı, altta gri alt ipucu + sol-altta çip küçük resmi ve
+/// canlı %. Koşudan önce bir kez kılavuz ekranı. Işık uyarısı: `viewModel.qualityWarning`.
 ///
 /// `onSuccess(alignedSelfieJPEG, antiSpoofCropJPEG, matchScore)` başarıyla biter; `onCancel` iptalde.
 /// Canlılık koşusundan geri bildirim kutusuna taşınan teşhis paketi.
@@ -38,7 +39,7 @@ struct LivenessView: View {
     // yedeklenip geri yüklenir (oto-parlaklık aç/kapa durumunu sorgulayan public API yok).
     @State private var savedBrightness: CGFloat?
 
-    // Android renkleri (LivenessActivity / FaceOvalOverlayView)
+    // Android renkleri (LivenessActivity / FaceFrameOverlayView)
     private let redColor  = Color(red: 1.0,   green: 0.267, blue: 0.267) // #FF4444
     private let grayColor = Color(red: 0.333, green: 0.333, blue: 0.333) // #555555
 
@@ -62,9 +63,12 @@ struct LivenessView: View {
             if camera.permissionDenied || camera.configurationFailed {
                 permissionOverlay
             } else {
-                ovalCamera     // oval kamera penceresi (Android FaceOvalOverlayView)
+                frameCamera    // kamera penceresi (Android FaceFrameOverlayView)
                 overlays       // metinler + canlı durum
                 backButton     // sol-üst geri (iOS'ta sistem geri tuşu yok)
+                if viewModel.phase == .guide {
+                    guideOverlay
+                }
             }
 
             if case .failure(let reason) = viewModel.phase {
@@ -107,46 +111,120 @@ struct LivenessView: View {
                     bestMetrics: withSeq(viewModel.bestCandidateMetrics, viewModel.bestSourceSeq),
                     approvedSelfie: viewModel.enclaveApprovedSelfie,
                     approvedCrop: viewModel.enclaveApprovedCrop,
-                    approvedMetrics: withSeq(viewModel.enclaveApprovedMetrics, viewModel.approvedSourceSeq)))
+                    approvedMetrics: withSeq(viewModel.enclaveApprovedMetrics, viewModel.approvedSourceSeq),
+                    choreographyProof: viewModel.choreographyProof))
                 onSuccess(jpeg, viewModel.antiSpoofCropJPEG, viewModel.finalMatchScore, diagnostics)
             }
             if case .failure(let reason) = phase { onFailure?(reason, viewModel.diagnosticJPEG, diagnostics) }
         }
     }
 
-    // MARK: - Oval kamera penceresi (beyaz zemin üzerinde oval kesit, kırmızı kenarlık)
+    // MARK: - Kamera penceresi (beyaz zemin üzerinde yuvarlatılmış kesit, durum renginde köşeler)
 
-    private var ovalCamera: some View {
+    private var frameCamera: some View {
         GeometryReader { geo in
-            let ovalW = geo.size.width * 0.75
-            let ovalH = ovalW * 1.35
-            ZStack {
+            let width = min(geo.size.width * 0.75, geo.size.height * 0.6 / FaceFrameView<EmptyView>.aspect)
+            FaceFrameView(width: width,
+                          aligned: viewModel.frameAligned,
+                          progress: viewModel.phase == .running ? viewModel.timeProgress : nil) {
                 CameraPreview(session: camera.session)
-                    .frame(width: ovalW, height: ovalH)
-                    .clipShape(Ellipse())
-                // Kalan süre halkası: oval kenarlığın KENDİSİ erir. Rakam gösterilmez — sayaç
-                // baskı kuruyor ve kafa çevrikken zaten görünmüyor; erimekte olan bir kenarlık
-                // "devam et" der. Son ~4 saniyede kehribara döner (+ sessiz haptic dürtme).
-                Ellipse()
-                    .stroke(Color(white: 0.88), lineWidth: 3)
-                    .frame(width: ovalW, height: ovalH)
-                Ellipse()
-                    .trim(from: 0, to: viewModel.gestureProgress)
-                    .stroke(timeRingColor, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                    .frame(width: ovalW, height: ovalH)
-                    .animation(.linear(duration: 0.1), value: viewModel.gestureProgress)
             }
             .position(x: geo.size.width / 2, y: geo.size.height / 2)
         }
         .ignoresSafeArea()
     }
 
+    // MARK: - Kılavuz (koşudan önce bir kez)
+
+    /// Işık, telefonun tutuluşu, aksesuarlar ve hareketlerin NASIL yapılacağı. Yanlış reddin en ucuz
+    /// ilacı baştan doğru bilgi; kamera arkada ısınırken okunur. Android `guideOverlay` paritesi.
+    private var guideOverlay: some View {
+        ZStack {
+            Theme.background.ignoresSafeArea()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(L.t("liveness_guide_title"))
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundColor(Theme.onSurface)
+                    Text(L.t("liveness_guide_subtitle"))
+                        .font(.system(size: 15))
+                        .foregroundColor(Theme.onSurfaceVariant)
+                        .padding(.top, 6)
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        guideLine("liveness_guide_light")
+                        guideLine("liveness_guide_hold")
+                        guideLine("liveness_guide_accessories")
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16))
+                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.outlineVariant, lineWidth: 1))
+                    .padding(.top, 20)
+
+                    Text(L.t("liveness_guide_moves_title", viewModel.eventCountForGuide))
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(Theme.onSurface)
+                        .padding(.top, 24)
+                    Text(L.t("liveness_guide_moves_intro"))
+                        .font(.system(size: 15))
+                        .foregroundColor(Theme.onSurfaceVariant)
+                        .padding(.top, 6)
+
+                    VStack(alignment: .leading, spacing: 14) {
+                        guideMove("liveness_face_blink", "liveness_ev_hint_blink")
+                        guideMove("liveness_face_double_blink", "liveness_ev_hint_double_blink")
+                        guideMove("liveness_face_smile", "liveness_ev_hint_smile")
+                        guideMove("liveness_face_mouth_open", "liveness_ev_hint_mouth_open")
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16))
+                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.outlineVariant, lineWidth: 1))
+                    .padding(.top, 12)
+
+                    Button {
+                        viewModel.beginAfterGuide()
+                    } label: {
+                        Text(L.t("liveness_guide_start"))
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundColor(Theme.onPrimary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Theme.primary, in: RoundedRectangle(cornerRadius: 12))
+                    }
+                    .padding(.top, 28)
+                }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 28)
+            }
+        }
+    }
+
+    private func guideLine(_ key: String) -> some View {
+        Text(L.t(key))
+            .font(.system(size: 15))
+            .foregroundColor(Theme.onSurface)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func guideMove(_ nameKey: String, _ hintKey: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(L.t(nameKey))
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(Theme.onSurface)
+            Text(L.t(hintKey))
+                .font(.system(size: 14))
+                .foregroundColor(Theme.onSurfaceVariant)
+        }
+    }
+
     // MARK: - Metin + canlı durum katmanları
 
     private var overlays: some View {
         VStack(spacing: 0) {
-            // Üst: adım sayacı (ortada, siyah). Kalan süre RAKAMLA değil, oval kenarlıktaki
-            // halkayla gösterilir.
+            // Üst: adım sayacı (ortada, siyah). Kalan süre RAKAMLA değil, çerçevede eriyen
+            // çizgiyle gösterilir.
             // Boşken "1/5" yazmak YANLIŞ bilgi: `presentChallenge` hiç koşmamışken bile ekranda ilk
             // adım duruyormuş gibi görünüyor. 2026-08-25 teşhisinde tam olarak bunu yanlış okuduk —
             // üstteki sayı komutun geldiğine kanıt sanıldı. Komut yoksa burası da boş kalsın.
@@ -216,11 +294,10 @@ struct LivenessView: View {
         Group {
             if viewModel.checkmark {
                 Text("✅").font(.system(size: 40))
-            } else if viewModel.wrongMove {
+            } else if let notice = viewModel.notice {
                 VStack(spacing: 6) {
                     Text("⚠️").font(.system(size: 34))
-                    Text(viewModel.wrongMoveDetail.isEmpty
-                         ? L.t("liveness_wrong_move") : viewModel.wrongMoveDetail)
+                    Text(notice)
                         .foregroundColor(redColor)
                 }
             } else {
@@ -240,36 +317,37 @@ struct LivenessView: View {
         .padding(.horizontal, 32)
     }
 
-    /// Kalan süre halkasının rengi — son ~4 saniyede kehribar.
-    private var timeRingColor: Color {
-        viewModel.gestureProgress <= LivenessViewModel.lowTimeFraction
-            ? Color(red: 0.95, green: 0.61, blue: 0.07) : redColor
-    }
-
     private static func failureIcon(_ reason: LivenessViewModel.FailureReason) -> String {
         switch reason {
-        case .gestureTimeout, .sessionTimeout: return "clock.badge.exclamationmark"
-        case .tooManyErrors: return "exclamationmark.triangle"
-        case .noSelfie:      return "camera.badge.ellipsis"
-        case .matchFailed:   return "person.crop.circle.badge.xmark"
+        case .gestureTimeout, .sessionTimeout, .settleTimeout: return "clock.badge.exclamationmark"
+        case .tooManyErrors, .tooManyResets: return "exclamationmark.triangle"
+        case .noSelfie:        return "camera.badge.ellipsis"
+        case .matchFailed:     return "person.crop.circle.badge.xmark"
+        case .missingSequence: return "arrow.down.app"
         }
     }
 
     private static func failureTitleKey(_ reason: LivenessViewModel.FailureReason) -> String {
         switch reason {
         case .gestureTimeout, .sessionTimeout: return "liveness_timeout_title"
-        case .tooManyErrors: return "liveness_too_many_errors_title"
-        case .noSelfie:      return "liveness_selfie_error_title"
-        case .matchFailed:   return "liveness_match_failed_title"
+        case .settleTimeout:   return "liveness_ev_settle_timeout_title"
+        case .tooManyErrors:   return "liveness_too_many_errors_title"
+        case .tooManyResets:   return "liveness_ev_resets_title"
+        case .noSelfie:        return "liveness_selfie_error_title"
+        case .matchFailed:     return "liveness_match_failed_title"
+        case .missingSequence: return "liveness_error_title"
         }
     }
 
     private static func failureMessageKey(_ reason: LivenessViewModel.FailureReason) -> String {
         switch reason {
         case .gestureTimeout, .sessionTimeout: return "liveness_timeout_message"
-        case .tooManyErrors: return "liveness_too_many_errors_message"
-        case .noSelfie:      return "liveness_selfie_error_message"
-        case .matchFailed:   return "liveness_match_failed_message"
+        case .settleTimeout:   return "liveness_ev_settle_timeout_message"
+        case .tooManyErrors:   return "liveness_too_many_errors_message"
+        case .tooManyResets:   return "liveness_ev_resets_message"
+        case .noSelfie:        return "liveness_selfie_error_message"
+        case .matchFailed:     return "liveness_match_failed_message"
+        case .missingSequence: return "liveness_ev_missing"
         }
     }
 
@@ -339,8 +417,11 @@ struct LivenessView: View {
                 HStack(spacing: 12) {
                     Button(L.t("btn_cancel")) { onCancel() }
                         .buttonStyle(.bordered)
-                    Button(L.t("btn_retry")) { viewModel.retry() }
-                        .buttonStyle(.borderedProminent)
+                    // Dizi hiç gelmediyse tekrar denemek aynı yere çıkar — yalnız vazgeçilir.
+                    if reason != .missingSequence {
+                        Button(L.t("btn_retry")) { viewModel.retry() }
+                            .buttonStyle(.borderedProminent)
+                    }
                 }
             }
             .padding(24)
@@ -380,4 +461,6 @@ struct LivenessCandidates {
     let approvedSelfie: Data?
     let approvedCrop: Data?
     let approvedMetrics: DeviceFrameMetrics?
+    /// Olay dizisi kanıtı — kayıt yüküne girer; enclave yapıyı ve HER karede kimliği doğrular.
+    let choreographyProof: ChoreographyProof?
 }

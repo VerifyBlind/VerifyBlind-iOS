@@ -73,7 +73,7 @@ struct LoginFaceView: View {
                 .padding(.horizontal, 32)
                 .padding(.top, 8)
 
-            ovalCamera
+            frameCamera
                 .padding(.top, 16)
 
             // Canlı benzerlik yüzdesi — kayıt ekranındaki göstergenin karşılığı. Burada
@@ -96,16 +96,16 @@ struct LoginFaceView: View {
         }
     }
 
-    /// Oval kamera penceresi — `LivenessView.ovalCamera` ile aynı görsel dil (beyaz zemin üzerinde
-    /// oval kesit, kırmızı kenarlık). Kullanıcı iki ekranı da aynı şey olarak tanısın diye.
-    private var ovalCamera: some View {
+    /// Kamera penceresi — `LivenessView.frameCamera` ile aynı görsel dil (`FaceFrameView`: beyaz
+    /// zemin üzerinde yuvarlatılmış kesit, köşe işaretleri; oval DEĞİL). Kullanıcı iki ekranı da aynı
+    /// şey olarak tanısın diye.
+    private var frameCamera: some View {
         GeometryReader { geo in
-            let side = min(geo.size.width * 0.8, geo.size.height)
+            let side = min(geo.size.width * 0.8, geo.size.height / FaceFrameView<EmptyView>.aspect)
             ZStack {
-                CameraPreview(session: camera.session)
-                    .frame(width: side, height: side * 1.25)
-                    .clipShape(Ellipse())
-                    .overlay(Ellipse().stroke(redColor, lineWidth: 3))
+                FaceFrameView(width: side, aligned: false, progress: nil) {
+                    CameraPreview(session: camera.session)
+                }
 
                 if let warning = viewModel.warning {
                     VStack {
@@ -117,7 +117,7 @@ struct LoginFaceView: View {
                             .background(redColor.opacity(0.8))
                         Spacer()
                     }
-                    .frame(width: side, height: side * 1.25)
+                    .frame(width: side, height: side * FaceFrameView<EmptyView>.aspect)
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)

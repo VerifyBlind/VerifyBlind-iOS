@@ -25,6 +25,9 @@ actor FlowTelemetry {
         case gestureRight = "gesture_right"
         case gestureSmile = "gesture_smile"
         case gestureBlink = "gesture_blink"
+        /// Olay dizisinin (2026-09-25) yeni hareketleri. Kafa çevirme yalnız eski sürümlerden gelir.
+        case gestureMouthOpen = "gesture_mouth_open"
+        case gestureDoubleBlink = "gesture_double_blink"
     }
 
     static let shared = FlowTelemetry()

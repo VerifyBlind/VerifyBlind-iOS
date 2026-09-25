@@ -130,9 +130,9 @@ enum Stage1SelfTest {
         })
 
         results.append(check("DTO: HandshakeResponse decode") {
-            let sample = #"{"nonce":"abc","timestamp":123,"nonce_signature":"sig","enclave_pub_key":"k","challenges":[1,2]}"#
+            let sample = #"{"nonce":"abc","timestamp":123,"nonce_signature":"sig","enclave_pub_key":"k","challenges":[1,2],"choreography":{"version":2,"events":[4,1,3]}}"#
             let resp = try JSONDecoder().decode(HandshakeResponse.self, from: Data(sample.utf8))
-            let ok = resp.nonce == "abc" && resp.timestamp == 123 && resp.challenges == [1, 2]
+            let ok = resp.nonce == "abc" && resp.timestamp == 123 && resp.choreography?.events == [4, 1, 3]
             return (ok, "nonce=\(resp.nonce)")
         })
 
