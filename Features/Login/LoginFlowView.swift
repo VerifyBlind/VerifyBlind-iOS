@@ -97,11 +97,16 @@ private struct QRScanStepView: View {
     let onResult: (String) -> Void
     let onCancel: () -> Void
 
-    // QR kamerası 1080p + max fps, varsayılan 2x açılır. `zoom` butonun seçili durumu için.
-    @StateObject private var camera = CameraController(position: .back, highFrameRate: true, defaultZoom: 2.0)
+    // QR kamerası 1080p (format sistemin — bkz. CameraController.configure), varsayılan 2x açılır.
+    // `zoom` butonun seçili durumu için.
+    @StateObject private var camera = CameraController(position: .back, defaultZoom: 2.0)
     @State private var scanner = QRScanner()
     @State private var zoom: CGFloat = 2.0
     @State private var scanLineDown = false
+    @State private var scanned = false
+
+    /// Odak teşhisi süreç başına BİR kez yazılır (Sentry kotası).
+    private static var focusDiagnosticsSent = false
 
     var body: some View {
         ZStack {
@@ -170,12 +175,19 @@ private struct QRScanStepView: View {
         }
         .onAppear {
             scanner.onResult = { payload in
+                scanned = true
                 camera.stop()
                 Log.info("QR okundu (login)", category: .flow)
                 onResult(payload)
             }
             camera.onFrame = { buf, o in scanner.process(buf, orientation: o) }
             camera.start()
+            // 4 sn'de okunamadıysa odak durumunu bir kez yaz — bulanıklık dönerse sebebi buradan.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+                guard !scanned, !Self.focusDiagnosticsSent else { return }
+                Self.focusDiagnosticsSent = true
+                camera.focusDiagnostics { Log.warning("QR 4 sn'de okunamadı — odak: \($0)", category: .flow) }
+            }
             withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
                 scanLineDown = true
             }
