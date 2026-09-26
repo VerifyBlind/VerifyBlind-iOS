@@ -120,6 +120,20 @@ final class EventSequencerTests: XCTestCase {
         XCTAssertEqual(d.seq.steps[0].events.count, 2, "Enclave çift kırpmada iki kare ister")
     }
 
+    /// Ağır iş yalnız kırpmada ertelenir; gülümseme/ağız açmada benzerlik güncellenmeye devam eder.
+    func testOnlyBlinksQuietTheHeavyWork() {
+        for (event, quiet) in [(EventSequencer.Event.blink, true), (.doubleBlink, true),
+                               (.smile, false), (.mouthOpen, false)] {
+            var d = Driver([event])
+            d.hold(sig(lip: 0.02), forMs: 600)
+            XCTAssertEqual(d.seq.phase, .event, "\(event)")
+            XCTAssertEqual(d.seq.quietPhase, quiet, "\(event)")
+        }
+        var settling = EventSequencer(events: [.blink])
+        settling.start(now: 0)
+        XCTAssertFalse(settling.quietPhase, "Yerleşirken selfie adayı toplanır")
+    }
+
     /// Tek gözle kırpma da kırpmadır — hangi göz olursa olsun (2026-09-25, kullanıcı kararı).
     func testWinkWithEitherEyeCountsAsBlink() {
         for w in [wink(left: 0.05, right: 0.95), wink(left: 0.95, right: 0.05)] {

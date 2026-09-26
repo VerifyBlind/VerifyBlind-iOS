@@ -177,9 +177,19 @@ struct EventSequencer {
         (phase == .settle || phase == .event) && index < events.count && events[index] == .mouthOpen
     }
 
-    /// Olay bekleniyor — çağıran bu sırada ağır işleri (selfie adayı, gömme) ERTELEMELİ: kare
-    /// hızı düşerse 100-150 ms'lik bir kırpma iki kare arasında kalır.
-    var quietPhase: Bool { phase == .event }
+    /// Göz kırpma bekleniyor — çağıran bu sırada ağır işleri (selfie adayı, gömme) ERTELEMELİ:
+    /// kare hızı düşerse 100-150 ms'lik bir kırpma iki kare arasında kalır.
+    ///
+    /// Yalnız kırpmada: gülümseme ve ağız açma yüzlerce milisaniyede açılıp TUTULUYOR, bir karelik
+    /// gecikme onları kaçırtmıyor. O adımlarda selfie adayı toplanmaya devam eder ki ekrandaki
+    /// benzerlik yüzdesi hareket boyunca da güncellensin — hareketin tamamı sessizken yüzde eskisi
+    /// kadar sık güncellenmiyor ve yükselmiyordu (kullanıcı, 2026-09-27). Android `quietFor`.
+    var quietPhase: Bool {
+        phase == .event && index < events.count && Self.quietFor(events[index])
+    }
+
+    /// Olay sırasında ağır işin ertelenmesi gereken hareketler — kısa olanlar.
+    static func quietFor(_ event: Event) -> Bool { event == .blink || event == .doubleBlink }
 
     // MARK: Akış
 

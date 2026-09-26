@@ -415,8 +415,9 @@ final class LivenessViewModel: ObservableObject {
         signals += seq.tick(now: now)
         sequencer = seq
 
-        // 🔴 Olay beklenirken selfie adayı (tam kare + hizalama + gömme) ERTELENİR: kare hızı
+        // 🔴 Göz kırpma beklenirken selfie adayı (tam kare + hizalama + gömme) ERTELENİR: kare hızı
         // düşerse 100-150 ms'lik bir kırpma iki kare arasında kalır (Android'de sahada yaşandı).
+        // Gülümseme/ağız açmada ertelenmez — yüzde hareket boyunca güncellensin (bkz. quietPhase).
         if !seq.quietPhase && seq.isActive {
             captureFrame(frame, quality: quality, fullCG: fullCG)
         }
