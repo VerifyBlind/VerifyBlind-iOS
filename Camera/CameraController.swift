@@ -150,9 +150,10 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
         // 🔴 QR ekranı eskiden formatı kendisi seçiyordu (1080p, 60 fps'e en yakın; preset
         // .inputPriority) ve seçimde formatın otomatik odağı olup olmadığına bakılmıyordu. iPhone 16 Pro
         // iOS 27'ye geçtikten sonra QR 1 metreden baştan sona bulanık göründü (kullanıcı, 2026-09-27);
-        // aynı telefonda sistem formatını kullanan MRZ ekranı sorunsuzdu, kod ve Xcode sürümü
-        // değişmemişti. Seçim, format listesi değişince odaksız ya da yavaş odaklı bir formata
-        // kayabiliyordu. 30 fps QR okumak için fazlasıyla yeterli.
+        // kod ve Xcode sürümü değişmemişti, Android aynı QR'da sorunsuzdu. QR'a özgü tek kamera ayarı
+        // bu elle seçilen formattı: format listesi değişince seçim odaksız ya da yavaş odaklı bir
+        // formata kayabilir. Diğer ekranlar (MRZ, canlılık) hep sistemin preset'ini kullanıyor.
+        // 30 fps QR okumak için fazlasıyla yeterli.
         if session.canSetSessionPreset(.hd1920x1080) {
             session.sessionPreset = .hd1920x1080
         } else {
