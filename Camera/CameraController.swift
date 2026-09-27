@@ -149,9 +149,9 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
         //
         // QR ekranı eskiden formatı kendisi seçiyordu (1080p, 60 fps'e en yakın; preset .inputPriority),
         // formatın otomatik odağına bakmadan. 2026-09-27'deki QR bulanıklığında ilk şüpheli buydu ve
-        // kaldırıldı; ama teşhis satırı formatın sağlam olduğunu gösterdi (af=phase). Asıl sebep
-        // sürekli odağın sonsuzda takılmasıydı → `focus(at:)`. Preset kaldı: her ekranda aynı yol,
-        // 30 fps QR okumak için fazlasıyla yeterli.
+        // kaldırıldı; bulanıklığın sebebi sonradan telefonun arızalı odak motoru çıktı (iPhone'un kendi
+        // Kamera uygulamasında da odaklamıyordu). Preset kaldı: her ekranda aynı yol, 30 fps QR okumak
+        // için fazlasıyla yeterli.
         if session.canSetSessionPreset(.hd1920x1080) {
             session.sessionPreset = .hd1920x1080
         } else {
@@ -236,10 +236,11 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
     /// Tek seferlik odak TARAMASI — merceği baştan sona gezdirip noktadaki en net konumu bulur ve
     /// orada kalır. Nokta aygıt koordinatında (0-1); varsayılan merkez.
     ///
-    /// Neden (QR ekranı): sürekli otomatik odak 1 m'deki ekran QR'ında sonsuzda takılı kaldı ve hiç
-    /// ayar yapmadı — teşhis satırı `af=phase mode=2 adjusting=false lens=1.00` (iPhone 12, iOS
-    /// 26.5.2, 2026-09-27). Format sağlamdı; sürekli odak sahneyi "net" sayıp kıpırdamıyordu. Tam
-    /// tarama bunu zorla yapar. `.autoFocus` her atamada yeni bir tarama başlatır (AVCam kalıbı).
+    /// QR ekranı açılışta ve okunana kadar aralıkla merkezi tarar, dokunulan noktaya da odaklanır:
+    /// sürekli odak bir ekran QR'ında yanlış mesafede kalırsa tam tarama yeniden arar. 2026-09-27'de
+    /// bir iPhone 12'deki bulanıklık için eklendi; o vakada sebep telefonun arızalı odak motoruydu
+    /// (tarama da merceği oynatamadı), ama sağlam telefonlarda da zararsız ve yararlı.
+    /// `.autoFocus` her atamada yeni bir tarama başlatır (AVCam kalıbı).
     func focus(at point: CGPoint = CGPoint(x: 0.5, y: 0.5)) {
         sessionQueue.async { [weak self] in
             guard let device = self?.videoDevice else { return }
@@ -258,29 +259,6 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
                 Log.warning("CameraController: odak taraması başlatılamadı: \(error.localizedDescription)",
                             category: .flow)
             }
-        }
-    }
-
-    /// Odak teşhisi — QR okunamadığında bir kez loglanır: hangi format, hangi odak sistemi, mercek
-    /// nerede. Bulanıklık yeniden görülürse sebebin ilk kanıtı bu satır olacak (cihazda debugger yok).
-    func focusDiagnostics(_ completion: @escaping (String) -> Void) {
-        sessionQueue.async { [weak self] in
-            guard let self, let device = self.videoDevice else { completion("cihaz yok"); return }
-            let format = device.activeFormat
-            let dims = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
-            let maxFps = Int(format.videoSupportedFrameRateRanges.map { $0.maxFrameRate }.max() ?? 0)
-            let af: String
-            switch format.autoFocusSystem {
-            case .none: af = "none"
-            case .contrastDetection: af = "contrast"
-            case .phaseDetection: af = "phase"
-            @unknown default: af = "?"
-            }
-            var text = "format=\(dims.width)x\(dims.height)@\(maxFps) af=\(af) mode=\(device.focusMode.rawValue) " +
-                "adjusting=\(device.isAdjustingFocus) lens=\(String(format: "%.2f", device.lensPosition)) " +
-                "zoom=\(String(format: "%.1f", device.videoZoomFactor)) preset=\(self.session.sessionPreset.rawValue)"
-            if #available(iOS 15.0, *) { text += " minFocus=\(device.minimumFocusDistance)mm" }
-            completion(text)
         }
     }
 

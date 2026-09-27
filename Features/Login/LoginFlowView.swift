@@ -107,9 +107,6 @@ private struct QRScanStepView: View {
     /// Son dokunarak odaklama — periyodik merkez taraması bundan sonra bir süre bekler.
     @State private var lastTapFocus: Date?
 
-    /// Odak teşhisi süreç başına BİR kez yazılır (Sentry kotası).
-    private static var focusDiagnosticsSent = false
-
     /// Okunana kadar merkeze yeniden odak taraması aralığı (bkz. CameraController.focus).
     private static let focusScanInterval: UInt64 = 2_500_000_000
 
@@ -192,19 +189,13 @@ private struct QRScanStepView: View {
             }
             camera.onFrame = { buf, o in scanner.process(buf, orientation: o) }
             camera.start()
-            // 4 sn'de okunamadıysa odak durumunu bir kez yaz — bulanıklık dönerse sebebi buradan.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
-                guard !scanned, !Self.focusDiagnosticsSent else { return }
-                Self.focusDiagnosticsSent = true
-                camera.focusDiagnostics { Log.warning("QR 4 sn'de okunamadı — odak: \($0)", category: .flow) }
-            }
             withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
                 scanLineDown = true
             }
         }
         .onDisappear { camera.stop() }
-        // Sürekli odak 1 m'deki ekran QR'ında sonsuzda takılı kalabiliyor (bkz. CameraController.focus):
-        // açılışta ve okunana kadar aralıkla merkeze tam tarama. Görünüm kaybolunca görev iptal olur.
+        // Açılışta ve okunana kadar aralıkla merkeze tam odak taraması (bkz. CameraController.focus).
+        // Görünüm kaybolunca görev iptal olur.
         .task {
             try? await Task.sleep(nanoseconds: 600_000_000)
             while !Task.isCancelled && !scanned {
