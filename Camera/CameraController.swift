@@ -147,12 +147,10 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
 
         // Çözünürlük: 1080p preset — formatı SİSTEM seçer (her ekranda).
         //
-        // 🔴 QR ekranı eskiden formatı kendisi seçiyordu (1080p, 60 fps'e en yakın; preset
-        // .inputPriority) ve seçimde formatın otomatik odağı olup olmadığına bakılmıyordu. iPhone 16 Pro
-        // iOS 27'ye geçtikten sonra QR 1 metreden baştan sona bulanık göründü (kullanıcı, 2026-09-27);
-        // kod ve Xcode sürümü değişmemişti, Android aynı QR'da sorunsuzdu. QR'a özgü tek kamera ayarı
-        // bu elle seçilen formattı: format listesi değişince seçim odaksız ya da yavaş odaklı bir
-        // formata kayabilir. Diğer ekranlar (MRZ, canlılık) hep sistemin preset'ini kullanıyor.
+        // QR ekranı eskiden formatı kendisi seçiyordu (1080p, 60 fps'e en yakın; preset .inputPriority),
+        // formatın otomatik odağına bakmadan. 2026-09-27'deki QR bulanıklığında ilk şüpheli buydu ve
+        // kaldırıldı; ama teşhis satırı formatın sağlam olduğunu gösterdi (af=phase). Asıl sebep
+        // sürekli odağın sonsuzda takılmasıydı → `focus(at:)`. Preset kaldı: her ekranda aynı yol,
         // 30 fps QR okumak için fazlasıyla yeterli.
         if session.canSetSessionPreset(.hd1920x1080) {
             session.sessionPreset = .hd1920x1080
@@ -232,6 +230,34 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
             device.unlockForConfiguration()
         } catch {
             Log.error("CameraController: cihaz yapılandırılamadı: \(error.localizedDescription)", category: .liveness)
+        }
+    }
+
+    /// Tek seferlik odak TARAMASI — merceği baştan sona gezdirip noktadaki en net konumu bulur ve
+    /// orada kalır. Nokta aygıt koordinatında (0-1); varsayılan merkez.
+    ///
+    /// Neden (QR ekranı): sürekli otomatik odak 1 m'deki ekran QR'ında sonsuzda takılı kaldı ve hiç
+    /// ayar yapmadı — teşhis satırı `af=phase mode=2 adjusting=false lens=1.00` (iPhone 12, iOS
+    /// 26.5.2, 2026-09-27). Format sağlamdı; sürekli odak sahneyi "net" sayıp kıpırdamıyordu. Tam
+    /// tarama bunu zorla yapar. `.autoFocus` her atamada yeni bir tarama başlatır (AVCam kalıbı).
+    func focus(at point: CGPoint = CGPoint(x: 0.5, y: 0.5)) {
+        sessionQueue.async { [weak self] in
+            guard let device = self?.videoDevice else { return }
+            do {
+                try device.lockForConfiguration()
+                if device.isFocusPointOfInterestSupported { device.focusPointOfInterest = point }
+                if device.isFocusModeSupported(.autoFocus) { device.focusMode = .autoFocus }
+                if device.isExposurePointOfInterestSupported {
+                    device.exposurePointOfInterest = point
+                    if device.isExposureModeSupported(.continuousAutoExposure) {
+                        device.exposureMode = .continuousAutoExposure
+                    }
+                }
+                device.unlockForConfiguration()
+            } catch {
+                Log.warning("CameraController: odak taraması başlatılamadı: \(error.localizedDescription)",
+                            category: .flow)
+            }
         }
     }
 

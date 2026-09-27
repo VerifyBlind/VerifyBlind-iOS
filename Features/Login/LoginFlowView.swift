@@ -104,14 +104,24 @@ private struct QRScanStepView: View {
     @State private var zoom: CGFloat = 2.0
     @State private var scanLineDown = false
     @State private var scanned = false
+    /// Son dokunarak odaklama — periyodik merkez taraması bundan sonra bir süre bekler.
+    @State private var lastTapFocus: Date?
 
     /// Odak teşhisi süreç başına BİR kez yazılır (Sentry kotası).
     private static var focusDiagnosticsSent = false
 
+    /// Okunana kadar merkeze yeniden odak taraması aralığı (bkz. CameraController.focus).
+    private static let focusScanInterval: UInt64 = 2_500_000_000
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            CameraPreview(session: camera.session).ignoresSafeArea()
+            // Dokunulan yere odaklanır — merkez taraması yetmezse kullanıcının elinde bir yol olsun.
+            CameraPreview(session: camera.session, onTapDevicePoint: { point in
+                lastTapFocus = Date()
+                camera.focus(at: point)
+            })
+            .ignoresSafeArea()
 
             if camera.permissionDenied || camera.configurationFailed {
                 VStack(spacing: 12) {
@@ -193,6 +203,17 @@ private struct QRScanStepView: View {
             }
         }
         .onDisappear { camera.stop() }
+        // Sürekli odak 1 m'deki ekran QR'ında sonsuzda takılı kalabiliyor (bkz. CameraController.focus):
+        // açılışta ve okunana kadar aralıkla merkeze tam tarama. Görünüm kaybolunca görev iptal olur.
+        .task {
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            while !Task.isCancelled && !scanned {
+                if lastTapFocus.map({ Date().timeIntervalSince($0) > 4 }) ?? true {
+                    camera.focus()
+                }
+                try? await Task.sleep(nanoseconds: Self.focusScanInterval)
+            }
+        }
     }
 
     /// Sağ alt köşe zoom pill butonu (2x).
