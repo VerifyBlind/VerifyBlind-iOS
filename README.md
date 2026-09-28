@@ -34,11 +34,12 @@ platform kısıtıdır (Telegram dahil tüm iOS uygulamaları için geçerli). B
 1. **Build provenance (bu repo)** — Her release'e eklenen `attestation.sigstore.json`, App Store'a
    yüklenen IPA'nın yukarıdaki commit'ten, bu repo'nun GitHub Actions iş akışında derlendiğini
    matematiksel olarak kanıtlar. İmza, iş akışının OIDC kimliğine bağlıdır; bu repo dışında kimse üretemez.
-2. **Apple kod imzalama zorunluluğu** — Stok iOS yalnızca Apple'ın imzaladığı App Store kopyasını
-   çalıştırır; değiştirilmiş bir uygulama cihazda hiç açılmaz. Aynı build numarası App Store Connect'te
-   yalnızca bir kez var olabilir.
-3. **App Attest** — VerifyBlind sunucusu her kayıtta, cihazdaki uygulamanın gerçek App Store build'i
-   olduğunu Apple üzerinden doğrular.
+2. **Apple kod imzalama zorunluluğu** — Stok iOS yalnızca Apple'ın verdiği sertifikalarla imzalanmış
+   uygulamaları çalıştırır. Değiştirilmiş bir kopya, VerifyBlind'ın hesabı dışında yeniden imzalanmak
+   zorundadır ve böyle bir kopya App Attest'ten geçemez. Aynı build numarası App Store Connect'te yalnızca
+   bir kez var olabilir.
+3. **App Attest** — VerifyBlind sunucusu her korunan istekte (kart ekleme, doğrulama, geri alma), cihazdaki
+   uygulamanın VerifyBlind hesabıyla imzalanmış gerçek build olduğunu Apple üzerinden doğrular.
 
 ### Nasıl doğrularsınız?
 
@@ -92,10 +93,11 @@ the chain of trust closes through **three independent links**:
    mathematical proof that the IPA uploaded to the App Store was built from the commit above, in this
    repo's GitHub Actions workflow. The signature is bound to the workflow's OIDC identity; no one
    outside this repo can produce it.
-2. **Apple code-signing enforcement** — Stock iOS only runs the App Store copy signed by Apple; a
-   modified app will not even launch. The same build number can exist only once in App Store Connect.
-3. **App Attest** — On every registration the VerifyBlind server verifies, via Apple, that the app on
-   the device is the genuine App Store build.
+2. **Apple code-signing enforcement** — Stock iOS only runs apps signed with Apple-issued certificates.
+   A modified copy has to be re-signed outside VerifyBlind's account, and such a copy cannot pass App
+   Attest. The same build number can exist only once in App Store Connect.
+3. **App Attest** — On every protected request (adding a card, verifying, revoking) the VerifyBlind server
+   verifies, via Apple, that the app on the device is the genuine build signed with VerifyBlind's account.
 
 ### How to verify
 
