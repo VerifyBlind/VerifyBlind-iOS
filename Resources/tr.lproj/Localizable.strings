@@ -297,7 +297,7 @@
 "feedback_step_liveness" = "Yüz doğrulama";
 "feedback_step_submit" = "Kayıt";
 "settings_backup_title" = "Şifreli Yedekleme";
-"settings_backup_desc" = "Kimlik bilgilerinizi bulutta yedekleyin";
+"settings_backup_desc" = "İşlem geçmişinizi yedekleyin ya da geri yükleyin";
 "settings_block_card_title" = "Kartımı Engelle";
 "settings_block_card_desc" = "Çalınan veya kaybolan kartı engelle";
 "settings_reset_title" = "Verilerimi Sil";

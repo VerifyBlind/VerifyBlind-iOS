@@ -297,7 +297,7 @@
 "feedback_step_liveness" = "Face check";
 "feedback_step_submit" = "Registration";
 "settings_backup_title" = "Encrypted Backup";
-"settings_backup_desc" = "Back up your identity credentials to the cloud";
+"settings_backup_desc" = "Back up or restore your transaction history";
 "settings_block_card_title" = "Block My Card";
 "settings_block_card_desc" = "Block a stolen or lost card";
 "settings_reset_title" = "Delete My Data";
