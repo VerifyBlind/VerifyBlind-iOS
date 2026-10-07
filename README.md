@@ -125,3 +125,11 @@ GitHub Actions ([`.github/workflows/ios-prod.yml`](.github/workflows/ios-prod.ym
 [`ios-dev.yml`](.github/workflows/ios-dev.yml)) builds the IPA, produces a Sigstore attestation via
 `actions/attest-build-provenance`, and [`scripts/ci/ios-release-publish.sh`](scripts/ci/ios-release-publish.sh)
 publishes a release tagged `build-N` (prod) / `dev-build-N` (dev).
+
+---
+
+## Lisans · License
+
+**PolyForm Strict 1.0.0** — kaynak kodu inceleme ve doğrulama için herkese açıktır; ticari kullanım ve değiştirilmiş kopyaların dağıtımı izin dışıdır. Ayrıntı: [LICENSE.md](LICENSE.md).
+
+The source code is public for review and verification; commercial use and distributing modified copies are not permitted. See [LICENSE.md](LICENSE.md).
