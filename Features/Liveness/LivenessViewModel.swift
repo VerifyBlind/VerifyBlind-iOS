@@ -197,8 +197,9 @@ final class LivenessViewModel: ObservableObject {
     var bestSourceSeq: Int? { streamer?.lastSentSeq }
     var approvedSourceSeq: Int? { streamer?.approvedSeq }
 
-    /// Demo dizisi — gerçek sunucu dizisi yoksa (Android `DEMO_EVENTS` paritesi).
-    static let demoEvents: [Int] = [1, 2, 3]
+    /// Demo dizisi — gerçek sunucu dizisi yoksa. Kart eklemedeki gibi BEŞ hareket, aynı hareket
+    /// art arda gelmez (enclave `ChoreographyGenerator.EventCount`): demo gerçek akışı temsil etmeli.
+    static let demoEvents: [Int] = [1, 2, 3, 4, 2]
 
     private struct Presentation: Equatable {
         var instruction: String

@@ -10,6 +10,11 @@ final class AppState: ObservableObject {
     /// Demo modu (kartsız cihaz testi). Cihaz sürümü, admin panelden tanımlanan iOS demo sürümüyle
     /// birebir eşleşirse açılır (`loadConfig`'te belirlenir). Android `demoEnabled` paritesi.
     @Published var demoEnabled: Bool = false
+    /// Cüzdan başlığındaki logoya 3 sn basılı tutunca açılır (yalnız bu oturum). Sürüm eşleşmesi
+    /// olmadan partner adaylarının demo kartı görebilmesi için. Güvenlik kapısı DEĞİLDİR: demo kart
+    /// gerçek partnerlerde enclave'de reddedilir (ERR_DEMO_CARD_TEST_ONLY). Android
+    /// `demoUnlockedByGesture` paritesi.
+    @Published var demoUnlockedByGesture: Bool = false
     /// Yapay zekâ asistanı açık mı (sunucudan, `app-config`). VARSAYILAN KAPALI: asistan sunucuda
     /// kapalıyken Yardım ekranındaki giriş noktası duruyordu ve kullanıcı hiçbir soruya cevap
     /// alamayan bir sohbete giriyordu (parite denetimi 2026-09-03, O-10). Android'de bu ekrana

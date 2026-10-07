@@ -176,8 +176,9 @@ struct RootView: View {
     }
 
     private func triggerDemo() {
-        // Şifre yok: buton yalnızca cihaz sürümü admin tanımlı demo sürümüyle eşleşince (demoEnabled)
-        // görünür, dolayısıyla görünürlüğü zaten yetkilendirmedir.
+        // Şifre yok: buton, cihaz sürümü admin tanımlı demo sürümüyle eşleşince (demoEnabled) ya da
+        // logoya 3 sn basılı tutulunca (demoUnlockedByGesture) görünür. İkisi de yetkilendirme DEĞİL:
+        // demo kartın zararsızlığını enclave sağlar — demo bileti yalnız test partnerlerinde geçer.
         activeFlow = .registerDemo
     }
 

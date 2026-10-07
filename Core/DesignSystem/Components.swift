@@ -80,12 +80,17 @@ struct LinkButton: View {
 /// Koyu zemin status bar'ın arkasına uzanır (edge-to-edge).
 struct TopAppBar: View {
     var onSettings: (() -> Void)? = nil
+    /// Logoya 3 sn basılı tutulunca çağrılır (cüzdanda demo düğmesini açar). Android
+    /// `WalletFragment.setupDemoUnlockGesture` paritesi.
+    var onLogoLongPress: (() -> Void)? = nil
 
     var body: some View {
         HStack(spacing: 0) {
             Image("logo")
                 .resizable().scaledToFit()
                 .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
+                .onLongPressGesture(minimumDuration: 3) { onLogoLongPress?() }
             (Text("Verify").foregroundColor(.white)
                 + Text("Blind").foregroundColor(Theme.secondary))
                 .font(.system(size: 20, weight: .bold))

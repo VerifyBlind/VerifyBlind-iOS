@@ -56,6 +56,7 @@
 "link_how_it_works" = "Nasıl Çalışır?";
 "wallet_active_title" = "Cüzdan Aktif";
 "demo_mode_title" = "Demo Modu";
+"demo_mode_unlocked" = "Demo modu açıldı. Demo kart yalnızca test sitelerinde çalışır.";
 "how_it_works_title" = "Sistem Nasıl Çalışır?";
 "how_it_works_desc" = "VerifyBlind, Sıfır Bilgi Kanıtı (Zero-Knowledge Proof) teknolojisi kullanır. Kimlik verileriniz sadece telefonunuzda şifreli saklanır ve sunucularımızda asla saklanmaz. Sadece kimliğinizin kriptografik kanıtını doğrularız.";
 "history_action_registration" = "Kart Eklendi";

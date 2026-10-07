@@ -56,6 +56,7 @@
 "link_how_it_works" = "How It Works?";
 "wallet_active_title" = "Wallet Active";
 "demo_mode_title" = "Demo Mode";
+"demo_mode_unlocked" = "Demo mode is on. The demo card only works on test sites.";
 "how_it_works_title" = "How Does the System Work?";
 "how_it_works_desc" = "VerifyBlind uses Zero-Knowledge Proof technology. Your identity data is stored encrypted only on your phone and is never stored on our servers. We only verify the cryptographic proof of your identity.";
 "history_action_registration" = "Card Added";
