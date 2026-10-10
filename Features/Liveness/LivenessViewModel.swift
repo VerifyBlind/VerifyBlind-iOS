@@ -270,6 +270,13 @@ final class LivenessViewModel: ObservableObject {
         // Kamera kılavuz ekrandayken ısınır; kareler dizi başlayana dek işlenmez.
         camera.start()
         phase = .guide
+        // Demo: diğer demo ekranları gibi 3sn sonra "Başla" (normal akış etkilenmez).
+        // Kullanıcı önce basarsa geç tetik `beginAfterGuide` içindeki faz koruması ile yok sayılır.
+        if isDemo {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                self?.beginAfterGuide()
+            }
+        }
     }
 
     /// Kılavuzdaki "Başla".
