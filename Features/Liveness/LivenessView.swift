@@ -226,9 +226,9 @@ struct LivenessView: View {
 
             Spacer()
 
-            // Alt ipucu (gri) — eşik %'si ile
-            Text(String(format: NSLocalizedString("liveness_threshold_hint", comment: ""),
-                        Int(LivenessViewModel.matchThreshold * 100)))
+            // Alt ipucu (gri). Eşik yüzdesi YOK: enclave onayı gelince akış cihaz yüzdesi eşiğin
+            // altındayken de geçiyor; "en az %65" yazmak ekranla çelişiyordu.
+            Text(NSLocalizedString("liveness_threshold_hint", comment: ""))
                 .font(.system(size: 13))
                 .foregroundColor(grayColor)
                 .multilineTextAlignment(.center)
@@ -245,9 +245,17 @@ struct LivenessView: View {
                             .frame(width: 60, height: 80)
                             .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
-                    Text("\(viewModel.liveScorePercent)%")
-                        .font(.system(size: 18, weight: .bold).monospacedDigit())
-                        .foregroundColor(scoreColor)
+                    // Enclave onayladıysa yüzde yerine "✓ Tanındı": akış o noktadan sonra cihaz
+                    // yüzdesi kırmızı olsa da geçiyor (Android `showFaceRecognized` paritesi).
+                    if viewModel.enclaveApproved {
+                        Text(NSLocalizedString("liveness_face_recognized", comment: ""))
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(.green)
+                    } else {
+                        Text("\(viewModel.liveScorePercent)%")
+                            .font(.system(size: 18, weight: .bold).monospacedDigit())
+                            .foregroundColor(scoreColor)
+                    }
                     Spacer()
                 }
                 .padding([.horizontal, .bottom], 16)

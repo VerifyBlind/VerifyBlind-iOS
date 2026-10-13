@@ -135,13 +135,15 @@ final class SimilarityStreamer: @unchecked Sendable {
     /// - Parameters:
     ///   - selfie: hizalanmış 112×112 PNG — enclave'in benzerlik için göreceği kare
     ///   - crop: AYNI karenin 2,7× geniş kırpması — enclave'in canlılık için göreceği kare
+    ///   - onApproved: enclave kareyi benzerlikten geçirince çağrılır (arka plan kuyruğunda).
     ///
     /// ⚠️ İkisi AYNI kareden olmalıdır. Benzerliği bir kareden, canlılığı başkasından almak
     /// gerçek bir açıktır (saldırgan gerçek yüzü benzerliğe, canlı kırpmayı anti-spoof'a verir).
     ///
     /// Sessizce düşer: kuyruk doluysa, hazırlık tamamlanmadıysa, aralık dolmadıysa ya da tavan
     /// aşıldıysa hiçbir şey yapmaz.
-    func submitFrame(selfie: Data, crop: Data?, metrics: DeviceFrameMetrics) {
+    func submitFrame(selfie: Data, crop: Data?, metrics: DeviceFrameMetrics,
+                     onApproved: (() -> Void)? = nil) {
         let now = Date().timeIntervalSince1970 * 1000
 
         // ⚠️ Elenen iyileşmeler SAYILIR: bu karenin skoru bir öncekinden iyiydi ama fren yüzünden
@@ -201,6 +203,8 @@ final class SimilarityStreamer: @unchecked Sendable {
                         self._approvedSeq = mySeq
                     }
                 }
+                // Kilit DIŞINDA çağrılır — callback streamer'a geri dönerse kilitlenmesin.
+                if response.similarityPassed { onApproved?() }
             } catch APIClientError.rateLimited {
                 // Oran sınırına takıldık — akışın geri kalanında susmak, 429 yağdırmaktan iyi.
                 self.lock.withLock { self.disabled = true }

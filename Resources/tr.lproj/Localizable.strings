@@ -196,7 +196,8 @@
 "liveness_preparing" = "Doğrulama Hazırlanıyor...";
 "liveness_error_title" = "Başlatma Hatası";
 "liveness_preparing_tv" = "Hazırlanıyor...";
-"liveness_threshold_hint" = "Tüm hareketleri tamamlamadan önce yüzünüzün en az %d%% başarı ile tanındığından emin olun";
+"liveness_threshold_hint" = "Tüm hareketleri tamamlamadan önce yüzünüzün tanındığından emin olun";
+"liveness_face_recognized" = "✓ Tanındı";
 "liveness_camera_error_title" = "Kamera Hatası";
 "liveness_camera_start_failed" = "Kamera başlatılamadı.";
 "liveness_quality_dark" = "Ortam çok karanlık — daha aydınlık bir yere geçin";

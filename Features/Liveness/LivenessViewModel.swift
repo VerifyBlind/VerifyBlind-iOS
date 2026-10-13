@@ -83,6 +83,9 @@ final class LivenessViewModel: ObservableObject {
     /// Yüz yerinde ve hazır → çerçeve yeşil; değilse kırmızı.
     @Published var frameAligned = false
     @Published var liveScorePercent = 0
+    /// Enclave bir kareyi benzerlikten geçirdi → gösterge yüzde yerine "✓ Tanındı" der.
+    /// Sıfırlanmaz: "Tekrar dene" aynı akışta kalır, streamer'daki onay da kalır.
+    @Published private(set) var enclaveApproved = false
     @Published var showScore = false   // chipEmbedding != nil
     @Published var checkmark = false
     /// Tek seferlik uyarı: yanlış hareket ya da adımın yeniden başlaması. ~1.5 sn görünür.
@@ -679,7 +682,9 @@ final class LivenessViewModel: ObservableObject {
             // Canlı benzerlik akışı: en iyi kare YENİLENDİĞİNDE enclave'e gönderilir. Selfie ve
             // kırpma AYNI kareden gelir (aksi bir açık olurdu).
             if let selfie = selfieJPEG {
-                streamer?.submitFrame(selfie: selfie, crop: antiSpoofCropJPEGLogic, metrics: frameMetrics)
+                streamer?.submitFrame(selfie: selfie, crop: antiSpoofCropJPEGLogic, metrics: frameMetrics) { [weak self] in
+                    DispatchQueue.main.async { self?.enclaveApproved = true }
+                }
             }
         }
 
