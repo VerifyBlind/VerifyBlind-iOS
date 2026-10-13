@@ -597,7 +597,7 @@ struct ProcessingStepView: View {
     var body: some View {
         VStack(spacing: 20) {
             Spacer()
-            ProgressView().scaleEffect(1.6).tint(Theme.themePrimary)
+            BrandPulseLogo()
             Text(L.t("processing_title")).font(.system(size: 20, weight: .bold)).foregroundColor(Theme.onSurface)
             Text(L.t("processing_subtitle")).font(.system(size: 14)).foregroundColor(Theme.onSurfaceVariant)
 
@@ -642,6 +642,64 @@ private struct ProcessingStepRow: View {
                 .foregroundColor(done ? Theme.onSurfaceVariant : Theme.onSurface)
         }
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// İşlem ekranının ortasındaki marka logosu; arkasında iki soluk halka sırayla yayılıp kaybolur.
+/// Logo kıpırdamaz — halkalar yalnız ekranın çalıştığını belli eder. Ölçüler Android
+/// `BrandPulseView` ile aynı: logo 104pt yükseklik, halka çapı 112pt, ölçek 0.7→1.45,
+/// opaklık 0.9→0, 2.4 sn, ikinci halka yarım tur geriden.
+private struct BrandPulseLogo: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private static let period: Double = 2.4
+    private static let ringColor = Color(red: 0, green: 102 / 255, blue: 204 / 255)
+
+    var body: some View {
+        ZStack {
+            if reduceMotion {
+                Circle().fill(Self.ringColor.opacity(0.08)).frame(width: 112, height: 112)
+            } else {
+                TimelineView(.animation) { context in
+                    let phase = context.date.timeIntervalSinceReferenceDate
+                        .truncatingRemainder(dividingBy: Self.period) / Self.period
+                    ZStack {
+                        ring(phase)
+                        ring((phase + 0.5).truncatingRemainder(dividingBy: 1))
+                    }
+                }
+            }
+            Image("logo")
+                .resizable().scaledToFit()
+                .frame(height: 104)
+                .shadow(color: Color(red: 15 / 255, green: 23 / 255, blue: 42 / 255).opacity(0.22), radius: 5, y: 6)
+        }
+        .frame(width: 140, height: 140)
+        .accessibilityHidden(true)
+    }
+
+    private func ring(_ phase: Double) -> some View {
+        let t = Self.ease(phase)
+        return Circle()
+            .fill(Self.ringColor.opacity(0.16 * 0.9 * (1 - t)))
+            .frame(width: 112, height: 112)
+            .scaleEffect(0.7 + 0.75 * t)
+    }
+
+    /// cubic-bezier(0.2, 0.6, 0.3, 1) — Android `PathInterpolator` ile aynı eğri.
+    private static func ease(_ x: Double) -> Double {
+        let (x1, y1, x2, y2) = (0.2, 0.6, 0.3, 1.0)
+        func bez(_ s: Double, _ a: Double, _ b: Double) -> Double {
+            let u = 1 - s
+            return 3 * u * u * s * a + 3 * u * s * s * b + s * s * s
+        }
+        // x(s) monoton; ikiye bölerek s'yi bul, sonra y(s).
+        var lo = 0.0, hi = 1.0
+        for _ in 0..<20 {
+            let mid = (lo + hi) / 2
+            if bez(mid, x1, x2) < x { lo = mid } else { hi = mid }
+        }
+        return bez((lo + hi) / 2, y1, y2)
     }
 }
 
