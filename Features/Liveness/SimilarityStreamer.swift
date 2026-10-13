@@ -76,8 +76,27 @@ final class SimilarityStreamer: @unchecked Sendable {
     private var _approvedMetrics: DeviceFrameMetrics?
     /// Onaylanan karenin gönderildiği `seq` — final yükte 2. adayın `source_seq`'i olur.
     private var _approvedSeq: Int?
+    /// Saklanan onaylı karenin canlılık skoru — 2. adayın hangi kare olacağını BU belirler
+    /// (bkz. [shouldKeepApproved]).
+    private var _approvedPLive: Double = -1
     /// En son GÖNDERİLEN karenin seq'i — 1. adayın `source_seq`'i (o kare de gönderilmişse).
     private var _lastSentSeq: Int?
+
+    /// Benzerlikten geçen yeni kare, saklanan onaylı karenin yerini alsın mı?
+    ///
+    /// 🔴 Sahada görülen red (2026-09-21, Android, güneşli pencere önü): enclave akış sırasında
+    /// bir kareye `p_live = 0,987` verdi, saniyeler sonra gelen kareye `0,534`. Eski kural "en son
+    /// onaylanan kareyi tut" olduğu için iyi kare kötüsüyle ÜZERİNE YAZILDI ve tek kalan aday
+    /// canlılık eşiğini 0,0164 ile kaçırdı — oysa geçecek kare cihazın elindeydi. Reddi doğuran
+    /// şey eşik değil KARE SEÇİMİYDİ. iOS aynı kuralı taşıyordu.
+    ///
+    /// Artık benzerlikten geçen kareler arasından **canlılığı en yüksek olan** saklanır (Android
+    /// `SimilarityStreamer.approvedPLive` paritesi). Enclave `p_live` döndürmezse (nil) 0 sayılır:
+    /// kare yine saklanır ama en düşük öncelikle — elde hiç yedek olmamasındansa skoru
+    /// bilinmeyen bir yedek iyidir. Eşitlikte yeni kare kazanır (Android ile aynı `>=`).
+    static func shouldKeepApproved(hasApproved: Bool, newPLive: Double?, keptPLive: Double) -> Bool {
+        !hasApproved || (newPLive ?? 0) >= keptPLive
+    }
 
     var approvedSelfie: Data? { lock.withLock { _approvedSelfie } }
     var approvedCrop: Data? { lock.withLock { _approvedCrop } }
@@ -190,21 +209,25 @@ final class SimilarityStreamer: @unchecked Sendable {
                             return m
                         }()))
 
-                self.lock.withLock {
+                let kept: Bool = self.lock.withLock {
                     self._lastEnclaveScore = response.matchScore
                     self._lastPLive = response.pLive
-                    if response.similarityPassed {
-                        // ONAYLANAN KAREYİ HATIRLA — submit'te 2. aday olarak gider.
-                        // Sonraki onaylar üzerine yazar: en son onaylanan kare, kullanıcının
-                        // o ana kadarki en iyi durumunu temsil eder.
-                        self._approvedSelfie = selfie
-                        self._approvedCrop = crop
-                        self._approvedMetrics = metrics
-                        self._approvedSeq = mySeq
-                    }
+                    // ONAYLANAN KAREYİ HATIRLA — submit'te 2. aday olarak gider. Seçim ölçüsü
+                    // CANLILIK ("en son onaylanan" DEĞİL — gerekçe [shouldKeepApproved]).
+                    guard response.similarityPassed,
+                          Self.shouldKeepApproved(hasApproved: self._approvedSelfie != nil,
+                                                  newPLive: response.pLive,
+                                                  keptPLive: self._approvedPLive)
+                    else { return false }
+                    self._approvedSelfie = selfie
+                    self._approvedCrop = crop
+                    self._approvedMetrics = metrics
+                    self._approvedSeq = mySeq
+                    self._approvedPLive = response.pLive ?? 0
+                    return true
                 }
                 // Kilit DIŞINDA çağrılır — callback streamer'a geri dönerse kilitlenmesin.
-                if response.similarityPassed { onApproved?() }
+                if kept { onApproved?() }
             } catch APIClientError.rateLimited {
                 // Oran sınırına takıldık — akışın geri kalanında susmak, 429 yağdırmaktan iyi.
                 self.lock.withLock { self.disabled = true }
