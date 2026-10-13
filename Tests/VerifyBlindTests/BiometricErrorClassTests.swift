@@ -18,6 +18,17 @@ final class BiometricErrorClassTests: XCTestCase {
         XCTAssertEqual(BiometricErrorClass.classify(code: LAError.Code.appCancel.rawValue), .cancelled)
     }
 
+    /// Prompt dokunulmadan zaman aşımına uğradı (belgelenmemiş -1003) → iptal; Sentry ERROR üretmemeli.
+    func testPromptTimeoutIsCancelled() {
+        XCTAssertEqual(BiometricErrorClass.classify(code: -1003), .cancelled)
+        let timeout = KeychainKeyStoreError.fromAuthError(NSError(domain: LAErrorDomain, code: -1003, userInfo: nil))
+        guard case .authCancelled(let code) = timeout else {
+            return XCTFail("-1003 authCancelled olmalıydı, gelen: \(timeout)")
+        }
+        XCTAssertEqual(code, -1003)
+        XCTAssertTrue(BiometricErrorClass.isCancellation(timeout))
+    }
+
     func testUserFixableCodesAreRecoverable() {
         XCTAssertEqual(BiometricErrorClass.classify(code: LAError.Code.authenticationFailed.rawValue), .recoverable)
         XCTAssertEqual(BiometricErrorClass.classify(code: LAError.Code.biometryLockout.rawValue), .recoverable)

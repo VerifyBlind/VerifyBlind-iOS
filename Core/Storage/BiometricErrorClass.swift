@@ -19,11 +19,18 @@ enum BiometricErrorClass {
     /// LAError kodu okunamayan hatalar için sentinel (0 hiçbir LAError koduna karşılık gelmez).
     static let unknownCode = 0
 
+    /// Belgelenmemiş LAError kodu: prompt (Face ID'den düşülen passcode ekranı dahil) dokunulmadan
+    /// açık kaldı ve sistem ~5 dk sonra kapattı. `LAError.Code`'da karşılığı yok. Android'deki
+    /// `ERROR_TIMEOUT` eşi; orada da iptal sayılıyor. Görüldüğü yer: telefon masada unutulmuş kart
+    /// ekleme akışı (Sentry 153375986, 2026-10-13).
+    static let promptTimeoutCode = -1003
+
     static func classify(code: Int) -> BiometricErrorClass {
         switch code {
         case LAError.Code.userCancel.rawValue,             // -2  kullanıcı "İptal"e bastı
              LAError.Code.systemCancel.rawValue,           // -4  sistem iptal etti (ekran kilitlendi, app arka plana düştü)
-             LAError.Code.appCancel.rawValue:              // -9  uygulama iptal etti
+             LAError.Code.appCancel.rawValue,              // -9  uygulama iptal etti
+             promptTimeoutCode:                            // -1003 prompt'a hiç yanıt verilmedi (zaman aşımı)
             return .cancelled
 
         case LAError.Code.authenticationFailed.rawValue,   // -1  eşleşme başarısız
