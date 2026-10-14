@@ -645,6 +645,21 @@ private struct ProcessingStepRow: View {
     }
 }
 
+/// Marka mavisi (#0066CC) — işlem ekranı halkaları ve "sırada ne var" ikonu.
+private let brandBlue = Color(red: 0, green: 102 / 255, blue: 204 / 255)
+
+/// Hafif gölgeli marka logosu; işlem ve başarı ekranları aynı görünümü paylaşır (Android `BrandLogoPainter`).
+private struct BrandLogoImage: View {
+    let height: CGFloat
+
+    var body: some View {
+        Image("logo")
+            .resizable().scaledToFit()
+            .frame(height: height)
+            .shadow(color: Color(red: 15 / 255, green: 23 / 255, blue: 42 / 255).opacity(0.22), radius: 5, y: 6)
+    }
+}
+
 /// İşlem ekranının ortasındaki marka logosu; arkasında iki soluk halka sırayla yayılıp kaybolur.
 /// Logo kıpırdamaz — halkalar yalnız ekranın çalıştığını belli eder. Ölçüler Android
 /// `BrandPulseView` ile aynı: logo 104pt yükseklik, halka çapı 112pt, ölçek 0.7→1.45,
@@ -653,12 +668,11 @@ private struct BrandPulseLogo: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let period: Double = 2.4
-    private static let ringColor = Color(red: 0, green: 102 / 255, blue: 204 / 255)
 
     var body: some View {
         ZStack {
             if reduceMotion {
-                Circle().fill(Self.ringColor.opacity(0.08)).frame(width: 112, height: 112)
+                Circle().fill(brandBlue.opacity(0.08)).frame(width: 112, height: 112)
             } else {
                 TimelineView(.animation) { context in
                     let phase = context.date.timeIntervalSinceReferenceDate
@@ -669,10 +683,7 @@ private struct BrandPulseLogo: View {
                     }
                 }
             }
-            Image("logo")
-                .resizable().scaledToFit()
-                .frame(height: 104)
-                .shadow(color: Color(red: 15 / 255, green: 23 / 255, blue: 42 / 255).opacity(0.22), radius: 5, y: 6)
+            BrandLogoImage(height: 104)
         }
         .frame(width: 140, height: 140)
         .accessibilityHidden(true)
@@ -681,7 +692,7 @@ private struct BrandPulseLogo: View {
     private func ring(_ phase: Double) -> some View {
         let t = Self.ease(phase)
         return Circle()
-            .fill(Self.ringColor.opacity(0.16 * 0.9 * (1 - t)))
+            .fill(brandBlue.opacity(0.16 * 0.9 * (1 - t)))
             .frame(width: 112, height: 112)
             .scaleEffect(0.7 + 0.75 * t)
     }
@@ -711,22 +722,111 @@ struct SuccessStepView: View {
     var body: some View {
         VStack(spacing: 20) {
             Spacer()
-            ZStack {
-                Circle().fill(Theme.success.opacity(0.12)).frame(width: 110, height: 110)
-                Image(systemName: "checkmark.circle.fill").font(.system(size: 72)).foregroundColor(Theme.success)
-            }
+            BrandSuccessLogo()
             Text(L.t("success_title"))
                 .font(.system(size: 20, weight: .bold)).foregroundColor(Theme.onSurface)
                 .multilineTextAlignment(.center).padding(.horizontal, 32)
             Text(L.t("success_desc"))
                 .font(.system(size: 14)).foregroundColor(Theme.onSurfaceVariant)
                 .multilineTextAlignment(.center).padding(.horizontal, 40)
+            SuccessNextCard()
+                .padding(.horizontal, 24).padding(.top, 8)
             Spacer()
             PrimaryGradientButton(title: L.t("btn_go_home"), action: onHome)
                 .padding(.horizontal, 32).padding(.bottom, 28)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.background.ignoresSafeArea())
+    }
+}
+
+/// Kart eklendi ekranının logosu: işlem ekranında dalgalanan aynı logo yerinde kalır, sağ altına yeşil
+/// onay rozeti oturur ve tek bir yeşil halka bir kez yayılır. Ölçüler Android `BrandSuccessView` ile
+/// aynı: 164pt kare, logo 120pt, rozet 40pt (merkezden +32/+40), rozet 0.45 sn, halka 0.1 sn gecikmeyle
+/// 0.9 sn'de 0.8→1.35.
+private struct BrandSuccessLogo: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var badgeShown = false
+    @State private var ringDone = false
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(Theme.success, lineWidth: 3)
+                .frame(width: 109, height: 109)
+                .scaleEffect(ringDone ? 1.35 : 0.8)
+                .opacity(ringDone || reduceMotion ? 0 : 0.8)
+            BrandLogoImage(height: 120)
+            ZStack {
+                Circle().fill(Theme.background).frame(width: 40, height: 40)
+                    .shadow(color: Theme.success.opacity(0.35), radius: 4, y: 3)
+                Circle().fill(Theme.success).frame(width: 34, height: 34)
+                SuccessCheckShape()
+                    .stroke(Color.white, style: StrokeStyle(lineWidth: 2.93, lineCap: .round, lineJoin: .round))
+                    .frame(width: 22, height: 22)
+            }
+            .scaleEffect(badgeShown ? 1 : 0)
+            .offset(x: 32, y: 40)
+        }
+        .frame(width: 164, height: 164)
+        .accessibilityHidden(true)
+        .onAppear {
+            if reduceMotion {
+                badgeShown = true
+                ringDone = true
+                return
+            }
+            withAnimation(.timingCurve(0.3, 1.6, 0.5, 1, duration: 0.45)) { badgeShown = true }
+            withAnimation(.timingCurve(0.2, 0.6, 0.3, 1, duration: 0.9).delay(0.1)) { ringDone = true }
+        }
+    }
+}
+
+/// 24 birimlik ikon alanında M5,12.5 L9.5,17 L19,7.5 — Android rozetiyle aynı onay işareti.
+private struct SuccessCheckShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let u = rect.width / 24
+        var p = Path()
+        p.move(to: CGPoint(x: rect.minX + 5 * u, y: rect.minY + 12.5 * u))
+        p.addLine(to: CGPoint(x: rect.minX + 9.5 * u, y: rect.minY + 17 * u))
+        p.addLine(to: CGPoint(x: rect.minX + 19 * u, y: rect.minY + 7.5 * u))
+        return p
+    }
+}
+
+/// "Sırada ne var?" — yeni kullanıcıya kart eklendikten sonraki adımı anlatır (Android `cardSuccessNext`).
+private struct SuccessNextCard: View {
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            ZStack {
+                Circle().fill(brandBlue.opacity(0.10)).frame(width: 40, height: 40)
+                Image(systemName: "qrcode").font(.system(size: 19, weight: .medium)).foregroundColor(brandBlue)
+            }
+            .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(L.t("success_next_label"))
+                    .font(.system(size: 10, weight: .medium)).tracking(0.8)
+                    .foregroundColor(Theme.onSurfaceVariant)
+                Text(Self.markdown(L.t("success_next_body")))
+                    .font(.system(size: 14)).foregroundColor(Theme.onSurface)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 4)
+                Text(L.t("success_next_privacy"))
+                    .font(.system(size: 13)).foregroundColor(Theme.onSurfaceVariant)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 8)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(16)
+        .background(Theme.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .accessibilityElement(children: .combine)
+    }
+
+    /// Metindeki **kalın** düğme adı (Android'de `<b>`).
+    private static func markdown(_ s: String) -> AttributedString {
+        (try? AttributedString(markdown: s)) ?? AttributedString(s)
     }
 }
 

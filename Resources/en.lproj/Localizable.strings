@@ -138,8 +138,6 @@
 "security_check_in_progress" = "Performing Security Check...";
 "processing_device_security" = "Verifying Device Security...";
 "security_block_title" = "Security Block";
-"security_status_label" = "SECURITY STATUS";
-"security_status_e2e" = "End-to-End Encrypted";
 "app_lock_title" = "VerifyBlind Locked";
 "app_lock_desc" = "Please verify your identity to\nunlock with biometrics.";
 "handshake_retry" = "Retry";
@@ -442,6 +440,9 @@
 "tip4_desc" = "Do not use glasses, hats or masks during the face verification step.";
 "success_title" = "Your identity has been saved to your phone!";
 "success_desc" = "Your identity was successfully verified and is safely stored on your phone.";
+"success_next_label" = "WHAT'S NEXT?";
+"success_next_body" = "When a site asks you to verify with VerifyBlind, tap **Verify with QR code** on the home screen and scan the code.";
+"success_next_privacy" = "Your identity details never leave your phone. The site receives only the verification result, such as “over 18”, never your identity.";
 "cd_back" = "Back";
 "wallet_verified" = "Verified";
 "wallet_verified_identity" = "Verified Identity";
