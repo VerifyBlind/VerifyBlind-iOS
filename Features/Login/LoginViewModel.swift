@@ -119,10 +119,15 @@ final class LoginViewModel: ObservableObject {
         guard isDeepLink,
               let ret = returnUrl, !ret.isEmpty,
               let registered = partnerAppReturnScheme, !registered.isEmpty,
-              var comps = URLComponents(string: ret),
-              let scheme = comps.scheme,
-              scheme.caseInsensitiveCompare(registered) == .orderedSame
+              var comps = URLComponents(string: ret)
         else { return false }
+        guard let scheme = comps.scheme, scheme.caseInsensitiveCompare(registered) == .orderedSame else {
+            // Koruma doğru çalıştı (fail-closed); bu bir kod arızası değil, partnerin kayıtlı şeması
+            // ile gönderdiği return URL uyuşmuyor → warning (Android `openPartnerReturnIfValid` paritesi).
+            Log.warning("Return şeması kayıtlı şemayla uyuşmuyor: '\(comps.scheme ?? "")' != '\(registered)' — açılmadı",
+                        category: .flow)
+            return false
+        }
 
         var items = comps.queryItems ?? []
         if !nonce.isEmpty { items.append(URLQueryItem(name: "nonce", value: nonce)) }
