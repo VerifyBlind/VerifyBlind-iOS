@@ -310,6 +310,12 @@ final class BackupViewModel: ObservableObject {
     /// kotasını gürültüyle doldurur.
     private func logCloudFailure(_ operation: String, _ providerId: String, _ error: Error) {
         if case CloudProviderError.cancelled = error { return }
+        // İzin kutucuğunu işaretlememek kullanıcının kendi düzeltebileceği bir seçim → event değil,
+        // breadcrumb (Android VERIFYBLIND-ANDROID-1V/1W paritesi). Ekrandaki mesaj ona yolu gösteriyor.
+        if case CloudProviderError.permissionDenied = error {
+            Log.info("Bulut girişi: izin onaylanmadı [\(operation)/\(providerId)]", category: .flow)
+            return
+        }
         // http gövdesi uzun olabilir → kırp. Google hata gövdeleri token içermez ama yine de
         // sınırlı tutuyoruz (log hijyeni).
         let detail = String(describing: error).prefix(300)
