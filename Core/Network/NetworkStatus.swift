@@ -67,4 +67,29 @@ final class NetworkStatus: @unchecked Sendable {
     static func isOfflineTransportFailure(_ error: Error?) -> Bool {
         isTransportFailure(error) && shared.isOffline
     }
+
+    /// İstek İPTAL edildi mi (NSURLErrorCancelled, -999)? `URLError.cancelled`, ham
+    /// `NSURLErrorDomain/-999` ve `APIClientError.network` içine sarılmış hâli tanınır.
+    ///
+    /// İptal bir arıza değildir: isteği bekleyen ekran kapandı, görev iptal edildi ya da yeni bir
+    /// deep-link eskisinin yerini aldı. Sentry'de warning olarak 6 ayrı issue açıyordu
+    /// (VERIFYBLIND-IOS-1R/47/48/3G/3H/3J) → artık yalnız breadcrumb (bkz. `SentryBridge.capture`).
+    ///
+    /// Not: 2026-07'den önceki build'lerde cert pinning reddi de -999 üretiyordu; pinning kaldırıldı
+    /// (bkz. `Config`), o yol artık yok.
+    static func isRequestCancellation(_ error: Error?) -> Bool {
+        isRequestCancellation(error, depth: 0)
+    }
+
+    private static func isRequestCancellation(_ error: Error?, depth: Int) -> Bool {
+        guard let error, depth < 5 else { return false }   // döngüsel sebep zincirine karşı tavan
+        if let api = error as? APIClientError { return api.isCancelled }
+        if let url = error as? URLError { return url.code == .cancelled }
+        let ns = error as NSError
+        if ns.domain == NSURLErrorDomain, ns.code == NSURLErrorCancelled { return true }
+        if let underlying = ns.userInfo[NSUnderlyingErrorKey] as? Error {
+            return isRequestCancellation(underlying, depth: depth + 1)
+        }
+        return false
+    }
 }

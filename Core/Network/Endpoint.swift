@@ -76,4 +76,19 @@ enum APIClientError: Error, LocalizedError {
             return nil
         }
     }
+
+    /// Taşıma hatasının `.network` yükü TEK yerden üretilir: `isCancelled` aynı biçimi okuyor.
+    ///
+    /// Yük bugünkü gibi `"\(code)"` (ör. `Code(rawValue: -1009)`) kalır; case imzasını değiştirmek
+    /// Sentry'deki mevcut ağ issue'larının başlığını ve gruplamasını bozardı.
+    static func transport(_ urlError: URLError) -> APIClientError {
+        .network("\(urlError.code)")
+    }
+
+    /// İstek iptal edildi mi (NSURLErrorCancelled, -999)? Görev/oturum iptal edildi ya da ekran
+    /// isteği beklemeden kapandı — bağlanırlık sorunu değil (bkz. `NetworkStatus.isRequestCancellation`).
+    var isCancelled: Bool {
+        guard case .network(let detail) = self else { return false }
+        return detail == "\(URLError.Code.cancelled)"
+    }
 }

@@ -110,6 +110,8 @@ enum Log {
     private static func sentryLevel(for error: Error?) -> SentryLevel {
         // Hatasız (saf doğrulama / kullanıcı-durumu mesajı: geçersiz QR, kart yok…) → error değil.
         guard let error else { return .warning }
+        // -999 (istek iptal edildi) hangi tipe sarılmış olursa olsun: arıza değil → EVENT YOK.
+        if NetworkStatus.isRequestCancellation(error) { return .info }
 
         switch error {
         case let nfc as NFCReadError:
@@ -160,6 +162,14 @@ private enum SentryBridge {
     static func capture(level: SentryLevel, category: LogCategory, message: String, error: Error? = nil) {
         guard SentrySDK.isEnabled else { return }
 
+        // İptal edilen istek (-999) → yalnız breadcrumb. `failure` bunu zaten info'ya indiriyor, ama
+        // olayların hepsi DOĞRUDAN `Log.warning(..., error:)` çağrılarından geliyordu (APIClient,
+        // AppConfig, App Attest, aydınlatma metni) — kapı bu yüzden burada, offline kapısının yanında.
+        if NetworkStatus.isRequestCancellation(error) {
+            breadcrumb(level: .info, category: category, message: message)
+            return
+        }
+
         // Her event aynı zamanda bir breadcrumb bırakır → crash raporu son adımların izini taşır.
         breadcrumb(level: level, category: category, message: message)
 
@@ -201,6 +211,12 @@ enum LogBootstrap {
             options.debug = Config.isDebugBuild
             options.enableAutoPerformanceTracing = false
             options.attachStacktrace = true
+
+            // --- Otomatik HTTP hata yakalama ---
+            // Yalnız KENDİ API hostumuz. Varsayılan hedef ".*" olduğu için Google SDK'larının
+            // (ML Kit telemetrisi: googleapis.com/experimentsandconfigs) 5xx'leri bizim error
+            // kotamıza düşüyordu (VERIFYBLIND-IOS-4, 145 olay). Kendi 5xx'lerimiz yakalanmaya devam eder.
+            options.failedRequestTargets = Self.failedRequestTargets(apiBaseURL: Self.configuredAPIBaseURL)
 
             // --- Gizlilik kilidi: Session Replay ---
             // Android (VerifyBlindApp.kt) ile parite. Ekran kaydı = TCKN / selfie / NFC
@@ -258,6 +274,22 @@ enum LogBootstrap {
             }
         }
         Log.info("Sentry başlatıldı (env: \(Config.appAttestEnvironment.rawValue))", category: .app)
+    }
+
+    /// Sentry'nin otomatik HTTP hata yakalamasının hedefleri: yalnız API hostu. Sentry dize
+    /// hedefini URL'nin içinde arar, yani host her yolu ve her şemayı kapsar.
+    ///
+    /// API kökü okunamazsa üretim hostuna düşülür: boş liste yakalamayı tamamen kapatırdı ve kendi
+    /// 5xx'lerimiz sessizce kaybolurdu.
+    static func failedRequestTargets(apiBaseURL: URL?) -> [String] {
+        guard let host = apiBaseURL?.host, !host.isEmpty else { return ["api.verifyblind.com"] }
+        return [host]
+    }
+
+    /// `Config.apiBaseURL` BURADA okunmaz: geçersizse `Log.fatal` çağırır ve bu, Sentry henüz
+    /// başlamadan olurdu — çöküşün açıklaması rapora girmezdi. Aynı Info.plist anahtarı sessizce okunur.
+    private static var configuredAPIBaseURL: URL? {
+        (Bundle.main.object(forInfoDictionaryKey: "API_BASE_URL") as? String).flatMap(URL.init(string:))
     }
 
     /// PII filtre — TCKN, MRZ ham, biyometrik veriler Sentry'e gitmez.
