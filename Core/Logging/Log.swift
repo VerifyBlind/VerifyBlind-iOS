@@ -44,13 +44,18 @@ enum Log {
     /// [error] verilirse hem Sentry gruplaması stacktrace üzerinden yapılır hem de "cihazın
     /// interneti yok" durumu tespit edilebilir (bkz. `SentryBridge.capture`). Ağ/IO kaynaklı her
     /// uyarıda hatayı GEÇ — aksi halde uyarı, kullanıcı uçak modundayken de kotaya yazılır.
-    static func warning(_ message: String, error: Error? = nil, category: LogCategory = .app) {
+    ///
+    /// [extras] olaya iliştirilen yapısal alanlar (Android `AppLog.warning(extras:)` paritesi).
+    /// Değişken ayrıntı (skor, ölçüler) MESAJA değil buraya konur: Sentry mesajsız olayları
+    /// metinden grupluyor, değişken mesaj her denemeyi ayrı bir issue olarak açardı.
+    static func warning(_ message: String, error: Error? = nil, category: LogCategory = .app,
+                        extras: [String: String]? = nil) {
         if let error {
             loggers[category]?.warning("\(message, privacy: .public) — \(error.localizedDescription, privacy: .public)")
         } else {
             loggers[category]?.warning("\(message, privacy: .public)")
         }
-        SentryBridge.capture(level: .warning, category: category, message: message, error: error)
+        SentryBridge.capture(level: .warning, category: category, message: message, error: error, extras: extras)
     }
 
     static func error(_ message: String, error: Error? = nil, category: LogCategory = .app) {
@@ -159,7 +164,8 @@ private enum SentryBridge {
     }
 
     /// Breadcrumb + EVENT (kota tüketir). `Log.warning`/`Log.error` bunu kullanır — yalnızca warning ve üstü.
-    static func capture(level: SentryLevel, category: LogCategory, message: String, error: Error? = nil) {
+    static func capture(level: SentryLevel, category: LogCategory, message: String, error: Error? = nil,
+                        extras: [String: String]? = nil) {
         guard SentrySDK.isEnabled else { return }
 
         // İptal edilen istek (-999) → yalnız breadcrumb. `failure` bunu zaten info'ya indiriyor, ama
@@ -185,11 +191,13 @@ private enum SentryBridge {
                 scope.setLevel(level)
                 scope.setTag(value: category.rawValue, key: "category")
                 scope.setExtra(value: message, key: "message")
+                extras?.forEach { scope.setExtra(value: $0.value, key: $0.key) }
             }
         } else {
             let event = Event(level: level)
             event.message = SentryMessage(formatted: message)
             event.tags = ["category": category.rawValue]
+            if let extras { event.extra = extras }
             SentrySDK.capture(event: event)
         }
     }

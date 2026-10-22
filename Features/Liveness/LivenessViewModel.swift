@@ -811,12 +811,25 @@ final class LivenessViewModel: ObservableObject {
             self.camera.stop()
             self.finalMatchScore = score
             self.diagnosticsSummary = summary
-            Log.warning("Liveness başarısız (\(reason)) — bestScore=\(Int(score * 100))% " +
-                        "[\(metrics ?? "kare ölçüsü yok")] \(diag)", category: .liveness)
+            let report = Self.failureReport(reason: reason, bestScore: score, frameMetrics: metrics, diagnostics: diag)
+            Log.warning(report.message, category: .liveness, extras: report.extras)
             // Ölçüm tablosuna GERÇEK sebep gider; stop()'taki "abandoned" bunu ezemez.
             self.streamer?.release(outcome: reason.flowReason)
             self.phase = .failure(reason)
         }
+    }
+
+    /// Canlılık başarısızlığının Sentry kaydı: SABİT mesaj (yalnız sınırlı `reason`) + yapısal alanlar.
+    /// Skor ve ölçüler mesaja girerse her deneme ayrı issue olur (Android VERIFYBLIND-ANDROID-1S ile
+    /// aynı kalıp). Android `LivenessFailureReport` paritesi.
+    static func failureReport(reason: FailureReason, bestScore: Float, frameMetrics: String?,
+                              diagnostics: String) -> (message: String, extras: [String: String]) {
+        (message: "Liveness başarısız (\(reason))",
+         extras: [
+            "best_score": "\(Int(bestScore * 100))%",
+            "frame_metrics": frameMetrics ?? "kare ölçüsü yok",
+            "diagnostics": diagnostics,
+         ])
     }
 
     // MARK: - Demo (ana kuyruk)
