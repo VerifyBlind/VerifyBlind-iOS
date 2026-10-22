@@ -58,7 +58,10 @@ final class PassportNFCReader {
                 }
             )
         } catch let e as NFCPassportReaderError {
-            Log.warning("NFC okuma başarısız: \(e)", category: .nfc)
+            // Deneme başına breadcrumb: çağıran (RegisterViewModel) ya sessizce tekrar dener ya da
+            // `fail`/son tekrar dalında hatayı ZATEN raporlar. Burada da warning gönderilince tek
+            // titrek tarama 7 olaya çıkıyordu (VERIFYBLIND-IOS-49). Ayrıntı breadcrumb'da kalır.
+            Log.info("NFC okuma başarısız: \(e)", category: .nfc)
             throw Self.map(e)
         } catch {
             // NFC çevresel/donanımsal flaky bir kanal — `NFCPassportReaderError` dışı bir hata bile

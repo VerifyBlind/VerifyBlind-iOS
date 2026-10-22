@@ -353,7 +353,9 @@ final class RegisterViewModel: ObservableObject {
     private func retryOrFail(reason: String, nfcReason: String) async {
         if nfcAttempt < 3 {
             nfcAttempt += 1
-            Log.warning("NFC denemesi başarısız (\(reason)) → 1s sonra sessiz tekrar #\(nfcAttempt)/3", category: .nfc)
+            // Sessiz tekrar olay DEĞİL, breadcrumb: düzelen okuma gürültüdür (aşağıdaki yorum,
+            // VERIFYBLIND-IOS-4B). Kullanıcı gerçekten hata ekranına düşerse son dal warning gönderir.
+            Log.info("NFC denemesi başarısız (\(reason)) → 1s sonra sessiz tekrar #\(nfcAttempt)/3", category: .nfc)
             try? await Task.sleep(nanoseconds: 1_000_000_000)
             runNfcAttempt()
         } else {
