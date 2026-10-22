@@ -110,8 +110,12 @@ enum Stage3SelfTest {
 
         // ── CoreML model varlığı (bilgilendirici — model commit'lenmemişse de PASS) ──
         r.append(check("FaceEmbedder model durumu (bilgi)") {
-            let available = FaceEmbedder().isAvailable
-            return (true, available ? "MobileFaceNet.mlmodelc YÜKLÜ — canlı % aktif" : "model yok — % gizli (graceful)")
+            // Paylaşılan örnek: self-test ana iş parçacığında koşar, burada yükleme BEKLENMEZ.
+            switch FaceEmbedder.shared.state {
+            case .ready:       return (true, "MobileFaceNet.mlmodelc YÜKLÜ — canlı % aktif")
+            case .loading:     return (true, "model arka planda yükleniyor — tekrar çalıştır")
+            case .unavailable: return (true, "model yok — % gizli (graceful)")
+            }
         })
 
         let passed = r.filter { $0.passed }.count

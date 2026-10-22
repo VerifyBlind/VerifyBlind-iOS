@@ -114,7 +114,7 @@ private struct QRScanStepView: View {
         ZStack {
             Color.black.ignoresSafeArea()
             // Dokunulan yere odaklanır — merkez taraması yetmezse kullanıcının elinde bir yol olsun.
-            CameraPreview(session: camera.session, onTapDevicePoint: { point in
+            CameraPreview(camera: camera, onTapDevicePoint: { point in
                 lastTapFocus = Date()
                 camera.focus(at: point)
             })

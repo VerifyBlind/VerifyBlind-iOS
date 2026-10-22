@@ -12,7 +12,7 @@ struct MRZScanTestView: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            CameraPreview(session: camera.session).ignoresSafeArea()
+            CameraPreview(camera: camera).ignoresSafeArea()
 
             if camera.permissionDenied || camera.configurationFailed {
                 cameraErrorOverlay

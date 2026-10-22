@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import CoreGraphics
 import CoreImage
 import UIKit
@@ -66,8 +67,17 @@ final class LoginFaceViewModel: ObservableObject {
 
     let camera = CameraController(position: .front)
     private let analyzer = FaceAnalyzer()
-    private let embedder = FaceEmbedder()
+    /// Paylaşılan, arka planda yüklenen model (IOS-4H) — bu VM kurulurken ana iş parçacığı beklemez.
+    private let embedder = FaceEmbedder.shared
     private let feedback = LivenessFeedback()
+    /// Kamera durumu bu VM üzerinden yayılır (bkz. `LivenessViewModel.cameraChanges`).
+    private var cameraChanges: AnyCancellable?
+
+    init() {
+        cameraChanges = camera.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }
+    }
 
     @Published private(set) var statusKey = "login_face_status_looking"
     @Published private(set) var warning: String?
@@ -230,7 +240,8 @@ final class LoginFaceViewModel: ObservableObject {
     private func handleFace(_ frame: FaceAnalyzer.Frame) {
         drainRequests()
         guard !finished else { return }
-        if refPending { prepareReference() }
+        // Model arka planda yükleniyorsa referans bir sonraki karede denenir (bkz. `readyToFinish`).
+        if refPending, !embedder.isLoading { prepareReference() }
         if movePhase { stepMove(frame) } else { captureFrame(frame) }
     }
 
@@ -328,7 +339,9 @@ final class LoginFaceViewModel: ObservableObject {
         // Referans yoksa (% hesaplanamıyorsa) eski davranışa düşülür: kalite yeterliyse gönder.
         // ⚠️ Kapı değil: eşik geçilemezse captureTimeout dolunca en iyi kare yine gider.
         let qualityOK = poseOK && sharpness > Self.minSharpness
-        let readyToFinish = refEmbedding != nil ? bestMatchScore >= Self.scoreHintGood : qualityOK
+        // Referans var ama model henüz yükleniyorsa (`refPending`) yalnız kaliteyle erken bitirilmez:
+        // kullanıcı yüzdeyi görmeden kare gitmesin. Bekleme sınırsız değil — captureTimeout geçerli.
+        let readyToFinish = refEmbedding != nil ? bestMatchScore >= Self.scoreHintGood : (qualityOK && !refPending)
         if goodSince == nil, qualityOK, readyToFinish {
             goodSince = Date()
         } else if !readyToFinish {

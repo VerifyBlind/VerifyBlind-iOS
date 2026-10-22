@@ -323,7 +323,7 @@ private struct MRZScanStepView: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea(edges: .bottom)
-            CameraPreview(session: camera.session).ignoresSafeArea(edges: .bottom)
+            CameraPreview(camera: camera).ignoresSafeArea(edges: .bottom)
 
             if camera.permissionDenied || camera.configurationFailed {
                 cameraError

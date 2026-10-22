@@ -21,7 +21,8 @@ struct LivenessDiagnostics {
 
 struct LivenessView: View {
     @StateObject private var viewModel: LivenessViewModel
-    @ObservedObject private var camera: CameraController
+    /// Kamera VM'in kendisinden okunur; değişiklikleri VM yayar (`LivenessViewModel.cameraChanges`).
+    private var camera: CameraController { viewModel.camera }
 
     let onSuccess: (Data, Data?, Float, LivenessDiagnostics) -> Void
     let onCancel: () -> Void
@@ -43,15 +44,18 @@ struct LivenessView: View {
     private let redColor  = Color(red: 1.0,   green: 0.267, blue: 0.267) // #FF4444
     private let grayColor = Color(red: 0.333, green: 0.333, blue: 0.333) // #555555
 
-    init(viewModel: LivenessViewModel,
+    /// `viewModel` bir AUTOCLOSURE: çağıranın `body`'si her yeniden değerlendirildiğinde yeni bir VM
+    /// (kamera oturumu + model yüklemesi) KURULMASIN. `StateObject` yalnız ilk kurulumda üretir;
+    /// eskiden ifade her seferinde değerlendiriliyor, fazlası atılıyordu (IOS-4H yığını:
+    /// `RegisterFlowView.body → LivenessViewModel.init → FaceEmbedder.init`).
+    init(viewModel: @autoclosure @escaping () -> LivenessViewModel,
          onSuccess: @escaping (Data, Data?, Float, LivenessDiagnostics) -> Void,
          onCancel: @escaping () -> Void,
          onFailure: ((LivenessViewModel.FailureReason, Data?, LivenessDiagnostics) -> Void)? = nil,
          onCandidates: ((LivenessCandidates) -> Void)? = nil) {
         self.onFailure = onFailure
         self.onCandidates = onCandidates
-        _viewModel = StateObject(wrappedValue: viewModel)
-        _camera = ObservedObject(wrappedValue: viewModel.camera)
+        _viewModel = StateObject(wrappedValue: viewModel())
         self.onSuccess = onSuccess
         self.onCancel = onCancel
     }
@@ -127,7 +131,7 @@ struct LivenessView: View {
             FaceFrameView(width: width,
                           aligned: viewModel.frameAligned,
                           progress: viewModel.phase == .running ? viewModel.timeProgress : nil) {
-                CameraPreview(session: camera.session)
+                CameraPreview(camera: camera)
             }
             .position(x: geo.size.width / 2, y: geo.size.height / 2)
         }

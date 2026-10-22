@@ -6,8 +6,9 @@ import SwiftUI
 /// sayacı ve kılavuz yok; komut ve nasıl yapılacağı durum satırının yerinde gösterilir. Ekran ne
 /// kadar sade olursa 2FA/step-up kullanımı o kadar mümkün kalır.
 struct LoginFaceView: View {
-    @StateObject private var viewModel = LoginFaceViewModel()
-    @ObservedObject private var camera: CameraController
+    @StateObject private var viewModel: LoginFaceViewModel
+    /// Kamera VM'in kendisinden okunur; değişiklikleri VM yayar (`LoginFaceViewModel.cameraChanges`).
+    private var camera: CameraController { viewModel.camera }
 
     /// (hizalanmış 112×112 selfie PNG, AYNI karenin 2,7× anti-spoof JPEG'i, cihaz ölçüleri,
     /// hareket kanıtı)
@@ -27,13 +28,18 @@ struct LoginFaceView: View {
          loginNonce: String?,
          onSuccess: @escaping (Data, Data, DeviceFrameMetrics?, ChoreographyProof?) -> Void,
          onCancel: @escaping (_ moveFailed: Bool) -> Void) {
+        // VM `StateObject`'in autoclosure'u İÇİNDE kurulur: init her çağrıldığında değil, yalnız ilk
+        // kurulumda (kamera oturumu + yüz analizcisi). Eskiden init'te hemen kurulup fazlası atılıyordu.
+        _viewModel = StateObject(wrappedValue: Self.makeViewModel(faceRefB64: faceRefB64, loginNonce: loginNonce))
+        self.onSuccess = onSuccess
+        self.onCancel = onCancel
+    }
+
+    private static func makeViewModel(faceRefB64: String?, loginNonce: String?) -> LoginFaceViewModel {
         let vm = LoginFaceViewModel()
         vm.faceRefB64 = faceRefB64
         vm.loginEvent = loginNonce.flatMap { LoginEvent.forNonce($0) }
-        _viewModel = StateObject(wrappedValue: vm)
-        _camera = ObservedObject(wrappedValue: vm.camera)
-        self.onSuccess = onSuccess
-        self.onCancel = onCancel
+        return vm
     }
 
     var body: some View {
@@ -127,7 +133,7 @@ struct LoginFaceView: View {
             let side = min(geo.size.width * 0.8, geo.size.height / FaceFrameView<EmptyView>.aspect)
             ZStack {
                 FaceFrameView(width: side, aligned: viewModel.frameAligned, progress: viewModel.timeProgress) {
-                    CameraPreview(session: camera.session)
+                    CameraPreview(camera: camera)
                 }
 
                 if let warning = viewModel.warning {

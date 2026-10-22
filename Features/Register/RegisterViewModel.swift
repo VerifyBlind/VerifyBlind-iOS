@@ -122,6 +122,8 @@ final class RegisterViewModel: ObservableObject {
 
     init(isDemo: Bool) {
         self.isDemo = isDemo
+        // Yüz modeli arka planda şimdiden yüklensin: MRZ + NFC adımları onu fazlasıyla örter.
+        FaceEmbedder.preload()
     }
 
     // MARK: - Akış başlangıcı

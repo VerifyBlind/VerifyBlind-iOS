@@ -3,6 +3,7 @@ import CoreVideo
 import CoreMedia
 import Combine
 import ImageIO
+import UIKit
 
 /// Kamera oturumu sarmalayıcı — Android `camera/CameraManager` + `LivenessActivity.startCamera`
 /// eşdeğeri. `AVCaptureSession` + video-data-output ile her kareyi (CVPixelBuffer) bir
@@ -43,10 +44,20 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
         super.init()
     }
 
+    /// Ekrandan kalkan önizleme görünümleri — oturum durana dek burada tutulur (bkz.
+    /// `retirePreview`). YALNIZ ana kuyrukta okunur/yazılır: son referans ana kuyrukta bırakılsın.
+    private var retiringPreviews: [UIView] = []
+
     // Controller dealloc olunca kamerayı kesin bırak — aksi halde ekran yeniden açılışta
     // siyah kalabiliyor (eski oturum cihazı tutuyor). Cihaz geri bildirimi 2026-06-07.
+    //
+    // Durdurma session kuyruğunda: `stopRunning()` senkron ve saniyeler sürebiliyor, deinit ise
+    // çoğunlukla ana iş parçacığında koşuyor (IOS-3R). Blok controller'ı değil yalnız oturumu tutar.
     deinit {
-        if session.isRunning { session.stopRunning() }
+        let session = self.session
+        sessionQueue.async {
+            if session.isRunning { session.stopRunning() }
+        }
     }
 
     /// İzin ister, gerekiyorsa yapılandırır ve oturumu başlatır.
@@ -73,6 +84,34 @@ final class CameraController: NSObject, ObservableObject, AVCaptureVideoDataOutp
             guard let self, self.session.isRunning else { return }
             self.session.stopRunning()
             DispatchQueue.main.async { self.isRunning = false }
+        }
+    }
+
+    /// Önizlemeyi oturumdan GÜVENLE ayırır — `CameraPreview.dismantleUIView` çağırır (ana kuyruk).
+    ///
+    /// IOS-3R (10-53 sn "App Hang Fully Blocked"): çalışan bir oturuma bağlı
+    /// `AVCaptureVideoPreviewLayer` serbest kalırken (`dealloc`) oturumu ANA iş parçacığında yeniden
+    /// yapılandırıyor (`commitConfiguration → _buildAndRunGraph`) ve medya sunucusunu bekliyor.
+    /// SwiftUI ekranı (ör. canlılık başarıyla bitince) kaldırdığında katman aynı CA işleminde
+    /// serbest kalıyordu; `stop()` ise session kuyruğuna asenkron atıldığı için henüz koşmamıştı.
+    ///
+    /// Sıra: (1) oturum kendi kuyruğunda durur — öncesinde kuyruğa atılmış `stop()`'lardan sonra,
+    /// (2) ana kuyrukta katmanın session referansı koparılır (duran oturumda ucuz), (3) görünüm
+    /// ancak bundan sonra, ana kuyrukta bırakılır. Önizleme yalnız ekranı kapanırken sökülür;
+    /// o yüzden oturumu durdurmak ekranın kendi `onDisappear` → `stop()` davranışıyla aynıdır.
+    func retirePreview(_ view: UIView) {
+        retiringPreviews.append(view)
+        // `self` bilerek GÜÇLÜ tutulur: controller blok koşmadan giderse görünüm başka bir
+        // kuyrukta, oturum hâlâ bağlıyken serbest kalırdı — düzeltilen donmanın ta kendisi.
+        sessionQueue.async { [self] in
+            if session.isRunning { session.stopRunning() }
+            DispatchQueue.main.async { [self] in
+                isRunning = session.isRunning
+                for view in retiringPreviews {
+                    (view.layer as? AVCaptureVideoPreviewLayer)?.session = nil
+                }
+                retiringPreviews.removeAll()
+            }
         }
     }
 

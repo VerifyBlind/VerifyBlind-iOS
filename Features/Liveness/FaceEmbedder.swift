@@ -13,60 +13,117 @@ import Foundation
 /// Dönüşüm sözleşmesi: 112×112 RGB **image** girdisi, normalizasyon ((p−127.5)/128) modele
 /// scale/bias ile gömülü; çıktı = 192-dim ham embedding (uygulama L2-normalize eder, Android
 /// `runInference` paritesi). CoreML = sistem framework → SPM bağımlılığı yok.
+///
+/// **Yükleme ana iş parçacığında YAPILMAZ** (IOS-4H: `MLModel(contentsOf:)` ANE derlemesiyle ana
+/// iş parçacığını 5 sn kilitledi; ViewModel SwiftUI `body` içinde kuruluyordu). Model süreç başına
+/// BİR KEZ, arka planda yüklenir (`shared`) ve canlılık/giriş ekranları arasında paylaşılır.
+/// Yükleme bitmeden gelen çağrılar, model hiç yokmuş gibi `nil` döner — mevcut "graceful" yol.
 final class FaceEmbedder {
 
     static let embeddingSize = 192
     static let inputSize = 112
 
-    private let model: MLModel?
-    private let inputName: String?
-    private let inputIsImage: Bool
+    /// Süreç geneli örnek — ilk erişimde arka plan yüklemesini başlatır, çağıranı bloklamaz.
+    static let shared = FaceEmbedder()
 
-    /// Model bundle'da yoksa `isAvailable == false` ve tüm embedding çağrıları `nil` döner.
-    var isAvailable: Bool { model != nil }
+    /// Akış başlarken çağrılır: model, kullanıcı yüz adımına gelene kadar hazır olsun.
+    static func preload() { _ = shared }
 
-    init() {
-        guard let url = Bundle.main.url(forResource: "MobileFaceNet", withExtension: "mlmodelc") else {
-            self.model = nil
-            self.inputName = nil
-            self.inputIsImage = false
-            Log.warning("FaceEmbedder: MobileFaceNet.mlmodelc bundle'da yok — canlı % devre dışı.", category: .liveness)
-            return
-        }
-        do {
-            let config = MLModelConfiguration()
-            let m = try MLModel(contentsOf: url, configuration: config)
-            self.model = m
-            // Girdi adı + tipi dinamik okunur (dönüşüm çıktı adları değişebilir).
-            let inputs = m.modelDescription.inputDescriptionsByName
-            if let imageInput = inputs.first(where: { $0.value.type == .image }) {
-                self.inputName = imageInput.key
-                self.inputIsImage = true
-            } else if let first = inputs.first {
-                self.inputName = first.key
-                self.inputIsImage = false
-            } else {
-                self.inputName = nil
-                self.inputIsImage = false
-            }
-            Log.info("FaceEmbedder: model yüklendi (input=\(inputName ?? "?"), image=\(inputIsImage)).", category: .liveness)
-        } catch {
-            self.model = nil
-            self.inputName = nil
-            self.inputIsImage = false
-            Log.error("FaceEmbedder: model yüklenemedi", error: error, category: .liveness)
+    /// Yüklenmiş model + girdi sözleşmesi.
+    struct LoadedModel {
+        let model: MLModel
+        let inputName: String
+        let inputIsImage: Bool
+    }
+
+    enum State: Equatable {
+        case loading
+        case ready
+        /// Model bundle'da yok ya da yüklenemedi — kalıcı; embedding çağrıları `nil` döner.
+        case unavailable
+    }
+
+    private let lock = NSLock()
+    private let predictionLock = NSLock()
+    private var loaded: LoadedModel?
+    private var _state: State = .loading
+    private let resolved = DispatchGroup()
+
+    var state: State {
+        lock.lock()
+        defer { lock.unlock() }
+        return _state
+    }
+
+    /// Yükleme sürüyor mu? Kare döngüsü buna bakıp referans gömmesini erteler.
+    var isLoading: Bool { state == .loading }
+
+    /// Model kullanılabilir mi (yüklendi). Yükleme sürerken de `false`.
+    var isAvailable: Bool { state == .ready }
+
+    /// - Parameter load: arka planda koşan yükleyici. Testler sahte yükleyici verir.
+    init(load: @escaping () -> LoadedModel? = FaceEmbedder.loadBundledModel,
+         queue: DispatchQueue = .global(qos: .userInitiated)) {
+        resolved.enter()
+        queue.async { [self] in
+            let result = load()
+            lock.lock()
+            loaded = result
+            _state = result == nil ? .unavailable : .ready
+            lock.unlock()
+            resolved.leave()
         }
     }
 
-    /// Hizalanmış 112×112 görüntüden L2-normalize edilmiş 192-dim embedding. Model yoksa nil.
+    /// Yükleme çözülene (hazır ya da yok) kadar bekler. ANA İŞ PARÇACIĞINDA ÇAĞIRMA — yalnız video
+    /// kuyruğunda, koşu bittikten sonra kapı değerlendirilirken kullanılır. Süre dolarsa `false`.
+    @discardableResult
+    func waitUntilResolved(timeout: TimeInterval) -> Bool {
+        resolved.wait(timeout: .now() + timeout) == .success
+    }
+
+    /// Bundle'daki `MobileFaceNet.mlmodelc`'yi yükler (arka plan kuyruğu).
+    static func loadBundledModel() -> LoadedModel? {
+        guard let url = Bundle.main.url(forResource: "MobileFaceNet", withExtension: "mlmodelc") else {
+            Log.warning("FaceEmbedder: MobileFaceNet.mlmodelc bundle'da yok — canlı % devre dışı.", category: .liveness)
+            return nil
+        }
+        do {
+            let startedAt = Date()
+            let m = try MLModel(contentsOf: url, configuration: MLModelConfiguration())
+            // Girdi adı + tipi dinamik okunur (dönüşüm çıktı adları değişebilir).
+            let inputs = m.modelDescription.inputDescriptionsByName
+            guard let input = inputs.first(where: { $0.value.type == .image }) ?? inputs.first else {
+                Log.error("FaceEmbedder: modelin girdisi yok", category: .liveness)
+                return nil
+            }
+            let isImage = input.value.type == .image
+            let ms = Int(Date().timeIntervalSince(startedAt) * 1000)
+            Log.info("FaceEmbedder: model yüklendi (input=\(input.key), image=\(isImage), \(ms) ms, arka plan).",
+                     category: .liveness)
+            return LoadedModel(model: m, inputName: input.key, inputIsImage: isImage)
+        } catch {
+            Log.error("FaceEmbedder: model yüklenemedi", error: error, category: .liveness)
+            return nil
+        }
+    }
+
+    /// Hizalanmış 112×112 görüntüden L2-normalize edilmiş 192-dim embedding. Model yoksa ya da
+    /// henüz yükleniyorsa nil.
     func embedding(from image: CGImage) -> [Float]? {
-        guard let model, let inputName, inputIsImage else { return nil }
+        lock.lock()
+        let current = loaded
+        lock.unlock()
+        guard let current, current.inputIsImage else { return nil }
         guard let pixelBuffer = Self.makePixelBuffer(from: image, size: Self.inputSize) else { return nil }
 
         do {
             let featureValue = MLFeatureValue(pixelBuffer: pixelBuffer)
-            let provider = try MLDictionaryFeatureProvider(dictionary: [inputName: featureValue])
-            let output = try model.prediction(from: provider)
+            let provider = try MLDictionaryFeatureProvider(dictionary: [current.inputName: featureValue])
+            // Örnek artık paylaşılıyor: tahminler sıraya sokulur (kare başına en çok bir çağrı).
+            predictionLock.lock()
+            defer { predictionLock.unlock() }
+            let output = try current.model.prediction(from: provider)
 
             // İlk MLMultiArray çıktısını al (çıktı adı dönüşüme göre değişebilir).
             guard let outName = output.featureNames.first(where: {

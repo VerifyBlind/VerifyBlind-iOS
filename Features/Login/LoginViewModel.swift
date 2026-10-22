@@ -41,6 +41,8 @@ final class LoginViewModel: ObservableObject {
 
     /// `initialPayload` (deep-link URL) verilirse QR taramayı atla, doğrudan o nonce ile başla.
     init(initialPayload: String? = nil) {
+        // Yüz adımı gelebilir: model arka planda şimdiden yüklensin (QR + onay adımları örter).
+        FaceEmbedder.preload()
         isDeepLink = (initialPayload != nil)
         if let initialPayload {
             step = .loadingPartner   // kamera adımı gösterilmesin

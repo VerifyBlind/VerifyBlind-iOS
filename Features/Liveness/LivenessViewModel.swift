@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import CoreImage
 import CoreVideo
 import Vision
@@ -118,7 +119,11 @@ final class LivenessViewModel: ObservableObject {
 
     let camera = CameraController(position: .front)
     private let analyzer = FaceAnalyzer()
-    private let embedder = FaceEmbedder()
+    /// Paylaşılan, arka planda yüklenen model (IOS-4H) — bu VM kurulurken ana iş parçacığı beklemez.
+    private let embedder = FaceEmbedder.shared
+    /// Kamera durumu (izin reddi, yapılandırma hatası) bu VM üzerinden yayılır: görünüm kamerayı
+    /// AYRI gözlemlemez, yoksa `body` her yeniden kurulduğunda başka bir VM'in kamerasına bağlanırdı.
+    private var cameraChanges: AnyCancellable?
     private var ciContext: CIContext { FaceAnalyzer.sharedCIContext }   // tek paylaşılan context
 
     private let events: [EventSequencer.Event]
@@ -132,6 +137,8 @@ final class LivenessViewModel: ObservableObject {
     /// ayırt edilmeli: orada eşleştirme beklenmez, burada eşleştirme YAPILAMADI ve sessizce
     /// geçilirse doğrulanmamış kayıt oluşur (Android `chipDecodeFailed` paritesi).
     private var chipDecodeFailed = false
+    /// Çip gömmesi model yüklenirken istendi → kare döngüsü model çözülünce yeniden dener.
+    private var chipEmbeddingDeferred = false
     private var isIdentityVerified = false
     private var bestMatchScore: Float = 0
     private var bestSavedMatchScore: Float = -1
@@ -238,6 +245,9 @@ final class LivenessViewModel: ObservableObject {
             self.streamer = st
         } else {
             self.streamer = nil
+        }
+        cameraChanges = camera.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
         }
     }
 
@@ -380,6 +390,17 @@ final class LivenessViewModel: ObservableObject {
 
     private func prepareChipEmbeddingIfNeeded() {
         guard chipEmbedding == nil, let data = chipPhotoData else { return }
+        // Model hâlâ arka planda yükleniyorsa beklenmez (video kuyruğu bloklanırsa bekçi koşuyu
+        // bitirir): gömme ertelenir, kare döngüsü model çözülünce tekrar dener. O arada kareler
+        // "model yok" yolundan geçer — eşleşme yüzdesi gecikir, akış durmaz.
+        if embedder.isLoading {
+            if !chipEmbeddingDeferred {
+                Log.breadcrumb("Liveness: model henüz yükleniyor — çip gömmesi ertelendi", category: .liveness)
+            }
+            chipEmbeddingDeferred = true
+            return
+        }
+        chipEmbeddingDeferred = false
         guard let cg = UIImage(data: data)?.cgImage else {
             // Çip fotoğrafı VERİLDİ ama çözülemedi. Bayrak şart: başarı kapısı bunu "çip yok"
             // sanıp sessizce geçiyordu (parite denetimi 2026-09-03, O-5).
@@ -401,6 +422,7 @@ final class LivenessViewModel: ObservableObject {
 
     private func handleFace(_ frame: FaceAnalyzer.Frame) {
         if takeStartRequest() { startLogic() }
+        if chipEmbeddingDeferred, !embedder.isLoading { prepareChipEmbeddingIfNeeded() }
         let now = Self.nowMs
         lastFrameAtMs = now
         lastFaceTime = now
@@ -710,6 +732,13 @@ final class LivenessViewModel: ObservableObject {
         // İkincisi bir güvenlik gevşemesi DEĞİLDİR: cihazdaki 0.65 hiçbir zaman güvenlik kontrolü
         // değildi ve gerçek karar hep enclave'de. Android `LivenessActivity.finishSuccess` paritesi.
         let verified = isIdentityVerified || (streamer?.hasEnclaveApproval == true)
+        // Model koşu boyunca yüklenemediyse (pratikte olmaz: koşu saniyeler sürer) kapı, model
+        // ÇÖZÜLDÜKTEN sonra değerlendirilir — bugünkü senkron yüklemedeki kararla aynı olsun diye.
+        // Video kuyruğundayız ve koşu bitti; kısa bekleme kare kaybından başka bir şeye mal olmaz.
+        if chipEmbeddingDeferred {
+            embedder.waitUntilResolved(timeout: 3)
+            prepareChipEmbeddingIfNeeded()
+        }
         // Çip fotoğrafı VERİLMİŞSE kapı aranır — embedding üretilemediyse de (parite denetimi O-5).
         let hasChip = chipEmbedding != nil || chipDecodeFailed
         let score = bestMatchScore
