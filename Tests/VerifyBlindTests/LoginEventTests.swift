@@ -14,6 +14,22 @@ final class LoginEventTests: XCTestCase {
         XCTAssertEqual(LoginEvent.forNonce("A1b2-C3d4"), .smile)
     }
 
+    /// Enclave `UcHareketliGirisTuretmesiSabittir` ile aynı vektörler.
+    func testThreeMovesMatchEnclaveVectors() {
+        XCTAssertEqual(LoginEvent.forNonceV3("7c9e6679-7425-40de-944b-e07fc1f90ae7"), [.smile, .mouthOpen, .smile])
+        XCTAssertEqual(LoginEvent.forNonceV3("vector-0"), [.smile, .mouthOpen, .smile])
+        XCTAssertEqual(LoginEvent.forNonceV3("A1b2-C3d4"), [.doubleBlink, .smile, .doubleBlink])
+    }
+
+    func testThreeMovesNeverRepeatInARow() {
+        for i in 0..<3000 {
+            let events = LoginEvent.forNonceV3("n-\(i)")
+            XCTAssertEqual(events.count, 3)
+            XCTAssertNotEqual(events[0], events[1])
+            XCTAssertNotEqual(events[1], events[2])
+        }
+    }
+
     func testEmptyNonceAsksForNothing() {
         XCTAssertNil(LoginEvent.forNonce(""))
     }

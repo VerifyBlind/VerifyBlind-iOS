@@ -55,7 +55,7 @@
 
 "link_how_it_works" = "How It Works?";
 "wallet_active_title" = "Wallet Active";
-"demo_mode_title" = "Demo Mode";
+"demo_mode_title" = "Try with a sample card";
 "demo_mode_unlocked" = "Demo mode is on. The demo card only works on test sites.";
 "how_it_works_title" = "How Does the System Work?";
 "how_it_works_desc" = "VerifyBlind uses Zero-Knowledge Proof technology. Your identity data is stored encrypted only on your phone and is never stored on our servers. We only verify the cryptographic proof of your identity.";
@@ -229,8 +229,8 @@
 "biometric_subtitle_decrypt" = "Verify your identity to approve the operation";
 "biometric_subtitle_auth" = "Scan your fingerprint to continue";
 "biometric_consent_title" = "Biometric Data Consent";
-"biometric_consent_body" = "Processed Biometric Data\n\nThe following special category personal data will be processed as part of the identity verification process:\n• Your face image taken during the liveness test and the biometric photo on the chip of your identity card.\n\nPurpose of Processing\n\nThis data is used solely for biometric matching to verify that the identity card belongs to you.\n\nHow It Is Processed\n\nYour data is transmitted to our servers end-to-end encrypted (AES-256 + RSA-OAEP); the match is calculated only in the secure processing environment (AWS Nitro Enclave).\n\nStorage and Deletion\n\nYour live face image is deleted after the match. The photo from your chip is not stored on our servers; it stays only on your own phone, encrypted, until the card is deleted. It is not shared with third parties.\n\nWithdrawal of Consent\n\nYou can withdraw this consent at any time. If you withdraw your consent, operations requiring biometric verification cannot be performed.";
-"biometric_consent_checkbox" = "I have read the biometric data processing consent text and approve the processing of my biometric data.";
+"biometric_consent_body" = "Processed Biometric Data\n\nThe following special category personal data will be processed as part of the identity verification process:\n• The live face image taken at each QR verification and the biometric photo on the chip of your identity card.\n\nPurpose of Processing\n\nThis data is used solely for biometric matching to verify that the identity card belongs to you.\n\nHow It Is Processed\n\nYour data is transmitted to our servers end-to-end encrypted (AES-256 + RSA-OAEP); the match is calculated only in the secure processing environment (AWS Nitro Enclave).\n\nStorage and Deletion\n\nYour live face image is deleted after the match. The photo from your chip is not stored on our servers; it stays only on your own phone, encrypted, until the card is deleted. It is not shared with third parties.\n\nWithdrawal of Consent\n\nYou can withdraw this consent at any time. If you withdraw your consent, operations requiring biometric verification cannot be performed.";
+"biometric_consent_checkbox" = "I have read the Biometric Consent Text. I give explicit consent to my live face being compared with my chip photo at every verification.";
 "consent_request_subtitle" = "is requesting identity verification.\nDo you approve sending the requested verifications?";
 "consent_shared_info_label" = "INFORMATION TO BE VERIFIED";
 "consent_scope_footer" = "Scope: Identity Verification Request";
@@ -419,7 +419,7 @@
 "scan_qr_instruction" = "Align QR Code with the frame";
 "nfc_card_searching" = "Searching for card...";
 "nfc_id_card_desc" = "Touch the chip of your identity card to the back of your phone";
-"nfc_id_instruction" = "Touch the chip of your identity card to the back of your phone";
+"nfc_id_instruction" = "Move the card slowly across the back of your phone, hold still once reading starts";
 "nfc_completed" = "Completed!";
 "processing_title" = "Processing...";
 "processing_subtitle" = "Your Identity is Being Verified";
@@ -437,7 +437,7 @@
 "tip3_title" = "Remove your case";
 "tip3_desc" = "Removing the case from your phone and card strengthens NFC contact.";
 "tip4_title" = "Remove accessories";
-"tip4_desc" = "Do not use glasses, hats or masks during the face verification step.";
+"tip4_desc" = "Do not wear glasses, a hat or a mask during the face check at verification.";
 "success_title" = "Your identity has been saved to your phone!";
 "success_desc" = "Your identity was successfully verified and is safely stored on your phone.";
 "success_next_label" = "WHAT'S NEXT?";
@@ -463,10 +463,10 @@
 "help_step1_desc" = "Scan the codes on the back of your ID card with your camera in seconds.";
 "help_step2_title" = "2. NFC Reading";
 "help_step2_desc" = "Bring your phone close to your ID to securely access the digital chip inside.";
-"help_step3_title" = "3. Liveness Test";
-"help_step3_desc" = "Biometrically confirm you are a real person by taking a selfie.";
-"help_step4_title" = "4. QR Verification";
-"help_step4_desc" = "Instantly verify your identity at any service with the secure QR code generated.";
+"help_step3_title" = "3. QR Verification";
+"help_step3_desc" = "Scan the QR code on the site, show your face and do the three requested moves.";
+"help_step4_title" = "4. Result";
+"help_step4_desc" = "The site receives only the verification result, not your identity.";
 "help_screen_guide" = "SCREEN USAGE GUIDE";
 "help_faq_label" = "FREQUENTLY ASKED QUESTIONS";
 "help_version" = "VERSION 1.0.0-STABLE";
@@ -591,3 +591,12 @@
 "nfc_err_timeout" = "NFC reading timed out. Please try again.";
 "nfc_err_missing_data" = "Card data is incomplete: %@.";
 "nfc_err_unknown" = "Unexpected NFC error: %@";
+
+"card_added_toast" = "Your card was added";
+"add_card_for_request" = "Add your card first, then you will go straight to the site approval";
+"mrz_rescan_needed" = "The card details could not be read, show the card to the camera again";
+"login_face_mismatch_title" = "Face did not match";
+"demo_card_notice_title" = "Sample card";
+"demo_card_notice_message" = "The sample card is for seeing the flow and does not prove a real person. It gives no age answer on real sites, and sites see the result as a test.";
+"read_terms" = "Read the Terms of Use";
+"read_biometric_consent" = "Read the Biometric Consent Text";

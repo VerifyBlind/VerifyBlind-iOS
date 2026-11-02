@@ -26,6 +26,22 @@ final class AppState: ObservableObject {
     /// Universal Link ile gelen doğrulama URL'i (`https://app.verifyblind.com/request?nonce=...`).
     /// Set edilince RootView login akışını QR taramadan, bu URL ile başlatır. Akış bitince temizlenir.
     @Published var pendingVerifyURL: String?
+    /// Kart yokken gelen site isteği: kart eklenince aynı istekle onaya geçilir.
+    var requestAwaitingCard: String?
+
+    /// Kişi kart eklemekten vazgeçti: site "bekleniyor" ekranında kalmasın.
+    func dropRequestAwaitingCard() {
+        guard let payload = requestAwaitingCard else { return }
+        requestAwaitingCard = nil
+        guard let nonce = QRPayloadParser.parse(payload)?.nonce else { return }
+        Task {
+            do {
+                try await VerifyAPI.shared.cancelPop(PopCancelRequest(nonce: nonce, reason: "no_card_registered"))
+            } catch {
+                Log.warning("cancelPop başarısız (yok sayıldı)", error: error, category: .flow)
+            }
+        }
+    }
 
     /// Launch-time enclave attestation engeli. nil = engel yok; dolu = kapatılamaz blok mesajı
     /// (Android CriticalError→finishAffinity paritesi). Yalnız GERÇEK doğrulama hatasında set edilir;

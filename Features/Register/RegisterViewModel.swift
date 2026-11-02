@@ -40,7 +40,16 @@ final class RegisterViewModel: ObservableObject {
             furthestFlowStep = reached
         }
     }
+    // Sözleşme, aydınlatma ve biyometrik rıza AYRI beyanlardır (KVKK Kurulu 2026/347).
+    @Published var termsAccepted = false
     @Published var kvkkAccepted = false
+    @Published var biometricAccepted = false
+    /// MRZ yanlış okundu: kamera ekranına dönüldü, kişiye söylenir.
+    @Published var showMrzRescanAlert = false
+    /// Kabulün yazılacağı hukuki metin sürümü.
+    var legalVersion: String = LegalTerms.baselineVersion
+
+    var consentsComplete: Bool { isDemo || (termsAccepted && kvkkAccepted && biometricAccepted) }
     /// "Başla" basıldıktan sonra handshake biter ekran değişene kadar true — çift basmayı + ikinci
     /// handshake'i engeller, butonu spinner durumuna geçirir.
     @Published var isStarting = false
@@ -130,23 +139,14 @@ final class RegisterViewModel: ObservableObject {
 
     /// "Başla" → user key + (gerçekte) handshake; demo'da doğrudan işleme.
     func begin() {
-        guard kvkkAccepted, !isStarting else { return }
+        guard consentsComplete, !isStarting else { return }
         isStarting = true
-        AppPrefs.kvkkConsentAccepted = true
+        // Hukuki metin kabulü burada alınır; demo gerçek veri işlemediği için ekran sormaz.
+        if !isDemo { LegalTerms.recordAcceptance(version: legalVersion) }
         Task {
             // Hangi yoldan çıkarsak çıkalım (başarı/hata/erken return) butonu serbest bırak.
             defer { isStarting = false }
-            // Cihaz kilidi (biyometri/passcode) yoksa `.userPresence` anahtarı ÜRETİLEMEZ ve
-            // ensureUserKey errSecAuthFailed ile düşer. Önden kontrol edip NE YAPILACAĞINI söyleyen
-            // net mesaj göster — aksi halde kullanıcı jenerik "güvenlik hatası" görüyordu.
-            guard BiometricGate.isDeviceLockAvailable() else {
-                // Tek düzeltilebilir hata bu: kullanıcı Ayarlar'dan kilit tanımlayıp dönebilir.
-                fail(title: L.t("biometric_required_title"),
-                     message: L.t("biometric_device_lock_required_message"),
-                     error: nil,
-                     offersSettings: true)
-                return
-            }
+            if !TicketStore.hasTicket { KeychainKeyStore.retireLegacyUserKey() }
             do {
                 userPubKey = try KeychainKeyStore.ensureUserKey()
             } catch {
@@ -327,14 +327,19 @@ final class RegisterViewModel: ObservableObject {
 
                 scanned = result
                 track(.nfc)
-                // Canlılık HER ZAMAN açılır. Eskiden sunucu jest listesi göndermezse kayıt canlılıksız
-                // gönderiliyordu (selfie'siz yük enclave'de zaten düşüyordu). Olay dizisi gelmediyse
-                // canlılık ekranı açık bir hata gösterir — sürüm uyuşmazlığı sessizce geçmez.
-                step = .biometricConsent   // rıza → liveness
+                // Yüz adımı yok: kart doğrudan enclave'e gider, yüz yalnız QR'da.
+                step = .processing
+                await finalizeReal()
             } catch let e as NFCReadError {
                 switch e {
                 case .cancelled:
                     Log.info("NFC iptal edildi", category: .nfc)
+                    step = .mrz
+                case .authenticationFailed:
+                    // MRZ yanlış okunmuşsa kartı yeniden okutmak düzeltmez: doğru yer kamera ekranı.
+                    Log.info("NFC anahtarı tutmadı → MRZ kamerasına dönülüyor", category: .nfc)
+                    nfcAttempt = 0
+                    showMrzRescanAlert = true
                     step = .mrz
                 case .notAvailable, .invalidInput:
                     reportNfcFailure(Self.nfcReason(for: e))
@@ -450,7 +455,8 @@ final class RegisterViewModel: ObservableObject {
     /// Demo: NFC ekranı ~2s sonra biyometrik rızaya geçer (Android `demoProceedAfterNfc`).
     func demoAfterNfc() {
         guard isDemo else { return }
-        step = .biometricConsent
+        step = .processing
+        Task { await runDemo() }
     }
 
     /// Biyometrik rıza onaylandı → liveness (gerçek + demo ortak).
@@ -511,6 +517,7 @@ final class RegisterViewModel: ObservableObject {
             // Olay dizisi kanıtı: her hareketin nötr ve olay kareleri. Enclave yapıyı ve HER karede
             // kimliği doğrular; eksik kanıt yapı hatasıdır (ERR_CHOREO_INVALID).
             payload.choreographyProof = choreographyProof
+            payload.cardOnly = true
             // iOS App Attest (Aşama 6) relay'de el sıkışmada doğrulanır; register enclave'e proxy'lenir
             // ve el sıkışma nonce'una bağlıdır → şifreli IntegrityToken iOS'ta BOŞ bırakılır (Android'de
             // bu alan Play Integrity taşır). Bkz. AppAttestService + sunucu ClientAttestationGate.

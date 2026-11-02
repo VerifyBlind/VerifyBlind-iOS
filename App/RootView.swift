@@ -7,6 +7,7 @@ struct RootView: View {
     @State private var path: [Route] = []
     @State private var activeFlow: Flow?
     @State private var showDevMenu = false
+    @State private var showDemoNotice = false
 
     enum Route: Hashable { case settings, history, backup, help, faq, security }
 
@@ -76,13 +77,24 @@ struct RootView: View {
         .fullScreenCover(item: $activeFlow, onDismiss: { appState.refresh() }) { flow in
             switch flow {
             case .register:
-                RegisterFlowView(isDemo: false, onFinish: { activeFlow = nil })
+                RegisterFlowView(isDemo: false,
+                                 legalVersion: appState.requiredLegalTermsVersion,
+                                 onFinish: {
+                                     appState.dropRequestAwaitingCard()
+                                     activeFlow = nil
+                                 },
+                                 onCardAdded: { finishCardAdd() })
             case .registerDemo:
-                RegisterFlowView(isDemo: true, onFinish: { activeFlow = nil })
+                RegisterFlowView(isDemo: true, onFinish: { activeFlow = nil }, onCardAdded: { finishCardAdd() })
             case .login(let payload):
                 // Deep-link varsa QR taramayı atlayıp doğrudan o URL ile başla.
                 LoginFlowView(onFinish: { activeFlow = nil; appState.pendingVerifyURL = nil },
                               onToast: { appState.showToast($0) },
+                              onNeedsCard: { pending in
+                                  appState.requestAwaitingCard = pending
+                                  appState.pendingVerifyURL = nil
+                                  activeFlow = .register
+                              },
                               initialPayload: payload)
                     // Payload değişince TAZE view kimliği (→ taze `@StateObject` vm). Cover'ın
                     // kendi kimliği zaten değişiyor; bu, SwiftUI sunumu geri dönüştürse bile
@@ -91,6 +103,13 @@ struct RootView: View {
             }
         }
         .sheet(isPresented: $showDevMenu) { DevMenuView() }
+        // Deneme kartı her sitede çalışır ama gerçek birini kanıtlamaz: kişiye baştan söylenir.
+        .alert(L.t("demo_card_notice_title"), isPresented: $showDemoNotice) {
+            Button(L.t("common_ok")) { activeFlow = .registerDemo }
+            Button(L.t("btn_cancel"), role: .cancel) {}
+        } message: {
+            Text(L.t("demo_card_notice_message"))
+        }
         // Register/Login akışı açıkken otomatik kilidi bastır (NFC/kamera/Face ID mid-flow çakışmasın).
         .onChange(of: activeFlow) { flow in
             appState.suppressAutoLock = (flow != nil)
@@ -117,7 +136,8 @@ struct RootView: View {
         // paritesi). İkisi birden gerekiyorsa ÖNCE zorunlu güncelleme gösterilir — eski istemcinin
         // göstereceği metin de eski olabilir, önce güncellensin.
         .overlay {
-            if appState.needsLegalTermsAcceptance && !appState.needsForceUpdate {
+            // Metin kabulü kart eklerken alınır; kapı yalnız kartı olanın kabulü eskidiyse açılır.
+            if appState.hasCard && appState.needsLegalTermsAcceptance && !appState.needsForceUpdate {
                 LegalTermsGate(
                     requiredVersion: appState.requiredLegalTermsVersion,
                     isUpdate: appState.legalTermsAcceptedVersion?.isEmpty == false,
@@ -176,10 +196,20 @@ struct RootView: View {
     }
 
     private func triggerDemo() {
-        // Şifre yok: buton, cihaz sürümü admin tanımlı demo sürümüyle eşleşince (demoEnabled) ya da
-        // logoya 3 sn basılı tutulunca (demoUnlockedByGesture) görünür. İkisi de yetkilendirme DEĞİL:
-        // demo kartın zararsızlığını enclave sağlar — demo bileti yalnız test partnerlerinde geçer.
-        activeFlow = .registerDemo
+        showDemoNotice = true
+    }
+
+    /// Kart eklendi: bekleyen site isteği varsa doğrudan onaya, yoksa cüzdana + kısa yazı.
+    private func finishCardAdd() {
+        appState.refresh()
+        appState.refreshLegalTermsAcceptance()
+        if let pending = appState.requestAwaitingCard {
+            appState.requestAwaitingCard = nil
+            activeFlow = .login(payload: pending)
+        } else {
+            activeFlow = nil
+            appState.showToast(L.t("card_added_toast"))
+        }
     }
 
     private func popPath() {

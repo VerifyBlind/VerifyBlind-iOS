@@ -107,7 +107,11 @@ struct SecurePayload: Codable {
     /// kimliği doğrular (Android `ChoreographyProof` paritesi). Anahtar büyük/küçük harf duyarlı.
     var choreographyProof: ChoreographyProof? = nil
 
+    /// Yüzsüz kart ekleme: enclave yüz kapılarını atlar, bilet üç hareketle açılır.
+    var cardOnly: Bool = false
+
     enum CodingKeys: String, CodingKey {
+        case cardOnly = "CardOnly"
         case candidates = "Candidates"
         case choreographyProof = "ChoreographyProof"
         case sod = "SOD"
@@ -165,7 +169,8 @@ struct RegistrationRequest: Codable {
 /// ⚠️ Adım sırası sunucunun dizisiyle AYNI olmak zorunda; eksik adım ya da eksik olay karesi yapı
 /// hatasıdır (ERR_CHOREO_INVALID). Buradaki sayıların hiçbirine güvenilmez.
 struct ChoreographyProof: Codable {
-    var version: Int = 2
+    /// Üç hareketli girişin kanıt sürümü — enclave `ChoreographyGenerator.LoginVersion3`.
+    var version: Int = 3
     var steps: [ChoreographyProofStep]
     var elapsedMs: Int?
     var resets: Int?

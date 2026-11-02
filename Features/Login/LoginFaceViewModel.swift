@@ -45,7 +45,7 @@ final class LoginFaceViewModel: ObservableObject {
     /// Dolduğunda eldeki EN İYİ kare yine seçilir: cihaz skoru enclave kararı DEĞİLDİR
     /// (farklı model, farklı eşik) ve burada reddetmek enclave'in geçireceği kullanıcıyı kapıda
     /// durdurmak olurdu. Hiç kare yoksa giriş iptal (fail-closed). Hareketin kendi süreleri var.
-    private static let captureTimeout: TimeInterval = 30
+    private static let captureTimeout: TimeInterval = 10   // 2026-11-02: bekleme kapı değil, karar enclave'in
 
     /// Benzerlik eşiği geçildikten SONRA beklenen süre — bu 1 saniyede daha iyi kare gelirse o gider.
     private static let settleSeconds: TimeInterval = 1.0
@@ -132,8 +132,8 @@ final class LoginFaceViewModel: ObservableObject {
     /// ekranda yüzde göstermek üzere yerel embedding'e çevrilir.
     var faceRefB64: String?
 
-    /// İstenen hareket — nil: hareketsiz biter (nonce yok / eski çağıran).
-    var loginEvent: EventSequencer.Event?
+    /// İstenen hareketler — boş: hareketsiz biter (nonce yok / eski çağıran).
+    var loginEvents: [EventSequencer.Event] = []
 
     // ── Tek hareket (video kuyruğu) ──
     private var sequencer: EventSequencer?
@@ -409,7 +409,7 @@ final class LoginFaceViewModel: ObservableObject {
     /// gömme) kare hızını düşürür ve çift kırpmanın ikincisini kaçırtır — kayıtta sahada yaşandı.
     private func bestFrameReady() {
         guard !finished, !movePhase else { return }
-        guard let event = loginEvent else { succeed(); return }
+        guard !loginEvents.isEmpty else { succeed(); return }
         movePhase = true
         timeoutTask?.cancel()
         DispatchQueue.main.async { [weak self] in
@@ -418,15 +418,15 @@ final class LoginFaceViewModel: ObservableObject {
             self.warning = nil
             self.feedback.activate()   // sessiz moddayken de duyulmalı (kayıt ekranıyla aynı)
         }
-        startMove(event)
+        startMove()
     }
 
-    private func startMove(_ event: EventSequencer.Event) {
+    private func startMove() {
         moveAttempts += 1
         moveNudged = false
         lastMovePresentation = nil
         lastPublishedTime = -1
-        var seq = EventSequencer(events: [event])
+        var seq = EventSequencer(events: loginEvents)
         let now = Self.nowMs
         seq.start(now: now)
         moveStartedAtMs = now
@@ -468,10 +468,10 @@ final class LoginFaceViewModel: ObservableObject {
                 // İz kaydı breadcrumb olarak kalır (olay değil → kota yemez).
                 Log.info("Giriş hareketi başarısız: \(failure) deneme \(moveAttempts)/\(Self.maxMoveAttempts) — iz: \(seq.trace)",
                          category: .liveness)
-                if moveAttempts < Self.maxMoveAttempts, let event = loginEvent {
+                if moveAttempts < Self.maxMoveAttempts {
                     feedback.play(.wrong)
                     showNotice(L.t("login_face_move_retry"))
-                    startMove(event)
+                    startMove()
                 } else {
                     finish(moveFailed: true)
                 }
@@ -557,7 +557,7 @@ final class LoginFaceViewModel: ObservableObject {
             return
         }
         // Hareket istendiyse kanıtı olmadan gönderilmez — "yapamadık" asla "geçti" değildir.
-        if loginEvent != nil && moveProof == nil {
+        if !loginEvents.isEmpty && moveProof == nil {
             finish(moveFailed: true)
             return
         }

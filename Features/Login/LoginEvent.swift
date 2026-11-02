@@ -23,6 +23,21 @@ enum LoginEvent {
         return events[draw.next(events.count)]
     }
 
+    private static let domainV3 = "vb-choreo-login-v3|"
+
+    /// Üç hareketli doğrulama dizisi — enclave `ChoreographyGenerator.ForLoginV3`. İlk hareket üçünden
+    /// biri, sonrakiler bir öncekinden farklı ikisinden biri.
+    static func forNonceV3(_ nonce: String) -> [EventSequencer.Event] {
+        guard !nonce.isEmpty else { return [] }
+        var draw = DeterministicDraw(seed: Data(SHA256.hash(data: Data((domainV3 + nonce).utf8))))
+        var picked: [EventSequencer.Event] = []
+        for _ in 0..<3 {
+            let pool = events.filter { $0 != picked.last }
+            picked.append(pool[draw.next(pool.count)])
+        }
+        return picked
+    }
+
     /// SHA-256 sayaç kipi, reddetme örneklemeli yansız çekiliş — enclave `DeterministicDraw`.
     /// Blok = SHA256(tohum ‖ sayaç, 4 bayt little-endian); değer = bloktan 4 bayt little-endian.
     private struct DeterministicDraw {

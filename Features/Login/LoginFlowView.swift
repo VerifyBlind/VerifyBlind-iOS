@@ -4,14 +4,18 @@ import SwiftUI
 struct LoginFlowView: View {
     let onFinish: () -> Void
     let onToast: (String) -> Void
+    /// Kart yok: akış kapanır, kart ekleme açılır; istek bu payload ile sürer.
+    let onNeedsCard: (String) -> Void
     @StateObject private var vm: LoginViewModel
 
     /// `initialPayload` = deep-link URL (varsa QR tarama atlanır, doğrudan o nonce ile başlar).
     init(onFinish: @escaping () -> Void,
          onToast: @escaping (String) -> Void = { _ in },
+         onNeedsCard: @escaping (String) -> Void = { _ in },
          initialPayload: String? = nil) {
         self.onFinish = onFinish
         self.onToast = onToast
+        self.onNeedsCard = onNeedsCard
         _vm = StateObject(wrappedValue: LoginViewModel(initialPayload: initialPayload))
     }
 
@@ -38,6 +42,15 @@ struct LoginFlowView: View {
                         vm.faceCaptured(selfiePNG: png, cropJPEG: crop, metrics: metrics, moveProof: proof)
                     },
                     onCancel: { moveFailed in vm.faceCaptureCancelled(moveFailed: moveFailed) })
+            case .faceRetry(let message):
+                FaceRetryStepView(message: message,
+                                  onRetry: { vm.retryFace() },
+                                  onCancel: { vm.reject() })
+            case .needsCard:
+                Color.clear.onAppear {
+                    onToast(L.t("add_card_for_request"))
+                    if let payload = vm.rawPayload { onNeedsCard(payload) } else { onFinish() }
+                }
             case .success:
                 // Ayrı "Başarılı" ekranı yok (Android paritesi): partnere geri dön (deeplink) + toast + kapat.
                 Color.clear.onAppear {
@@ -90,6 +103,35 @@ struct LoginFlowView: View {
         }
     }
 
+}
+
+/// Yüz eşleşmedi: aynı QR ile yeniden dene ya da vazgeç.
+private struct FaceRetryStepView: View {
+    let message: String
+    let onRetry: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Spacer()
+            Text(L.t("login_face_mismatch_title"))
+                .font(.system(size: 22, weight: .bold))
+                .foregroundColor(Theme.onSurface)
+            Text(message)
+                .font(.system(size: 15))
+                .foregroundColor(Theme.onSurfaceVariant)
+                .multilineTextAlignment(.center)
+            Spacer()
+            PrimaryGradientButton(title: L.t("btn_retry"), action: onRetry)
+            Button(action: onCancel) {
+                Text(L.t("btn_cancel"))
+                    .font(.system(size: 15))
+                    .foregroundColor(Theme.onSurfaceVariant)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(24)
+    }
 }
 
 /// QR tarama adımı — Android QR ViewFlipper. Kamera (arka) + QRScanner.

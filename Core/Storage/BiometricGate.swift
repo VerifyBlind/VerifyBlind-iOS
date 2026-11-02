@@ -29,6 +29,8 @@ enum BiometricGate {
     }
 
     static func authenticate(reason: String) async throws {
+        // Ekran kilidi şart değil (2026-11-02): kilit varsa sorar, yoksa geçer.
+        guard isDeviceLockAvailable() else { return }
         let context = LAContext()
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
             context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason) { success, error in

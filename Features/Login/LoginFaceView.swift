@@ -38,7 +38,7 @@ struct LoginFaceView: View {
     private static func makeViewModel(faceRefB64: String?, loginNonce: String?) -> LoginFaceViewModel {
         let vm = LoginFaceViewModel()
         vm.faceRefB64 = faceRefB64
-        vm.loginEvent = loginNonce.flatMap { LoginEvent.forNonce($0) }
+        vm.loginEvents = loginNonce.map { LoginEvent.forNonceV3($0) } ?? []
         return vm
     }
 

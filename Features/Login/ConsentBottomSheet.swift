@@ -9,7 +9,6 @@ struct ConsentBottomSheet: View {
     let onApprove: () -> Void
     let onReject: () -> Void
 
-    @State private var kvkkChecked = AppPrefs.kvkkConsentAccepted
     @State private var privacyDoc: PrivacyDoc?
     @State private var loadingPrivacy = false
 
@@ -81,21 +80,6 @@ struct ConsentBottomSheet: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
 
-            // KVKK onay kutusu
-            Button { kvkkChecked.toggle() } label: {
-                HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: kvkkChecked ? "checkmark.square.fill" : "square")
-                        .font(.system(size: 20))
-                        .foregroundColor(kvkkChecked ? Theme.themePrimary : Theme.onSurfaceVariant)
-                    Text(L.t("consent_kvkk_text"))
-                        .font(.system(size: 13)).foregroundColor(Theme.onSurface)
-                        .multilineTextAlignment(.leading)
-                    Spacer()
-                }
-            }
-            .buttonStyle(.plain)
-            .padding(.bottom, 16)
-
             Button(action: approve) {
                 Text(L.t("btn_approve"))
                     .textCase(.uppercase) // Android MaterialButton textAllCaps paritesi (APPROVE / ONAYLA)
@@ -103,9 +87,7 @@ struct ConsentBottomSheet: View {
                     .frame(maxWidth: .infinity).frame(height: 60)
                     .background(Theme.consentButtonGradient)
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .opacity(kvkkChecked ? 1 : 0.5)
             }
-            .disabled(!kvkkChecked)
             .padding(.bottom, 12)
 
             Button(action: onReject) {
@@ -182,8 +164,6 @@ struct ConsentBottomSheet: View {
     }
 
     private func approve() {
-        guard kvkkChecked else { return }
-        AppPrefs.kvkkConsentAccepted = true
         onApprove()
     }
 

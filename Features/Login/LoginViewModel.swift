@@ -15,6 +15,10 @@ final class LoginViewModel: ObservableObject {
         /// Canlı yüz karesi toplanıyor — bilet FaceRefJpegB64 taşıyorsa (yani demo değilse)
         /// `processing`'den ÖNCE gelir. Girişte jest yoktur, ekran ~2 saniyede kapanır.
         case faceCapture
+        /// Yüz eşleşmedi, sunucu aynı QR'ı yeniden açtı: kişi yeniden dener ya da vazgeçer.
+        case faceRetry(message: String)
+        /// Kart yok: istek iptal edilmez, kart eklenince aynı istekle devam edilir.
+        case needsCard
         case processing
         case success
         case rejected
@@ -29,6 +33,10 @@ final class LoginViewModel: ObservableObject {
 
     private(set) var nonce: String = ""
     private var pkHash: String?
+    /// QR/bağlantının ham hâli — kart eklenince aynı istekle devam etmek için.
+    private(set) var rawPayload: String?
+    /// Aynı QR ile kalan yeniden deneme; relay QR başına üç gönderime izin veriyor.
+    private var faceRetriesLeft = 2
 
     /// App-to-app deeplink akışı mı (true → geri-dönüş URL'i onurlandırılır).
     let isDeepLink: Bool
@@ -57,6 +65,7 @@ final class LoginViewModel: ObservableObject {
             fail(title: L.t("invalid_request"), message: L.t("invalid_qr"), error: nil)
             return
         }
+        rawPayload = payload
         nonce = parsed.nonce
         pkHash = parsed.pkHash
         returnUrl = parsed.returnUrl
@@ -66,9 +75,10 @@ final class LoginViewModel: ObservableObject {
 
     private func fetchPartner() async {
         guard TicketStore.hasTicket else {
-            // Partner widget'ı QR TTL'e kadar boş poll'da kalmasın — relay'e iptal bildir (Android paritesi).
-            Task { await cancelPop(reason: "no_card_registered") }
-            fail(title: L.t("error_no_card_title"), message: L.t("error_no_card_message"), error: nil)
+            // İstek iptal edilmez: kişi kartını ekler, doğrudan site onayına geçer (Android paritesi).
+            // `terminal`: akış kapanırken nonce iptal edilmesin.
+            terminal = true
+            step = .needsCard
             return
         }
         do {
@@ -102,6 +112,12 @@ final class LoginViewModel: ObservableObject {
     func approve() {
         step = .processing
         Task { await completeLogin() }
+    }
+
+    /// Yüz eşleşmedi ekranından yeniden deneme.
+    func retryFace() {
+        pendingFaceProof = nil
+        step = .faceCapture
     }
 
     func reject() {
@@ -248,6 +264,14 @@ final class LoginViewModel: ObservableObject {
             clearPendingLoginState()
             step = .success
         } catch {
+            // Yüz eşleşmediyse relay aynı QR'ı açıyor (X-Login-Retry). Hak bittiyse sunucu
+            // QR_ALREADY_USED der ve akış normal hata yolundan biter.
+            if case let APIClientError.http(_, body) = error, body?.errorCode == "ERR_LOGIN_FACE_MISMATCH",
+               pendingFaceRef != nil, faceRetriesLeft > 0 {
+                faceRetriesLeft -= 1
+                step = .faceRetry(message: UserFacingError.message(for: error))
+                return
+            }
             await handleLoginError(error)
         }
     }

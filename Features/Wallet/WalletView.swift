@@ -23,7 +23,7 @@ struct WalletView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            TopAppBar(onSettings: onSettings, onLogoLongPress: unlockDemo)
+            TopAppBar(onSettings: onSettings)
                 // Dev menü: logoya uzun bas (yalnız development).
                 .onLongPressGesture(minimumDuration: 0.8) { onDevMenu?() }
 
@@ -127,18 +127,17 @@ struct WalletView: View {
             PrimaryGradientButton(title: L.t("btn_add_id"), systemImage: "creditcard.fill", action: onAddCard)
                 .padding(.horizontal, 32)
 
-            if appState.demoEnabled || appState.demoUnlockedByGesture {
-                Button(action: onDemo) {
-                    Text(L.t("demo_mode_title"))
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundColor(Theme.secondary)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 48)
-                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.secondary, lineWidth: 1.5))
-                }
-                .padding(.horizontal, 32)
-                .padding(.top, 8)
+            // Deneme kartı her sürümde görünür: akışı gerçek kart olmadan görmek isteyen herkes için.
+            Button(action: onDemo) {
+                Text(L.t("demo_mode_title"))
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(Theme.secondary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.secondary, lineWidth: 1.5))
             }
+            .padding(.horizontal, 32)
+            .padding(.top, 8)
 
             Button(action: howItWorks) {
                 HStack(spacing: 6) {
@@ -152,19 +151,6 @@ struct WalletView: View {
             .padding(.top, 12)
             .padding(.bottom, 28)
         }
-    }
-
-    /// Logoya 3 sn basılı tutma → demo düğmesini bu oturum için aç (kart yokken).
-    ///
-    /// Neden: mağaza sürümünde düğmeyi herkese göstermek gerçek kullanıcıların kafasını karıştırır;
-    /// partner adayları ise ilk incelemede gerçek kart olmadan denemek ister. Düğmenin kendiliğinden
-    /// görünmesi admin panelindeki demo sürümüne bağlı kalır. Gizlilik bir güvenlik önlemi DEĞİLDİR
-    /// (kaynak kod açık): demo kart gerçek partnerlerde enclave'de reddedilir.
-    private func unlockDemo() {
-        guard !appState.hasCard, !appState.demoEnabled, !appState.demoUnlockedByGesture else { return }
-        appState.demoUnlockedByGesture = true
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        appState.showToast(L.t("demo_mode_unlocked"))
     }
 
     // "Nasıl Çalışır?" — tam Help ekranını (Aşama 6) sheet olarak aç.

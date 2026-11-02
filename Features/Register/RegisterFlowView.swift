@@ -5,6 +5,8 @@ import UIKit
 struct RegisterFlowView: View {
     let isDemo: Bool
     let onFinish: () -> Void
+    /// Kart eklendi: ayrı başarı ekranı yok, cüzdana ya da bekleyen site isteğine geçilir.
+    let onCardAdded: () -> Void
 
     @StateObject private var vm: RegisterViewModel
 
@@ -16,8 +18,13 @@ struct RegisterFlowView: View {
     /// Kutu hata sonrası mı, yarıda bırakma sonrası mı açıldı — metin buna göre değişir.
     @State private var promptIsAbandonment = false
 
-    init(isDemo: Bool, onFinish: @escaping () -> Void) {
+    init(isDemo: Bool, legalVersion: String = LegalTerms.baselineVersion,
+         onFinish: @escaping () -> Void, onCardAdded: @escaping () -> Void) {
         self.isDemo = isDemo
+        self.onCardAdded = {
+            Task { await FlowTelemetry.shared.endFlow() }
+            onCardAdded()
+        }
         // Kapanış TEK yerden sarmalanır: `onFinish` gövdede dört ayrı yerden çağrılıyor (başarı,
         // "hayır" cevabı, form kapanışı, yarıda çıkış) ve akış etiketini her birinde ayrı ayrı
         // temizlemek er ya da geç bir dalda unutulurdu.
@@ -25,7 +32,9 @@ struct RegisterFlowView: View {
             Task { await FlowTelemetry.shared.endFlow() }
             onFinish()
         }
-        _vm = StateObject(wrappedValue: RegisterViewModel(isDemo: isDemo))
+        let model = RegisterViewModel(isDemo: isDemo)
+        model.legalVersion = legalVersion
+        _vm = StateObject(wrappedValue: model)
     }
 
     var body: some View {
@@ -56,7 +65,7 @@ struct RegisterFlowView: View {
             case .processing:
                 ProcessingStepView(showFlowSteps: true)
             case .success:
-                SuccessStepView(onHome: onFinish)
+                Color.clear.onAppear { onCardAdded() }
             case .failed(let title, let message, let offersSettings):
                 FailedStepView(title: title, message: message,
                                offersSettings: offersSettings, onClose: closeAfterFailure)
@@ -64,7 +73,7 @@ struct RegisterFlowView: View {
                 ZStack(alignment: .bottom) {
                     VStack(spacing: 0) {
                         header
-                        StepperHeader(steps: [L.t("step_prepare"), L.t("step_mrz"), L.t("step_nfc"), L.t("step_face")], current: 4)
+                        StepperHeader(steps: [L.t("step_prepare"), L.t("step_mrz"), L.t("step_nfc")], current: 3)
                         Spacer()
                     }
                     Color.black.opacity(0.5).ignoresSafeArea()
@@ -78,7 +87,7 @@ struct RegisterFlowView: View {
             default:
                 VStack(spacing: 0) {
                     header
-                    StepperHeader(steps: [L.t("step_prepare"), L.t("step_mrz"), L.t("step_nfc"), L.t("step_face")],
+                    StepperHeader(steps: [L.t("step_prepare"), L.t("step_mrz"), L.t("step_nfc")],
                                   current: currentStepIndex)
                     stepContent
                 }
@@ -92,6 +101,9 @@ struct RegisterFlowView: View {
             // Yarıda bırakan kişiye "bir sorun mu yaşadınız?" demek başarısızlık varsayar; oysa
             // telefonu çalmış da olabilir. Metin suçlayıcı değil, davetkâr olmalı.
             Text(L.t(promptIsAbandonment ? "feedback_prompt_message_left" : "feedback_prompt_message"))
+        }
+        .alert(L.t("mrz_rescan_needed"), isPresented: $vm.showMrzRescanAlert) {
+            Button(L.t("common_ok"), role: .cancel) {}
         }
         .sheet(isPresented: $showFeedbackForm, onDismiss: onFinish) {
             FeedbackView(prefilledSubject: feedbackStep.map { FlowFeedbackPrompt.subject(for: $0) },
@@ -243,39 +255,39 @@ private struct PreparationStepView: View {
 
                 Spacer().frame(height: 8)
 
-                // Aydınlatma Metni link (Android tvPrivacyNoticeCardAdd paritesi)
-                Button {
-                    fetchPrivacy()
-                } label: {
-                    if loadingPrivacy {
-                        ProgressView().frame(height: 20)
-                    } else {
-                        Text(L.t("read_privacy_notice"))
-                            .font(.system(size: 13))
-                            .foregroundColor(Theme.themePrimary)
-                            .underline()
+                if !vm.isDemo {
+                    Button {
+                        if let url = URL(string: "https://verifyblind.com/terms") { UIApplication.shared.open(url) }
+                    } label: {
+                        consentLink(L.t("read_terms"))
                     }
-                }
-                .buttonStyle(.plain)
-                .padding(.bottom, 2)
+                    .buttonStyle(.plain)
+                    consentBox("legal_terms_checkbox", isOn: $vm.termsAccepted)
 
-                // KVKK onay kutusu
-                Button { vm.kvkkAccepted.toggle() } label: {
-                    HStack(alignment: .top, spacing: 10) {
-                        Image(systemName: vm.kvkkAccepted ? "checkmark.square.fill" : "square")
-                            .font(.system(size: 20))
-                            .foregroundColor(vm.kvkkAccepted ? Theme.themePrimary : Theme.onSurfaceVariant)
-                        Text(L.t("kvkk_consent_checkbox"))
-                            .font(.system(size: 13))
-                            .foregroundColor(Theme.onSurface)
-                            .multilineTextAlignment(.leading)
-                        Spacer()
+                    // Aydınlatma Metni link (Android tvPrivacyNoticeCardAdd paritesi)
+                    Button {
+                        fetchPrivacy()
+                    } label: {
+                        if loadingPrivacy {
+                            ProgressView().frame(height: 20)
+                        } else {
+                            consentLink(L.t("read_privacy_notice"))
+                        }
                     }
+                    .buttonStyle(.plain)
+                    consentBox("kvkk_consent_checkbox", isOn: $vm.kvkkAccepted)
+
+                    Button {
+                        privacyDoc = PrivacyDoc(text: L.t("biometric_consent_body"))
+                    } label: {
+                        consentLink(L.t("read_biometric_consent"))
+                    }
+                    .buttonStyle(.plain)
+                    consentBox("biometric_consent_checkbox", isOn: $vm.biometricAccepted)
                 }
-                .buttonStyle(.plain)
 
                 PrimaryGradientButton(title: L.t("btn_start"),
-                                      enabled: vm.kvkkAccepted && !vm.isStarting,
+                                      enabled: vm.consentsComplete && !vm.isStarting,
                                       loading: vm.isStarting) { vm.begin() }
                     .padding(.top, 8)
             }
@@ -286,11 +298,33 @@ private struct PreparationStepView: View {
         // Hazırlık adımında değilsek (kullanıcı önceden ilerlediyse) geç tetik yok sayılır.
         .onAppear {
             guard vm.isDemo else { return }
-            vm.kvkkAccepted = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
                 if vm.isDemo && vm.step == .preparation { vm.begin() }
             }
         }
+    }
+
+    private func consentLink(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 13))
+            .foregroundColor(Theme.themePrimary)
+            .underline()
+    }
+
+    private func consentBox(_ key: String, isOn: Binding<Bool>) -> some View {
+        Button { isOn.wrappedValue.toggle() } label: {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: isOn.wrappedValue ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 20))
+                    .foregroundColor(isOn.wrappedValue ? Theme.themePrimary : Theme.onSurfaceVariant)
+                Text(L.t(key))
+                    .font(.system(size: 13))
+                    .foregroundColor(Theme.onSurface)
+                    .multilineTextAlignment(.leading)
+                Spacer()
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     private func fetchPrivacy() {
@@ -604,7 +638,6 @@ struct ProcessingStepView: View {
             VStack(alignment: .leading, spacing: 10) {
                 if showFlowSteps {
                     ProcessingStepRow(titleKey: "step_card_read", done: true)
-                    ProcessingStepRow(titleKey: "step_face_verified", done: true)
                 }
                 ProcessingStepRow(titleKey: "step_server_verifying", done: false)
             }

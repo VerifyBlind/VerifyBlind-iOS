@@ -18,7 +18,12 @@ import LocalAuthentication
 /// tek prompt kullanıyor (time-bound pencere), yani iki platform aynı davranışta.
 enum KeychainKeyStore {
 
-    private static let userKeyTag    = Data("app.verifyblind.ios.userkey.v1".utf8)
+    /// v2 (2026-11-02, kullanıcı kararı): anahtar kullanıcı doğrulaması İSTEMEZ. Bilet kartın
+    /// gerçekliğinin kanıtıdır; kişi her QR'da yüz + canlılık + üç hareketle kanıtlanır. Cihaz
+    /// kilidi şartı da böylece kalktı. v1 kartı olan kullanıcı kartı yeniden ekleyene kadar
+    /// istemle devam eder (Android V7 paritesi).
+    private static let userKeyTag    = Data("app.verifyblind.ios.userkey.v2".utf8)
+    private static let legacyUserKeyTag = Data("app.verifyblind.ios.userkey.v1".utf8)
     private static let historyKeyTag = Data("app.verifyblind.ios.historykey.v1".utf8)
 
     /// Public key cache (biyometriksiz generic-password item) servis adı. RSA anahtarı normal Keychain'de
@@ -32,20 +37,39 @@ enum KeychainKeyStore {
     /// Yoksa üretir, SPKI base64 public key döner (Android `ensureKeyExists` → `publicKey.encoded`).
     @discardableResult
     static func ensureUserKey() throws -> String {
-        try ensureKey(tag: userKeyTag, biometric: true)
+        if hasLegacyUserKey { return try ensureKey(tag: legacyUserKeyTag, biometric: true) }
+        return try ensureKey(tag: userKeyTag, biometric: false)
+    }
+
+    /// Eski (v1) anahtar kullanımda mı? Yalnız referans alınır, istem açılmaz.
+    private static var hasLegacyUserKey: Bool {
+        (try? loadPrivateKey(tag: legacyUserKeyTag, context: nil)) != nil
+    }
+
+    /// Kart yokken eski anahtarın işi bitmiştir: sıradaki kart v2 ile eklensin.
+    static func retireLegacyUserKey() {
+        delete(tag: legacyUserKeyTag)
+        deleteCachedPublicKey(tag: legacyUserKeyTag)
+    }
+
+    /// Ticket'i açacak özel anahtar: v2 doğrudan, eski v1 Face ID/passcode istemiyle.
+    private static func unlockedUserKey(reason: String) async throws -> SecKey {
+        guard hasLegacyUserKey else { return try loadPrivateKey(tag: userKeyTag, context: nil) }
+        let context = LAContext()
+        try await authenticate(context: context, reason: reason)
+        let priv = try loadPrivateKey(tag: legacyUserKeyTag, context: context)
+        // Eski kurulum migrasyonu: public key henüz cache'lenmemişse, kimliği DOĞRULANMIŞ context ile
+        // türetip cache'le (ek prompt yok). Böylece bir sonraki kayıt MRZ öncesi prompt çıkarmaz.
+        if cachedPublicKey(tag: legacyUserKeyTag) == nil,
+           let pub = SecKeyCopyPublicKey(priv), let spki = RSAKey.spkiBase64(of: pub) {
+            cachePublicKey(spki, tag: legacyUserKeyTag)
+        }
+        return priv
     }
 
     /// Ticket'in AES anahtarını çözer. Face ID/passcode promptu (Android `BiometricPrompt` + CryptoObject).
     static func decryptWithUserKey(_ cipherBase64: String, reason: String) async throws -> String {
-        let context = LAContext()
-        try await authenticate(context: context, reason: reason)
-        let priv = try loadPrivateKey(tag: userKeyTag, context: context)
-        // Eski kurulum migrasyonu: public key henüz cache'lenmemişse, kimliği DOĞRULANMIŞ context ile
-        // türetip cache'le (ek prompt yok). Böylece bir sonraki kayıt MRZ öncesi prompt çıkarmaz.
-        if cachedPublicKey(tag: userKeyTag) == nil,
-           let pub = SecKeyCopyPublicKey(priv), let spki = RSAKey.spkiBase64(of: pub) {
-            cachePublicKey(spki, tag: userKeyTag)
-        }
+        let priv = try await unlockedUserKey(reason: reason)
         return try CryptoUtils.rsaDecrypt(cipherBase64, privateKey: priv, algorithm: .rsaEncryptionOAEPSHA1)
     }
 
@@ -56,14 +80,7 @@ enum KeychainKeyStore {
     /// (`BiometricHelper.authenticateForKeyUse`). Eski yorum "Android'de iki prompt gerekir" diyordu
     /// ve V5'ten beri yanlıştı.
     static func decryptAndSign(_ cipherBase64: String, message: String, reason: String) async throws -> (aesKey: String, signatureBase64: String) {
-        let context = LAContext()
-        try await authenticate(context: context, reason: reason)
-        let priv = try loadPrivateKey(tag: userKeyTag, context: context)
-        // Eski kurulum migrasyonu: public key cache yoksa, DOĞRULANMIŞ context ile türetip cache'le (ek prompt yok).
-        if cachedPublicKey(tag: userKeyTag) == nil,
-           let pub = SecKeyCopyPublicKey(priv), let spki = RSAKey.spkiBase64(of: pub) {
-            cachePublicKey(spki, tag: userKeyTag)
-        }
+        let priv = try await unlockedUserKey(reason: reason)
         let aesKey = try CryptoUtils.rsaDecrypt(cipherBase64, privateKey: priv, algorithm: .rsaEncryptionOAEPSHA1)
         let signature = try CryptoUtils.rsaSignPSS(message, privateKey: priv)
         return (aesKey, signature)
@@ -73,6 +90,7 @@ enum KeychainKeyStore {
     static func deleteUserKey() {
         delete(tag: userKeyTag)
         deleteCachedPublicKey(tag: userKeyTag)
+        retireLegacyUserKey()
     }
 
     // MARK: - History key (biyometriksiz)
