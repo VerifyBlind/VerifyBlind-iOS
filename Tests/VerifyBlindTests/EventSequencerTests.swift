@@ -272,7 +272,7 @@ final class EventSequencerTests: XCTestCase {
         XCTAssertEqual(d.signals.last, .completed)
 
         let proof = LivenessViewModel.makeProof(d.seq, elapsedMs: 9_000)
-        XCTAssertEqual(proof.version, 2)
+        XCTAssertEqual(proof.version, 3)
         XCTAssertEqual(proof.steps.map { $0.neutral.count }, [1, 1, 1])
         XCTAssertEqual(proof.steps.map { $0.event.count }, [2, 1, 1])
         XCTAssertEqual(proof.steps.map { $0.attempts ?? 0 }, [1, 1, 1])
