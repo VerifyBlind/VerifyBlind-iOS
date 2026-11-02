@@ -152,7 +152,7 @@
 "privacy_notice_load_error" = "Aydınlatma metni şu anda yüklenemiyor.";
 "privacy_notice_load_failed" = "Aydınlatma metni yüklenirken hata oluştu.";
 "privacy_notice_title" = "Aydınlatma Metni";
-"kvkk_consent_checkbox" = "Aydınlatma metnini okudum, kişisel verilerimin işlenmesini onaylıyorum.";
+"kvkk_consent_checkbox" = "Aydınlatma Metni'ni okudum ve anladım.";
 "demo_hint" = "Demo kodu";
 "demo_mode_enter_code" = "Demo kodunu girin:";
 "demo_invalid_code" = "Geçersiz demo kodu.";
@@ -229,13 +229,13 @@
 "biometric_subtitle_decrypt" = "İşlemi onaylamak için kimliğinizi doğrulayın";
 "biometric_subtitle_auth" = "Devam etmek için parmak izinizi okutun";
 "biometric_consent_title" = "Biyometrik Veri Rızası";
-"biometric_consent_body" = "İşlenen Biyometrik Veriler\n\nKimlik doğrulama işlemi kapsamında aşağıdaki özel nitelikli kişisel verileriniz işlenecektir:\n• Canlılık testi sırasında alınan yüz görüntünüz ve kimlik kartınızın çipindeki biyometrik fotoğrafınız.\n\nİşleme Amacı\n\nBu veriler yalnızca kimlik kartının size ait olduğunu doğrulamak amacıyla biyometrik eşleşme kontrolünde kullanılır.\n\nNasıl İşlenir\n\nVerileriniz sunucularımıza uçtan uca şifreli (AES-256 + RSA-OAEP) olarak iletilir; yalnızca güvenli işlem ortamında (AWS Nitro Enclave) eşleşme hesaplanır.\n\nSaklanmaz ve Silinir\n\nBiyometrik verileriniz hiçbir şekilde kaydedilmez veya depolanmaz. Eşleşme sonucu alındıktan hemen sonra kalıcı olarak silinir. Üçüncü kişilerle paylaşılmaz.\n\nRızanızın Geri Alınması\n\nBu rızayı dilediğiniz zaman geri alabilirsiniz. Rızanızı geri almanız halinde biyometrik doğrulama gerektiren işlemler gerçekleştirilemeyecektir.";
+"biometric_consent_body" = "İşlenen Biyometrik Veriler\n\nKimlik doğrulama işlemi kapsamında aşağıdaki özel nitelikli kişisel verileriniz işlenecektir:\n• Canlılık testi sırasında alınan yüz görüntünüz ve kimlik kartınızın çipindeki biyometrik fotoğrafınız.\n\nİşleme Amacı\n\nBu veriler yalnızca kimlik kartının size ait olduğunu doğrulamak amacıyla biyometrik eşleşme kontrolünde kullanılır.\n\nNasıl İşlenir\n\nVerileriniz sunucularımıza uçtan uca şifreli (AES-256 + RSA-OAEP) olarak iletilir; yalnızca güvenli işlem ortamında (AWS Nitro Enclave) eşleşme hesaplanır.\n\nSaklama ve Silme\n\nCanlı yüz görüntünüz eşleşmeden sonra silinir. Çipinizdeki fotoğraf sunucularımızda saklanmaz, yalnız sizin telefonunuzda şifreli olarak kart silinene kadar durur. Üçüncü kişilerle paylaşılmaz.\n\nRızanızın Geri Alınması\n\nBu rızayı dilediğiniz zaman geri alabilirsiniz. Rızanızı geri almanız halinde biyometrik doğrulama gerektiren işlemler gerçekleştirilemeyecektir.";
 "biometric_consent_checkbox" = "Biyometrik veri işleme rıza metnini okudum, biyometrik verilerimin işlenmesini onaylıyorum.";
 "consent_request_subtitle" = "Kimlik bilgisi doğrulaması talep ediyor.\nTalep ettiği doğrulamaların gönderilmesini onaylıyor musunuz?";
 "consent_shared_info_label" = "DOĞRULANACAK BİLGİLER";
 "consent_scope_footer" = "Kapsam: Kimlik Doğrulama İsteği";
 "consent_section_shared" = "DOĞRULANACAK BİLGİLER";
-"consent_kvkk_text" = "Aydınlatma metnini okudum, kişisel verilerimin işlenmesini onaylıyorum.";
+"consent_kvkk_text" = "Aydınlatma Metni'ni okudum ve anladım.";
 "consent_default_scope" = "Kimlik Doğrulama Özeti";
 "scope_user_id" = "Size özel kalıcı tanıma kodu";
 "scope_user_id_whatis" = "Bu nedir?";
@@ -574,7 +574,8 @@
 "legal_terms_link_disclosure" = "Aydınlatma Metni";
 "legal_terms_summary_title" = "Kısaca";
 "legal_terms_summary_body" = "· Kimlik numaranız cihazınızdan ve güvenli enclave'den dışarı çıkmaz.\n· Uygulamayı yalnızca kendi kimlik kartınızla kullanabilirsiniz.\n· Uygulama resmi kimlik belgesi yerine geçmez.\n· 15 yaşını doldurmuş olmalısınız.\n· Tüm verilerinizi istediğiniz an Ayarlar'dan silebilirsiniz.";
-"legal_terms_checkbox" = "Kullanım Şartları, Veri İşleme Sözleşmesi ve Aydınlatma Metni'ni okudum, kabul ediyorum.";
+"legal_terms_checkbox" = "Kullanım Şartları'nı ve Veri İşleme Sözleşmesi'ni okudum, kabul ediyorum.";
+"legal_terms_disclosure_checkbox" = "Aydınlatma Metni'ni okudum ve anladım.";
 "legal_terms_accept" = "Kabul et ve devam et";
 "legal_terms_decline_hint" = "Kabul etmiyorsanız uygulamayı kapatabilirsiniz. VerifyBlind bu metinler kabul edilmeden kullanılamaz.";
 "legal_terms_version_label" = "Sürüm %@";

@@ -3,7 +3,8 @@ import SwiftUI
 /// Hukuki metin kabul kapısı (clickwrap) — Android `LegalTermsActivity` paritesi.
 ///
 /// Engelleyici tam-ekran overlay olarak sunulur: kabul edilmeden altındaki uygulamaya erişilemez,
-/// kapatma jesti yoktur. Onay kutusu işaretlenmeden "Kabul et" etkinleşmez. Kabul edilince sürüm +
+/// kapatma jesti yoktur. İki onay kutusu da işaretlenmeden "Kabul et" etkinleşmez: sözleşmeler kabul
+/// edilir, Aydınlatma Metni ise yalnız okunup anlaşılır (KVKK Kurulu 2026/347). Kabul edilince sürüm +
 /// zaman damgası cihaza yazılır — zero-knowledge mimaride kanıt budur (bkz. `LegalTerms`).
 struct LegalTermsGate: View {
 
@@ -18,12 +19,14 @@ struct LegalTermsGate: View {
     let onAccept: () -> Void
 
     @State private var agreed = false
+    /// Aydınlatma AYRI beyandır: onaylatılmaz, yalnız okunup anlaşıldığı işaretlenir.
+    @State private var disclosureRead = false
     /// Sunucu hiç cevap vermezse kapı sonsuza kadar bekletmesin: tavan dolunca kabul açılır ve
     /// gömülü taban sürümle kaydedilir (fail-open YOK — taban yalnız alt sınırdır).
     @State private var versionWaitElapsed = false
 
-    /// Kabul düğmesi: onay kutusu işaretli VE sürüm belli (ya da bekleme tavanı dolmuş).
-    private var acceptEnabled: Bool { agreed && (versionResolved || versionWaitElapsed) }
+    /// Kabul düğmesi: iki onay kutusu işaretli VE sürüm belli (ya da bekleme tavanı dolmuş).
+    private var acceptEnabled: Bool { agreed && disclosureRead && (versionResolved || versionWaitElapsed) }
 
     private static let termsURL = "https://verifyblind.com/terms"
     private static let dpaURL = "https://verifyblind.com/dpa"
@@ -76,23 +79,8 @@ struct LegalTermsGate: View {
                 }
 
                 VStack(spacing: 12) {
-                    Button {
-                        agreed.toggle()
-                    } label: {
-                        HStack(alignment: .top, spacing: 12) {
-                            Image(systemName: agreed ? "checkmark.square.fill" : "square")
-                                .font(.system(size: 20))
-                                .foregroundColor(agreed ? Theme.themePrimary : Theme.onSurfaceVariant)
-                            Text(L.t("legal_terms_checkbox"))
-                                .font(.system(size: 14))
-                                .foregroundColor(Theme.onSurface)
-                                .multilineTextAlignment(.leading)
-                                .fixedSize(horizontal: false, vertical: true)
-                            Spacer(minLength: 0)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(agreed ? [.isSelected] : [])
+                    checkboxRow("legal_terms_checkbox", isOn: $agreed)
+                    checkboxRow("legal_terms_disclosure_checkbox", isOn: $disclosureRead)
 
                     Button {
                         LegalTerms.recordAcceptance(version: requiredVersion)
@@ -134,6 +122,26 @@ struct LegalTermsGate: View {
     /// Sürüm beklemesinin tavanı. Kullanıcı metni okuyup onay kutusunu işaretlerken zaten dolar,
     /// yani normal akışta hiç fark edilmez; ağ tamamen yoksa kapı yine de açılabilir kalır.
     private static let versionWaitCapSeconds: Double = 2.0
+
+    private func checkboxRow(_ key: String, isOn: Binding<Bool>) -> some View {
+        Button {
+            isOn.wrappedValue.toggle()
+        } label: {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: isOn.wrappedValue ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 20))
+                    .foregroundColor(isOn.wrappedValue ? Theme.themePrimary : Theme.onSurfaceVariant)
+                Text(L.t(key))
+                    .font(.system(size: 14))
+                    .foregroundColor(Theme.onSurface)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isOn.wrappedValue ? [.isSelected] : [])
+    }
 
     private func linkRow(_ key: String, url: String) -> some View {
         Button {

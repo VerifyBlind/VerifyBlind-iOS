@@ -152,7 +152,7 @@
 "privacy_notice_load_error" = "Privacy notice cannot be loaded at this time.";
 "privacy_notice_load_failed" = "An error occurred while loading the privacy notice.";
 "privacy_notice_title" = "Privacy Notice";
-"kvkk_consent_checkbox" = "I have read the privacy notice and consent to the processing of my personal data.";
+"kvkk_consent_checkbox" = "I have read and understood the Privacy Notice.";
 "demo_hint" = "Demo code";
 "demo_mode_enter_code" = "Enter demo code:";
 "demo_invalid_code" = "Invalid demo code.";
@@ -229,13 +229,13 @@
 "biometric_subtitle_decrypt" = "Verify your identity to approve the operation";
 "biometric_subtitle_auth" = "Scan your fingerprint to continue";
 "biometric_consent_title" = "Biometric Data Consent";
-"biometric_consent_body" = "Processed Biometric Data\n\nThe following special category personal data will be processed as part of the identity verification process:\n• Your face image taken during the liveness test and the biometric photo on the chip of your identity card.\n\nPurpose of Processing\n\nThis data is used solely for biometric matching to verify that the identity card belongs to you.\n\nHow It Is Processed\n\nYour data is transmitted to our servers end-to-end encrypted (AES-256 + RSA-OAEP); the match is calculated only in the secure processing environment (AWS Nitro Enclave).\n\nNot Stored and Deleted\n\nYour biometric data is never recorded or stored. It is permanently deleted immediately after the match result is obtained. It is not shared with third parties.\n\nWithdrawal of Consent\n\nYou can withdraw this consent at any time. If you withdraw your consent, operations requiring biometric verification cannot be performed.";
+"biometric_consent_body" = "Processed Biometric Data\n\nThe following special category personal data will be processed as part of the identity verification process:\n• Your face image taken during the liveness test and the biometric photo on the chip of your identity card.\n\nPurpose of Processing\n\nThis data is used solely for biometric matching to verify that the identity card belongs to you.\n\nHow It Is Processed\n\nYour data is transmitted to our servers end-to-end encrypted (AES-256 + RSA-OAEP); the match is calculated only in the secure processing environment (AWS Nitro Enclave).\n\nStorage and Deletion\n\nYour live face image is deleted after the match. The photo from your chip is not stored on our servers; it stays only on your own phone, encrypted, until the card is deleted. It is not shared with third parties.\n\nWithdrawal of Consent\n\nYou can withdraw this consent at any time. If you withdraw your consent, operations requiring biometric verification cannot be performed.";
 "biometric_consent_checkbox" = "I have read the biometric data processing consent text and approve the processing of my biometric data.";
 "consent_request_subtitle" = "is requesting identity verification.\nDo you approve sending the requested verifications?";
 "consent_shared_info_label" = "INFORMATION TO BE VERIFIED";
 "consent_scope_footer" = "Scope: Identity Verification Request";
 "consent_section_shared" = "INFORMATION TO BE VERIFIED";
-"consent_kvkk_text" = "I have read the disclosure text, I approve the processing of my personal data.";
+"consent_kvkk_text" = "I have read and understood the Privacy Notice.";
 "consent_default_scope" = "Identity Verification Summary";
 "scope_user_id" = "A permanent recognition code unique to you";
 "scope_user_id_whatis" = "What is this?";
@@ -574,7 +574,8 @@
 "legal_terms_link_disclosure" = "Privacy Notice";
 "legal_terms_summary_title" = "In short";
 "legal_terms_summary_body" = "· Your identity number never leaves your device or the secure enclave.\n· You may only use the app with your own ID card.\n· The app is not a substitute for an official identity document.\n· You must have completed 15 years of age.\n· You can delete all your data at any time from Settings.";
-"legal_terms_checkbox" = "I have read and accept the Terms of Use, the Data Processing Agreement and the Privacy Notice.";
+"legal_terms_checkbox" = "I have read and accept the Terms of Use and the Data Processing Agreement.";
+"legal_terms_disclosure_checkbox" = "I have read and understood the Privacy Notice.";
 "legal_terms_accept" = "Accept and continue";
 "legal_terms_decline_hint" = "If you do not accept, you can close the app. VerifyBlind cannot be used without accepting these documents.";
 "legal_terms_version_label" = "Version %@";
