@@ -233,27 +233,21 @@ private struct PreparationStepView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text(L.t("prepare_title"))
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.system(size: 18, weight: .bold))
                     .foregroundColor(Theme.onSurface)
-                    .padding(.top, 8)
-                Text(L.t("prepare_subtitle"))
-                    .font(.system(size: 14))
-                    .foregroundColor(Theme.onSurfaceVariant)
 
+                // Onay kutuları ve düğme kaydırmadan görünsün diye yalnız başlıklar.
                 ForEach(tips, id: \.0) { tip in
-                    HStack(alignment: .top, spacing: 14) {
-                        IconCircle(systemName: tip.0, fill: Theme.blueSoft, tint: Theme.themePrimary, size: 40)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(L.t(tip.1)).font(.system(size: 14, weight: .bold)).foregroundColor(Theme.onSurface)
-                            Text(L.t(tip.2)).font(.system(size: 12)).foregroundColor(Theme.onSurfaceVariant)
-                        }
+                    HStack(alignment: .center, spacing: 10) {
+                        IconCircle(systemName: tip.0, fill: Theme.blueSoft, tint: Theme.themePrimary, size: 24)
+                        Text(L.t(tip.1)).font(.system(size: 13, weight: .semibold)).foregroundColor(Theme.onSurface)
                         Spacer()
                     }
                 }
 
-                Spacer().frame(height: 8)
+                Spacer().frame(height: 2)
 
                 if !vm.isDemo {
                     Button {
@@ -289,9 +283,10 @@ private struct PreparationStepView: View {
                 PrimaryGradientButton(title: L.t("btn_start"),
                                       enabled: vm.consentsComplete && !vm.isStarting,
                                       loading: vm.isStarting) { vm.begin() }
-                    .padding(.top, 8)
+                    .padding(.top, 4)
             }
-            .padding(20)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 8)
         }
         .sheet(item: $privacyDoc) { doc in PrivacyNoticeView(text: doc.text) }
         // Demo: KVKK onayını otomatik işaretle + 3sn sonra "Başla" (normal akış etkilenmez).
@@ -318,7 +313,7 @@ private struct PreparationStepView: View {
                     .font(.system(size: 20))
                     .foregroundColor(isOn.wrappedValue ? Theme.themePrimary : Theme.onSurfaceVariant)
                 Text(L.t(key))
-                    .font(.system(size: 13))
+                    .font(.system(size: 12))
                     .foregroundColor(Theme.onSurface)
                     .multilineTextAlignment(.leading)
                 Spacer()

@@ -77,6 +77,13 @@ final class EventSequencerTests: XCTestCase {
         XCTAssertNotNil(d.seq.steps[0].neutral)
     }
 
+    /// iPhone'da kare hızı saniyede ~5: nötr kare yine bir saniyenin altında alınmalı.
+    func testNeutralFrameArrivesQuicklyAtLowFrameRate() {
+        var run = Driver([.blink])
+        for _ in 0..<6 { run.frame(sig(), ms: 190) }
+        XCTAssertEqual(run.seq.phase, .event)
+    }
+
     func testSmilingFaceMustRelaxBeforeTheCommand() {
         var d = Driver([.blink])
         d.hold(sig(smile: 0.7), forMs: 1_000)

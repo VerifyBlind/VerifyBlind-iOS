@@ -280,7 +280,11 @@ struct EventSequencer {
 
         let w = Double(s.boundingBox.width)
         stillSamples.append((t: now, w: w))
-        stillSamples.removeAll { $0.t < now - Self.stillWindowMs }
+        // Pencerenin başlangıcından eski EN YENİ örnek tutulur. Tamamı atılırsa saniyede 5 karede
+        // kalan örnekler pencereyi hiç kaplamıyor ve kişi hareketler arasında saniyelerce bekliyordu.
+        while stillSamples.count >= 2, stillSamples[1].t <= now - Self.stillWindowMs {
+            stillSamples.removeFirst()
+        }
         let covered = stillSamples.count >= 3 &&
             now - (stillSamples.first?.t ?? now) >= Self.stillWindowMs * 0.8
         let widths = stillSamples.map { $0.w }
